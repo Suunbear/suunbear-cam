@@ -4,16 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Suun Cam</title>
+<meta name="robots" content="noindex, nofollow">
+<title>Cam</title>
 
 <script>
 /* ============================================================
-   CONFIG — tout se règle ici
+   CONFIG — aucun secret ici. Le code peut rester public.
+   L'ID et le mot de passe arrivent par le # de l'URL.
    ============================================================ */
 const CONFIG = {
 
   // --- VDO.Ninja ---
-  STREAM_ID   : "",
   QUALITY     : 0,            // 0 = 1080p | 1 = 720p | 2 = 360p
   BITRATE     : 4000,         // kbps. Descendre à 2500 si ça saccade en 4G
 
@@ -99,6 +100,30 @@ html, body {
 #toggle:active { background:rgba(0,0,0,.7); }
 #toggle.off { opacity:.4; }
 
+/* --- Écran d'aide si l'ID manque --- */
+#setup {
+  position:fixed; inset:0;
+  z-index:20;
+  display:none;
+  place-items:center;
+  padding:2rem;
+  background:#000;
+  color:#fff;
+  font:15px/1.6 system-ui, sans-serif;
+  text-align:center;
+}
+#setup.show { display:grid; }
+#setup code {
+  display:block;
+  margin-top:1rem;
+  padding:.9rem;
+  border-radius:10px;
+  background:#161616;
+  color:#9fe3a0;
+  font:13px/1.5 ui-monospace, monospace;
+  word-break:break-all;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #chat, #scrim, #toggle { transition:none; }
 }
@@ -117,32 +142,60 @@ html, body {
 
 <button id="toggle" aria-label="Afficher ou masquer le chat">💬</button>
 
+<div id="setup">
+  <div>
+    Ajoute ton identifiant de flux à la fin de l'adresse.
+    <code>#id=TON_ID&amp;pw=TON_MOT_DE_PASSE</code>
+  </div>
+</div>
+
 <script>
 (() => {
   const C = CONFIG;
-  const root = document.documentElement;
+
+  /* ------------------------------------------------------------
+     Les identifiants viennent du fragment (#), jamais du code.
+     Un fragment n'est jamais envoyé au serveur : ni GitHub ni
+     Cloudflare ne le voient passer. Le ? est accepté en secours.
+     ------------------------------------------------------------ */
+  const frag  = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  const get   = k => frag.get(k) || query.get(k) || '';
+
+  const ID = get('id').trim();
+  const PW = get('pw').trim();
+
+  if (!ID) {
+    document.getElementById('setup').classList.add('show');
+    return;
+  }
+
+  const root   = document.documentElement;
+  const cam    = document.getElementById('cam');
+  const chat   = document.getElementById('chat');
+  const scrim  = document.getElementById('scrim');
+  const toggle = document.getElementById('toggle');
 
   /* --- Applique la config au CSS --- */
   root.style.setProperty('--scrim',    C.SCRIM);
   root.style.setProperty('--chatH',    C.CHAT_HEIGHT + '%');
   root.style.setProperty('--chatSide', C.CHAT_SIDE + '%');
 
-  const cam    = document.getElementById('cam');
-  const chat   = document.getElementById('chat');
-  const scrim  = document.getElementById('scrim');
-  const toggle = document.getElementById('toggle');
-
   chat.classList.add(C.CHAT_ANCHOR);
   scrim.classList.add(C.CHAT_ANCHOR);
 
   /* --- Construit le lien VDO.Ninja --- */
-  cam.src = 'https://vdo.ninja/?push=' + encodeURIComponent(C.STREAM_ID)
+  let src = 'https://vdo.ninja/?push=' + encodeURIComponent(ID)
           + '&webcam'
           + '&quality='      + C.QUALITY
           + '&videobitrate=' + C.BITRATE
           + '&fullscreen'
           + '&largepreview';
 
+  // Le mot de passe part dans le fragment de l'iframe, pas dans la requête
+  if (PW) src += '#password=' + encodeURIComponent(PW);
+
+  cam.src  = src;
   chat.src = C.CHAT_URL;
 
   /* --- Bouton afficher / masquer --- */
