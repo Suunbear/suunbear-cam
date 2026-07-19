@@ -10,7 +10,10 @@
 <script>
 /* ============================================================
    CONFIG — aucun secret ici. Le code peut rester public.
-   L'ID et le mot de passe arrivent par le # de l'URL.
+   ID VDO.Ninja, mot de passe et session chat arrivent par le #.
+
+   Adresse à mettre en favori :
+   .../suunbear-cam/#id=TON_ID&pw=TON_MDP&chat=TA_SESSION
    ============================================================ */
 const CONFIG = {
 
@@ -18,8 +21,11 @@ const CONFIG = {
   QUALITY     : 0,            // 0 = 1080p | 1 = 720p | 2 = 360p
   BITRATE     : 4000,         // kbps. Descendre à 2500 si ça saccade en 4G
 
-  // --- Chat ---
-  CHAT_URL    : "https://jmfoss.github.io/v2/?channel=suun_bear&size=3&font=2&stroke=2&shadow=2&bots=true&animate=true",
+  // --- Chat (Social Stream Ninja) ---
+  // {SESSION} est remplacé par la valeur passée dans le #.
+  // Pour changer de thème, remplace "rainbowpuke" par un autre.
+  CHAT_URL    : "https://socialstream.ninja/themes/rainbowpuke/index.html?session={SESSION}",
+
   CHAT_HEIGHT : 45,           // % de la hauteur d'écran occupée par le chat
   CHAT_ANCHOR : "bottom",     // "bottom" ou "top"
   CHAT_SIDE   : 4,            // marge gauche/droite en %
@@ -99,6 +105,7 @@ html, body {
 }
 #toggle:active { background:rgba(0,0,0,.7); }
 #toggle.off { opacity:.4; }
+#toggle.none { display:none; }
 
 /* --- Écran d'aide si l'ID manque --- */
 #setup {
@@ -144,8 +151,8 @@ html, body {
 
 <div id="setup">
   <div>
-    Ajoute ton identifiant de flux à la fin de l'adresse.
-    <code>#id=TON_ID&amp;pw=TON_MOT_DE_PASSE</code>
+    Ajoute tes identifiants à la fin de l'adresse.
+    <code>#id=TON_ID&amp;pw=TON_MDP&amp;chat=TA_SESSION</code>
   </div>
 </div>
 
@@ -160,10 +167,11 @@ html, body {
      ------------------------------------------------------------ */
   const frag  = new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
-  const get   = k => frag.get(k) || query.get(k) || '';
+  const get   = k => (frag.get(k) || query.get(k) || '').trim();
 
-  const ID = get('id').trim();
-  const PW = get('pw').trim();
+  const ID      = get('id');
+  const PW      = get('pw');
+  const SESSION = get('chat');
 
   if (!ID) {
     document.getElementById('setup').classList.add('show');
@@ -184,7 +192,7 @@ html, body {
   chat.classList.add(C.CHAT_ANCHOR);
   scrim.classList.add(C.CHAT_ANCHOR);
 
-  /* --- Construit le lien VDO.Ninja --- */
+  /* --- Caméra : lien VDO.Ninja --- */
   let src = 'https://vdo.ninja/?push=' + encodeURIComponent(ID)
           + '&webcam'
           + '&quality='      + C.QUALITY
@@ -195,8 +203,17 @@ html, body {
   // Le mot de passe part dans le fragment de l'iframe, pas dans la requête
   if (PW) src += '#password=' + encodeURIComponent(PW);
 
-  cam.src  = src;
-  chat.src = C.CHAT_URL;
+  cam.src = src;
+
+  /* --- Chat : overlay Social Stream Ninja --- */
+  if (SESSION) {
+    chat.src = C.CHAT_URL.replace('{SESSION}', encodeURIComponent(SESSION));
+  } else {
+    // Pas de session fournie : la caméra fonctionne seule
+    chat.style.display = 'none';
+    scrim.style.display = 'none';
+    toggle.classList.add('none');
+  }
 
   /* --- Bouton afficher / masquer --- */
   let visible = true;
