@@ -15,47 +15,67 @@
    Favori à mettre sur l'écran d'accueil du téléphone :
    .../suunbear-cam/#id=TON_ID&pw=TON_MDP&chat=TA_SESSION
 
-   « chat » attend l'ID de session seul, pas une URL.
+   « chat » attend l'ID de session Social Stream Ninja, pas une URL.
 
-   Options en plus, à ajouter dans le # :
-     &theme=dock|sample|t3nk3y|rainbow   habillage du chat
-     &dev                               affiche le bouton 🎨
+   Deux temps :
+   1. RÉGLAGE — l'interface VDO.Ninja est active, tu choisis ta
+      caméra et tu appuies sur Start.
+   2. DIRECT — tu appuies sur VERROUILLER. L'écran devient inerte,
+      le chat apparaît, et mes propres boutons prennent le relais.
    ============================================================ */
 const CONFIG = {
 
-  /* --- Caméra (VDO.Ninja) --- */
-  QUALITY : 0,       // 0 = 1080p | 1 = 720p | 2 = 360p
-  BITRATE : 4000,    // kbps. Descendre à 2500 si ça saccade en 4G
+  /* ---------- Caméra (VDO.Ninja) ---------- */
+  QUALITY : 0,        // 0 = 1080p | 1 = 720p | 2 = 360p
+  BITRATE : 4000,     // kbps. Descendre à 2500 si ça saccade en 4G
 
-  /* --- Chat (Social Stream Ninja) --- */
-  THEME   : "dock",
-  CSS_URL : "https://suunbear.github.io/suunbear-cam/chat.css",
+  /* ---------- Chat ---------- */
+  MAX      : 8,       // nombre de messages gardés à l'écran
+  LIFETIME : 0,       // secondes avant qu'un message s'efface. 0 = jamais
+  FONT     : 18,      // taille du texte en px
 
-  CHAT_HEIGHT : 62,        // % de la hauteur d'écran occupée par le chat
-  CHAT_ANCHOR : "bottom",  // "bottom" ou "top"
-  CHAT_SIDE   : 2,         // marge gauche/droite en %
+  AVATARS  : true,    // photo de profil
+  ICONS    : true,    // icône de la plateforme (Twitch, YouTube…)
+  BADGES   : true,    // badges Twitch (sub, modo, VIP…)
+  FADE_OLD : true,    // les anciens messages s'estompent doucement
 
-  /* --- Lisibilité --- */
-  SCRIM : 0.35,            // voile sombre derrière le chat. 0 = aucun
+  /* ---------- Placement ---------- */
+  CHAT_HEIGHT : 56,   // % de la hauteur d'écran réservée au chat
+  CHAT_SIDE   : 3,    // marge gauche/droite en %
+  CHAT_BOTTOM : 28,   // marge basse en px, au-dessus de la barre de gestes
+  SCRIM       : 0.45, // voile sombre derrière le chat. 0 = aucun
 
-  /* --- Sécurité --- */
-  CONFIRM_EXIT : true      // confirmation avant de quitter ou rafraîchir
+  /* ---------- Sécurité ---------- */
+  CONFIRM_EXIT : true // confirmation avant de quitter ou rafraîchir
 };
 
-/* {SESSION} et {CSS} sont remplacés au chargement. */
-const THEMES = {
-  dock    : "https://socialstream.ninja/dock.html?session={SESSION}&compact&darkmode&css={CSS}",
-  sample  : "https://socialstream.ninja/sampleoverlay.html?session={SESSION}",
-  t3nk3y  : "https://socialstream.ninja/themes/t3nk3y/?session={SESSION}",
-  rainbow : "https://socialstream.ninja/themes/rainbowpuke/index.html?session={SESSION}"
+/* Couleur de la barre latérale, selon la plateforme d'origine. */
+const PLATFORM = {
+  twitch:'#9146ff', youtube:'#ff0033', youtubeshorts:'#ff0033', kick:'#53fc18',
+  tiktok:'#ff0050', discord:'#5865f2', instagram:'#e1306c', facebook:'#1877f2',
+  x:'#e7e9ea', twitter:'#e7e9ea', telegram:'#2aabee', trovo:'#1cb46c',
+  rumble:'#85c742', reddit:'#ff4500', slack:'#e01e5a', zoom:'#2d8cff'
 };
+
+/* Boutons de VDO.Ninja à masquer une fois l'écran verrouillé.
+   On joue sur l'opacité : c'est réversible proprement.
+   Un identifiant absent ne provoque rien. */
+const VDO_UI = '#header,#controlButtons,#mutebutton,#mutevideobutton,'
+             + '#hangupbutton,#settingsbutton,#screensharebutton,#chatbutton,'
+             + '#raisehandbutton,#recordLocalbutton,#helpbutton,#reportbutton,'
+             + '#translationbutton,#toggleSettingsButton,#logoname,#info,#qos,'
+             + '#mainmenu,#chatModule,#nextbutton,#previousbutton';
 </script>
 
 <style>
 :root {
-  --scrim   : 0.35;
-  --chatH   : 62%;
-  --chatSide: 2%;
+  --scrim  : 0.45;
+  --chatH  : 56%;
+  --side   : 3%;
+  --bottom : 28px;
+  --font   : 18px;
+  --accent : #8a8f98;
+  --purple : #9146ff;
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -64,90 +84,235 @@ html, body {
   width:100%; height:100%;
   background:#000;
   overflow:hidden;
-  overscroll-behavior:none;              /* tue le pull-to-refresh */
+  overscroll-behavior:none;               /* tue le pull-to-refresh */
   -webkit-tap-highlight-color:transparent;
+  font-family:system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  -webkit-font-smoothing:antialiased;
 }
 
-/* ---------- Couche 1 : la caméra ---------- */
+/* ================= Couche 1 : la caméra ================= */
 #cam {
   position:fixed; inset:0;
   width:100%; height:100%;
   border:0;
   z-index:1;
 }
+body.live #cam { pointer-events:none; }   /* plus aucun tap accidentel */
 
-/* ---------- Couche 2 : le voile de lisibilité ---------- */
+/* ================= Couche 2 : le voile ================= */
 #scrim {
-  position:fixed; left:0; right:0;
-  height:var(--chatH);
+  position:fixed; left:0; right:0; bottom:0;
+  height:calc(var(--chatH) + 8%);
   z-index:2;
   pointer-events:none;
-  opacity:var(--scrim);
-  transition:opacity .25s ease;
+  opacity:0;
+  background:linear-gradient(to top, #000 0%, rgba(0,0,0,.65) 40%, transparent 100%);
+  transition:opacity .3s ease;
 }
-#scrim.bottom { bottom:0; background:linear-gradient(to top,    #000 0%, transparent 100%); }
-#scrim.top    { top:0;    background:linear-gradient(to bottom, #000 0%, transparent 100%); }
+body.live #scrim          { opacity:var(--scrim); }
+body.live #scrim.hidden   { opacity:0; }
 
-/* ---------- Couche 3 : le chat ---------- */
-#chat {
+/* ================= Couche 3 : le chat =================
+   column-reverse : le plus récent se pose en bas, les vieux
+   sortent par le haut. Aucun défilement, donc rien ne peut
+   se retrouver hors de l'écran. */
+#feed {
   position:fixed;
-  left:var(--chatSide); right:var(--chatSide);
-  height:var(--chatH);
-  border:0;
-  background:transparent;
+  left:var(--side); right:var(--side);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + var(--bottom));
+  max-height:var(--chatH);
   z-index:3;
-  pointer-events:none;                   /* les taps traversent vers la caméra */
-  transition:opacity .25s ease;
+  pointer-events:none;
+  display:none;
+  flex-direction:column-reverse;
+  align-items:flex-start;
+  gap:6px;
+  overflow:hidden;
+  transition:opacity .3s ease;
 }
-#chat.bottom { bottom:env(safe-area-inset-bottom, 0px); }
-#chat.top    { top:env(safe-area-inset-top, 0px); }
+body.live #feed        { display:flex; }
+body.live #feed.hidden { opacity:0; }
 
-#chat.hidden, #scrim.hidden { opacity:0; }
-
-/* ---------- Boutons ---------- */
-.btn {
-  position:fixed; right:10px;
-  z-index:10;
-  width:46px; height:46px;
-  border:0; border-radius:14px;
-  background:rgba(0,0,0,.45);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
+.msg {
+  --o:.62;
+  max-width:100%;
+  padding:6px 12px 7px;
+  border-left:3px solid var(--accent);
+  border-radius:3px 15px 15px 3px;
+  background:rgba(0,0,0,.58);            /* 50-70 % : lisible sur tout fond */
   color:#fff;
-  font:600 19px/1 system-ui, sans-serif;
-  display:grid; place-items:center;
-  cursor:pointer;
+  font-size:var(--font);
+  line-height:1.34;
+  word-wrap:break-word;
+  overflow-wrap:anywhere;
+  text-shadow:0 1px 2px #000, 0 2px 10px rgba(0,0,0,.9);
+  opacity:var(--o);
+  transform:translateY(0);
+  transition:opacity .45s ease, transform .3s cubic-bezier(.2,.9,.3,1);
+
+  display:-webkit-box;                    /* coupe les pavés interminables */
+  -webkit-line-clamp:5;
+  -webkit-box-orient:vertical;
 }
-.btn:active      { background:rgba(0,0,0,.7); }
-.btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
 
-#toggle      { top:calc(env(safe-area-inset-top, 0px) + 10px); }
-#toggle.off  { opacity:.4; }
-#toggle.none { display:none; }
+/* Dégradé de fraîcheur : le dernier message est le plus net. */
+#feed.fade .msg:nth-child(1) { --o:1;   }
+#feed.fade .msg:nth-child(2) { --o:.94; }
+#feed.fade .msg:nth-child(3) { --o:.88; }
+#feed.fade .msg:nth-child(4) { --o:.82; }
+#feed.fade .msg:nth-child(5) { --o:.76; }
+#feed.fade .msg:nth-child(6) { --o:.70; }
 
-#next        { top:calc(env(safe-area-inset-top, 0px) + 66px); display:none; font-size:16px; }
-#next.on     { display:grid; }
+.msg.enter { opacity:0; transform:translateY(18px); }
+.msg.gone  { opacity:0 !important; transform:translateY(-10px); }
 
-/* ---------- Étiquette du thème (mode dev) ---------- */
-#badge {
+.av  { width:1.3em; height:1.3em; border-radius:50%; object-fit:cover;
+       vertical-align:-.28em; margin-right:.32em; background:#333; }
+.bdg { height:.95em; vertical-align:-.08em; margin-right:.2em; }
+.nm  { font-weight:700; color:#ffc14d; margin-right:.15em; }
+.src { width:.9em; height:.9em; vertical-align:-.05em; margin:0 .3em 0 .1em; }
+.don { color:#4ade80; font-weight:700; margin-right:.3em; }
+.tx img   { max-height:1.5em; vertical-align:-.35em; }
+.media    { display:block; max-width:100%; max-height:110px;
+            margin-top:6px; border-radius:9px; }
+
+/* ================= Barre du haut ================= */
+#bar {
   position:fixed;
   top:calc(env(safe-area-inset-top, 0px) + 10px);
-  left:50%; transform:translateX(-50%);
+  left:10px; right:10px;
   z-index:10;
-  padding:9px 15px;
+  display:none;
+  align-items:center;
+  gap:8px;
+}
+body.live #bar { display:flex; }
+
+#dot {
+  display:flex; align-items:center; gap:7px;
+  padding:0 12px; height:40px;
   border-radius:12px;
-  background:rgba(0,0,0,.6);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
   color:#fff;
-  font:600 14px/1 system-ui, sans-serif;
+  font:600 13px/1 system-ui, sans-serif;
+}
+#dot::before {
+  content:''; width:9px; height:9px; border-radius:50%;
+  background:#71767b;
+  transition:background .3s ease, box-shadow .3s ease;
+}
+#dot.on::before { background:#4ade80; box-shadow:0 0 9px #4ade80; }
+
+#spacer { flex:1; }
+
+.btn {
+  width:44px; height:44px;
+  border:0; border-radius:13px;
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 18px/1 system-ui, sans-serif;
+  display:grid; place-items:center;
+  cursor:pointer;
+  position:relative;
+  flex-shrink:0;
+}
+.btn:active        { background:rgba(0,0,0,.75); }
+.btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+.btn.off           { opacity:.45; }
+.btn.none          { display:none; }
+
+#unread {
+  position:absolute; top:-5px; right:-5px;
+  min-width:20px; height:20px; padding:0 5px;
+  border-radius:10px;
+  background:#e0245e;
+  color:#fff;
+  font:700 11px/20px system-ui, sans-serif;
+  text-align:center;
+  display:none;
+}
+#unread.on { display:block; }
+
+/* ================= Menu ================= */
+#menu {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 62px);
+  right:10px;
+  z-index:11;
+  width:210px;
+  padding:6px;
+  border-radius:15px;
+  background:rgba(16,16,18,.92);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 10px 34px rgba(0,0,0,.6);
+  display:none;
+}
+#menu.open { display:block; }
+#menu button {
+  display:flex; align-items:center; gap:11px;
+  width:100%; padding:12px 13px;
+  border:0; border-radius:10px;
+  background:transparent;
+  color:#fff;
+  font:500 15px/1 system-ui, sans-serif;
+  text-align:left;
+  cursor:pointer;
+}
+#menu button:active { background:rgba(255,255,255,.12); }
+#menu button.danger { color:#ff6b6b; }
+#menu hr { border:0; height:1px; background:rgba(255,255,255,.12); margin:5px 9px; }
+
+/* ================= Écran de réglage ================= */
+#go {
+  position:fixed;
+  left:16px; right:16px;
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 22px);
+  z-index:10;
+  padding:17px;
+  border:0; border-radius:16px;
+  background:var(--purple);
+  color:#fff;
+  font:700 17px/1.25 system-ui, sans-serif;
+  box-shadow:0 8px 26px rgba(145,70,255,.45);
+  cursor:pointer;
+}
+#go small {
+  display:block;
+  margin-top:5px;
+  font-weight:500;
+  font-size:12.5px;
+  opacity:.82;
+}
+#go:active   { transform:scale(.985); }
+body.live #go { display:none; }
+
+/* ================= Message passager ================= */
+#toast {
+  position:fixed;
+  left:50%; transform:translateX(-50%);
+  top:calc(env(safe-area-inset-top, 0px) + 64px);
+  z-index:12;
+  max-width:80%;
+  padding:10px 16px;
+  border-radius:13px;
+  background:rgba(0,0,0,.72);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 14px/1.3 system-ui, sans-serif;
+  text-align:center;
   opacity:0;
   pointer-events:none;
-  transition:opacity .2s ease;
+  transition:opacity .22s ease;
 }
-#badge.show { opacity:1; }
+#toast.show { opacity:1; }
 
-/* ---------- Écran d'aide si l'ID manque ---------- */
+/* ================= Écran d'aide ================= */
 #setup {
   position:fixed; inset:0;
   z-index:20;
@@ -172,7 +337,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #chat, #scrim, #badge, .btn { transition:none; }
+  .msg, #feed, #scrim, #toast, #go { transition:none; }
 }
 </style>
 </head>
@@ -184,13 +349,29 @@ html, body {
         allowfullscreen></iframe>
 
 <div id="scrim"></div>
+<div id="feed"></div>
 
-<iframe id="chat" scrolling="no"></iframe>
+<div id="bar">
+  <div id="dot">PC</div>
+  <div id="spacer"></div>
+  <button class="btn" id="bMic"  aria-label="Couper le micro">🎤</button>
+  <button class="btn" id="bChat" aria-label="Afficher ou masquer le chat">💬<span id="unread"></span></button>
+  <button class="btn" id="bMenu" aria-label="Plus d'options">⋯</button>
+</div>
 
-<button id="toggle" class="btn" aria-label="Afficher ou masquer le chat">💬</button>
-<button id="next"   class="btn" aria-label="Habillage suivant">🎨</button>
+<div id="menu">
+  <button id="mCam">🔄 &nbsp;Caméra suivante</button>
+  <button id="mLock">🔓 &nbsp;Déverrouiller l'écran</button>
+  <hr>
+  <button id="mEnd" class="danger">⏻ &nbsp;Raccrocher</button>
+</div>
 
-<div id="badge" aria-live="polite"></div>
+<button id="go">
+  VERROUILLER L'ÉCRAN
+  <small>À faire une fois la caméra lancée</small>
+</button>
+
+<div id="toast"></div>
 
 <div id="setup">
   <div>
@@ -211,36 +392,40 @@ html, body {
   const frag  = new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
   const get   = k => (frag.get(k) || query.get(k) || '').trim();
-  const has   = k => frag.has(k) || query.has(k);
 
   const ID      = get('id');
   const PW      = get('pw');
   const SESSION = get('chat');
-  const DEV     = has('dev');
 
-  const $      = s => document.querySelector(s);
-  const cam    = $('#cam');
-  const chat   = $('#chat');
-  const scrim  = $('#scrim');
-  const toggle = $('#toggle');
-  const next   = $('#next');
-  const badge  = $('#badge');
+  const $     = s => document.querySelector(s);
+  const cam   = $('#cam'),  feed  = $('#feed'), scrim = $('#scrim');
+  const dot   = $('#dot'),  menu  = $('#menu'), toastEl = $('#toast');
+  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu');
+  const unread = $('#unread');
 
-  if (!ID) {
-    $('#setup').classList.add('show');
-    return;
-  }
+  if (!ID) { $('#setup').classList.add('show'); return; }
 
   /* --- La config pilote le CSS --- */
   const root = document.documentElement;
-  root.style.setProperty('--scrim',    C.SCRIM);
-  root.style.setProperty('--chatH',    C.CHAT_HEIGHT + '%');
-  root.style.setProperty('--chatSide', C.CHAT_SIDE + '%');
+  root.style.setProperty('--scrim',  C.SCRIM);
+  root.style.setProperty('--chatH',  C.CHAT_HEIGHT + '%');
+  root.style.setProperty('--side',   C.CHAT_SIDE + '%');
+  root.style.setProperty('--bottom', C.CHAT_BOTTOM + 'px');
+  root.style.setProperty('--font',   C.FONT + 'px');
+  if (C.FADE_OLD) feed.classList.add('fade');
 
-  chat.classList.add(C.CHAT_ANCHOR);
-  scrim.classList.add(C.CHAT_ANCHOR);
+  /* --- Petit message passager --- */
+  let toastTimer;
+  const toast = txt => {
+    toastEl.textContent = txt;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
+  };
 
-  /* --- Couche 1 : la caméra --- */
+  /* ============================================================
+     Couche 1 — la caméra
+     ============================================================ */
   let src = 'https://vdo.ninja/?push=' + encodeURIComponent(ID)
           + '&webcam'
           + '&quality='      + C.QUALITY
@@ -253,61 +438,232 @@ html, body {
 
   cam.src = src;
 
-  /* --- Étiquette passagère --- */
-  let timer;
-  const flash = txt => {
-    badge.textContent = txt;
-    badge.classList.add('show');
-    clearTimeout(timer);
-    timer = setTimeout(() => badge.classList.remove('show'), 1400);
+  /* Commande envoyée à VDO.Ninja (API IFRAME officielle) */
+  const cmd = m => { try { cam.contentWindow.postMessage(m, '*'); } catch (e) {} };
+
+  /* ============================================================
+     Verrouillage de l'écran
+     ============================================================ */
+  const lock = () => {
+    document.body.classList.add('live');
+    cmd({ style: VDO_UI + '{opacity:0 !important;}' });   // ses boutons disparaissent
+    cmd({ getDeviceList: true, cib: 'devices' });         // pour le bouton caméra
+    toast('Écran verrouillé');
   };
 
-  /* --- Couche 3 : le chat --- */
-  const isURL = /^https?:\/\//i.test(SESSION);
-  const names = Object.keys(THEMES);
-  let index   = Math.max(0, names.indexOf(get('theme') || C.THEME));
+  const unlock = () => {
+    document.body.classList.remove('live');
+    menu.classList.remove('open');
+    cmd({ style: VDO_UI + '{opacity:1 !important;}' });
+    toast('Écran déverrouillé');
+  };
 
-  const loadChat = announce => {
-    chat.src = isURL
-      ? SESSION                                    // URL complète acceptée telle quelle
-      : THEMES[names[index]]
-          .replace('{SESSION}', encodeURIComponent(SESSION))
-          .replace('{CSS}', C.CSS_URL);
-    if (announce) flash(names[index]);
+  $('#go').addEventListener('click', lock);
+  $('#mLock').addEventListener('click', unlock);
+
+  /* ============================================================
+     Contrôles
+     ============================================================ */
+
+  /* --- Micro --- */
+  let micOn = true;
+  bMic.addEventListener('click', () => {
+    micOn = !micOn;
+    cmd({ mic: micOn });
+    bMic.textContent = micOn ? '🎤' : '🔇';
+    bMic.classList.toggle('off', !micOn);
+    toast(micOn ? 'Micro actif' : 'Micro coupé');
+  });
+
+  /* --- Menu --- */
+  bMenu.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target) && e.target !== bMenu) menu.classList.remove('open');
+  });
+
+  /* --- Caméra suivante --- */
+  let cams = [], camIdx = 0;
+  $('#mCam').addEventListener('click', () => {
+    menu.classList.remove('open');
+    if (cams.length < 2) { toast('Une seule caméra détectée'); return; }
+    camIdx = (camIdx + 1) % cams.length;
+    cmd({ changeVideoDevice: cams[camIdx].deviceId });
+    toast(cams[camIdx].label || ('Caméra ' + (camIdx + 1)));
+  });
+
+  /* --- Raccrocher --- */
+  $('#mEnd').addEventListener('click', () => {
+    menu.classList.remove('open');
+    if (confirm('Raccrocher et couper la caméra ?')) {
+      cmd({ close: true });
+      toast('Caméra coupée');
+    }
+  });
+
+  /* ============================================================
+     Couche 3 — le chat
+     Les messages arrivent de Social Stream Ninja par WebRTC,
+     via un iframe invisible. On les redessine nous-mêmes.
+     ============================================================ */
+  let pipe = null, visible = true, missed = 0, counter = 0;
+
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+  const draw = d => {
+    const el = document.createElement('div');
+    el.className = 'msg enter';
+    el.dataset.mid  = String(d.mid || d.id || ('m' + (++counter)));
+    el.dataset.name = d.chatname ? String(d.chatname) : '';
+    el.style.setProperty('--accent', PLATFORM[d.type] || '#8a8f98');
+
+    let h = '';
+
+    if (C.AVATARS && d.chatimg) {
+      h += '<img class="av" src="' + esc(d.chatimg) + '" onerror="this.remove()">';
+    }
+
+    if (C.BADGES && Array.isArray(d.chatbadges)) {
+      d.chatbadges.forEach(b => {
+        if (typeof b === 'string') {
+          h += '<img class="bdg" src="' + esc(b) + '" onerror="this.remove()">';
+        } else if (b && b.type === 'img' && b.src) {
+          h += '<img class="bdg" src="' + esc(b.src) + '" onerror="this.remove()">';
+        } else if (b && b.type === 'svg' && b.html) {
+          h += '<span class="bdg">' + b.html + '</span>';
+        }
+      });
+    }
+
+    if (d.chatname) {
+      const col = d.nameColor ? ' style="color:' + esc(d.nameColor) + '"' : '';
+      h += '<span class="nm"' + col + '>' + esc(d.chatname) + '</span>';
+    }
+
+    if (C.ICONS && d.type) {
+      h += '<img class="src" src="https://socialstream.ninja/sources/images/'
+         + encodeURIComponent(d.type) + '.png" onerror="this.remove()">';
+    }
+
+    if (d.hasDonation) h += '<span class="don">' + esc(d.hasDonation) + '</span>';
+    if (d.chatmessage) h += '<span class="tx">' + d.chatmessage + '</span>';
+    if (d.contentimg)  h += '<img class="media" src="' + esc(d.contentimg) + '" onerror="this.remove()">';
+
+    el.innerHTML = h;
+
+    feed.prepend(el);              // column-reverse : ça se pose en bas
+    void el.offsetWidth;           // force le calcul avant l'animation
+    el.classList.remove('enter');
+
+    // Le plus ancien est le dernier du DOM
+    while (feed.children.length > C.MAX) feed.lastElementChild.remove();
+
+    if (C.LIFETIME > 0) {
+      setTimeout(() => {
+        el.classList.add('gone');
+        setTimeout(() => el.remove(), 500);
+      }, C.LIFETIME * 1000);
+    }
+
+    if (!visible) {
+      missed++;
+      unread.textContent = missed > 99 ? '99+' : missed;
+      unread.classList.add('on');
+    }
+  };
+
+  const drop = test => [...feed.children].forEach(el => { if (test(el)) el.remove(); });
+
+  const handle = d => {
+    if (!d || typeof d !== 'object') return;
+    if (d.content) d = d.content;
+
+    if ('clearAll' in d || d.action === 'clear' || d.action === 'clearAll') {
+      feed.innerHTML = ''; return;
+    }
+    if ('deleteMessage' in d) {
+      drop(el => el.dataset.mid === String(d.deleteMessage)); return;
+    }
+    if (d.delete && typeof d.delete === 'object') {
+      const t = d.delete;
+      drop(el => (t.id && el.dataset.mid === String(t.id))
+              || (t.chatname && el.dataset.name === String(t.chatname)));
+      return;
+    }
+    if (d.timeoutUser || d.blockUser) {
+      const u = d.timeoutUser || d.blockUser;
+      const n = u.chatname || u.username;
+      if (n) drop(el => el.dataset.name === String(n));
+      return;
+    }
+
+    if (!d.chatmessage && !d.hasDonation && !d.contentimg) return;
+    draw(d);
   };
 
   if (SESSION) {
-    loadChat(false);
+    pipe = document.createElement('iframe');
+    pipe.src = 'https://vdo.socialstream.ninja/?ln&salt=vdo.ninja&notmobile'
+             + '&password=false&push&label=dock&vd=0&ad=0'
+             + '&novideo&noaudio&autostart&cleanoutput'
+             + '&room=' + encodeURIComponent(SESSION);
+    pipe.style.cssText = 'width:0;height:0;position:fixed;left:-100px;top:-100px;border:0;';
+    document.body.appendChild(pipe);
+
+    bChat.addEventListener('click', () => {
+      visible = !visible;
+      feed.classList.toggle('hidden',  !visible);
+      scrim.classList.toggle('hidden', !visible);
+      bChat.classList.toggle('off',    !visible);
+      if (visible) { missed = 0; unread.classList.remove('on'); }
+    });
   } else {
-    // Pas de session : la caméra fonctionne seule
-    chat.style.display  = 'none';
-    scrim.style.display = 'none';
-    toggle.classList.add('none');
+    bChat.classList.add('none');
   }
 
-  /* --- Bouton 💬 : afficher / masquer le chat --- */
-  let visible = true;
-  toggle.addEventListener('click', () => {
-    visible = !visible;
-    chat.classList.toggle('hidden',  !visible);
-    scrim.classList.toggle('hidden', !visible);
-    toggle.classList.toggle('off',   !visible);
+  /* ============================================================
+     Écoute des deux iframes
+     ============================================================ */
+  let viewers = 0;
+
+  window.addEventListener('message', e => {
+
+    /* --- Chat --- */
+    if (pipe && e.source === pipe.contentWindow) {
+      const r = e.data && e.data.dataReceived;
+      if (r && typeof r === 'object' && r.overlayNinja) handle(r.overlayNinja);
+      return;
+    }
+
+    /* --- Caméra --- */
+    if (e.source !== cam.contentWindow) return;
+    const d = e.data;
+    if (!d || typeof d !== 'object') return;
+
+    // Liste des caméras du téléphone
+    if (d.cib === 'devices' && Array.isArray(d.deviceList)) {
+      cams = d.deviceList.filter(x => x && x.kind === 'videoinput');
+    }
+
+    // Le PC (OBS) reçoit-il le flux ?
+    if (d.action === 'view-connection') {
+      viewers = Math.max(0, viewers + (d.value ? 1 : -1));
+      dot.classList.toggle('on', viewers > 0);
+      dot.textContent = viewers > 0 ? 'PC' : 'PC ?';
+    }
   });
 
-  /* --- Bouton 🎨 : habillage suivant. Uniquement avec &dev --- */
-  if (DEV && SESSION && !isURL) {
-    next.classList.add('on');
-    next.addEventListener('click', () => {
-      index = (index + 1) % names.length;
-      loadChat(true);
-    });
-    flash(names[index]);
-  }
+  /* ============================================================
+     Confort
+     ============================================================ */
 
   /* --- Garde l'écran allumé --- */
-  let lock = null;
+  let awake = null;
   const keepAwake = async () => {
-    try { lock = await navigator.wakeLock.request('screen'); }
+    try { awake = await navigator.wakeLock.request('screen'); }
     catch (e) { /* refusé ou non supporté : la veille système prend le relais */ }
   };
   if ('wakeLock' in navigator) {
