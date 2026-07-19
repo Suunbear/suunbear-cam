@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Suun Cam</title>
+
+<script>
+/* ============================================================
+   CONFIG — tout se règle ici
+   ============================================================ */
+const CONFIG = {
+
+  // --- VDO.Ninja ---
+  STREAM_ID   : "suunbear1",
+  QUALITY     : 0,            // 0 = 1080p | 1 = 720p | 2 = 360p
+  BITRATE     : 4000,         // kbps. Descendre à 2500 si ça saccade en 4G
+
+  // --- Chat ---
+  CHAT_URL    : "https://jmfoss.github.io/v2/?channel=suun_bear&size=3&font=2&stroke=2&shadow=2&bots=true&animate=true",
+  CHAT_HEIGHT : 45,           // % de la hauteur d'écran occupée par le chat
+  CHAT_ANCHOR : "bottom",     // "bottom" ou "top"
+  CHAT_SIDE   : 4,            // marge gauche/droite en %
+
+  // --- Lisibilité ---
+  SCRIM       : 0.30,         // voile sombre derrière le chat. 0 = aucun, 1 = noir
+
+  // --- Sécurité ---
+  CONFIRM_EXIT: true          // demande confirmation avant de quitter/rafraîchir
+};
+</script>
+
+<style>
+:root { --scrim: 0.30; --chatH: 45%; --chatSide: 4%; }
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  width:100%; height:100%;
+  background:#000;
+  overflow:hidden;
+  overscroll-behavior:none;          /* tue le pull-to-refresh */
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* --- Couche 1 : la caméra --- */
+#cam {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  border:0;
+  z-index:1;
+}
+
+/* --- Couche 2 : le voile de lisibilité --- */
+#scrim {
+  position:fixed; left:0; right:0;
+  height:var(--chatH);
+  z-index:2;
+  pointer-events:none;
+  opacity:var(--scrim);
+  transition:opacity .25s ease;
+}
+#scrim.bottom { bottom:0; background:linear-gradient(to top, #000 0%, transparent 100%); }
+#scrim.top    { top:0;    background:linear-gradient(to bottom, #000 0%, transparent 100%); }
+
+/* --- Couche 3 : le chat --- */
+#chat {
+  position:fixed;
+  left:var(--chatSide); right:var(--chatSide);
+  height:var(--chatH);
+  border:0;
+  background:transparent;
+  z-index:3;
+  pointer-events:none;               /* les taps traversent vers la caméra */
+  transition:opacity .25s ease;
+}
+#chat.bottom { bottom:env(safe-area-inset-bottom, 0px); }
+#chat.top    { top:env(safe-area-inset-top, 0px); }
+
+#chat.hidden, #scrim.hidden { opacity:0; }
+
+/* --- Bouton chat --- */
+#toggle {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 10px);
+  right:10px;
+  z-index:10;
+  width:46px; height:46px;
+  border:0; border-radius:14px;
+  background:rgba(0,0,0,.45);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  color:#fff;
+  font:600 19px/1 system-ui, sans-serif;
+  display:grid; place-items:center;
+  cursor:pointer;
+}
+#toggle:active { background:rgba(0,0,0,.7); }
+#toggle.off { opacity:.4; }
+
+@media (prefers-reduced-motion: reduce) {
+  #chat, #scrim, #toggle { transition:none; }
+}
+</style>
+</head>
+
+<body>
+
+<iframe id="cam"
+        allow="camera; microphone; autoplay; display-capture; fullscreen; screen-wake-lock"
+        allowfullscreen></iframe>
+
+<div id="scrim"></div>
+
+<iframe id="chat" scrolling="no"></iframe>
+
+<button id="toggle" aria-label="Afficher ou masquer le chat">💬</button>
+
+<script>
+(() => {
+  const C = CONFIG;
+  const root = document.documentElement;
+
+  /* --- Applique la config au CSS --- */
+  root.style.setProperty('--scrim',    C.SCRIM);
+  root.style.setProperty('--chatH',    C.CHAT_HEIGHT + '%');
+  root.style.setProperty('--chatSide', C.CHAT_SIDE + '%');
+
+  const cam    = document.getElementById('cam');
+  const chat   = document.getElementById('chat');
+  const scrim  = document.getElementById('scrim');
+  const toggle = document.getElementById('toggle');
+
+  chat.classList.add(C.CHAT_ANCHOR);
+  scrim.classList.add(C.CHAT_ANCHOR);
+
+  /* --- Construit le lien VDO.Ninja --- */
+  cam.src = 'https://vdo.ninja/?push=' + encodeURIComponent(C.STREAM_ID)
+          + '&webcam'
+          + '&quality='      + C.QUALITY
+          + '&videobitrate=' + C.BITRATE
+          + '&fullscreen'
+          + '&largepreview';
+
+  chat.src = C.CHAT_URL;
+
+  /* --- Bouton afficher / masquer --- */
+  let visible = true;
+  toggle.addEventListener('click', () => {
+    visible = !visible;
+    chat.classList.toggle('hidden',  !visible);
+    scrim.classList.toggle('hidden', !visible);
+    toggle.classList.toggle('off',   !visible);
+  });
+
+  /* --- Garde l'écran allumé --- */
+  let lock = null;
+  const keepAwake = async () => {
+    try { lock = await navigator.wakeLock.request('screen'); }
+    catch (e) { /* non supporté ou refusé : la veille système prend le relais */ }
+  };
+  if ('wakeLock' in navigator) {
+    keepAwake();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') keepAwake();
+    });
+  }
+
+  /* --- Anti-rafraîchissement accidentel --- */
+  if (C.CONFIRM_EXIT) {
+    window.addEventListener('beforeunload', e => {
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
