@@ -9,37 +9,54 @@
 
 <script>
 /* ============================================================
-   CONFIG — aucun secret ici. Le code peut rester public.
-   ID VDO.Ninja, mot de passe et session chat arrivent par le #.
+   SUUNBEAR CAM — caméra du téléphone + chat, pour Twitch
+   Aucun secret dans ce fichier : le dépôt peut rester public.
 
-   Adresse à mettre en favori :
+   Favori à mettre sur l'écran d'accueil du téléphone :
    .../suunbear-cam/#id=TON_ID&pw=TON_MDP&chat=TA_SESSION
+
+   « chat » attend l'ID de session seul, pas une URL.
+
+   Options en plus, à ajouter dans le # :
+     &theme=dock|sample|t3nk3y|rainbow   habillage du chat
+     &dev                               affiche le bouton 🎨
    ============================================================ */
 const CONFIG = {
 
-  // --- VDO.Ninja ---
-  QUALITY     : 0,            // 0 = 1080p | 1 = 720p | 2 = 360p
-  BITRATE     : 4000,         // kbps. Descendre à 2500 si ça saccade en 4G
+  /* --- Caméra (VDO.Ninja) --- */
+  QUALITY : 0,       // 0 = 1080p | 1 = 720p | 2 = 360p
+  BITRATE : 4000,    // kbps. Descendre à 2500 si ça saccade en 4G
 
-  // --- Chat (Social Stream Ninja) ---
-  // {SESSION} est remplacé par la valeur passée dans le #.
-  // Pour changer de thème, remplace "rainbowpuke" par un autre.
-  CHAT_URL    : "https://socialstream.ninja/themes/rainbowpuke/index.html?session={SESSION}",
+  /* --- Chat (Social Stream Ninja) --- */
+  THEME   : "dock",
+  CSS_URL : "https://suunbear.github.io/suunbear-cam/chat.css",
 
-  CHAT_HEIGHT : 45,           // % de la hauteur d'écran occupée par le chat
-  CHAT_ANCHOR : "bottom",     // "bottom" ou "top"
-  CHAT_SIDE   : 4,            // marge gauche/droite en %
+  CHAT_HEIGHT : 62,        // % de la hauteur d'écran occupée par le chat
+  CHAT_ANCHOR : "bottom",  // "bottom" ou "top"
+  CHAT_SIDE   : 2,         // marge gauche/droite en %
 
-  // --- Lisibilité ---
-  SCRIM       : 0.30,         // voile sombre derrière le chat. 0 = aucun, 1 = noir
+  /* --- Lisibilité --- */
+  SCRIM : 0.35,            // voile sombre derrière le chat. 0 = aucun
 
-  // --- Sécurité ---
-  CONFIRM_EXIT: true          // demande confirmation avant de quitter/rafraîchir
+  /* --- Sécurité --- */
+  CONFIRM_EXIT : true      // confirmation avant de quitter ou rafraîchir
+};
+
+/* {SESSION} et {CSS} sont remplacés au chargement. */
+const THEMES = {
+  dock    : "https://socialstream.ninja/dock.html?session={SESSION}&compact&darkmode&css={CSS}",
+  sample  : "https://socialstream.ninja/sampleoverlay.html?session={SESSION}",
+  t3nk3y  : "https://socialstream.ninja/themes/t3nk3y/?session={SESSION}",
+  rainbow : "https://socialstream.ninja/themes/rainbowpuke/index.html?session={SESSION}"
 };
 </script>
 
 <style>
-:root { --scrim: 0.30; --chatH: 45%; --chatSide: 4%; }
+:root {
+  --scrim   : 0.35;
+  --chatH   : 62%;
+  --chatSide: 2%;
+}
 
 * { margin:0; padding:0; box-sizing:border-box; }
 
@@ -47,11 +64,11 @@ html, body {
   width:100%; height:100%;
   background:#000;
   overflow:hidden;
-  overscroll-behavior:none;          /* tue le pull-to-refresh */
+  overscroll-behavior:none;              /* tue le pull-to-refresh */
   -webkit-tap-highlight-color:transparent;
 }
 
-/* --- Couche 1 : la caméra --- */
+/* ---------- Couche 1 : la caméra ---------- */
 #cam {
   position:fixed; inset:0;
   width:100%; height:100%;
@@ -59,7 +76,7 @@ html, body {
   z-index:1;
 }
 
-/* --- Couche 2 : le voile de lisibilité --- */
+/* ---------- Couche 2 : le voile de lisibilité ---------- */
 #scrim {
   position:fixed; left:0; right:0;
   height:var(--chatH);
@@ -68,10 +85,10 @@ html, body {
   opacity:var(--scrim);
   transition:opacity .25s ease;
 }
-#scrim.bottom { bottom:0; background:linear-gradient(to top, #000 0%, transparent 100%); }
+#scrim.bottom { bottom:0; background:linear-gradient(to top,    #000 0%, transparent 100%); }
 #scrim.top    { top:0;    background:linear-gradient(to bottom, #000 0%, transparent 100%); }
 
-/* --- Couche 3 : le chat --- */
+/* ---------- Couche 3 : le chat ---------- */
 #chat {
   position:fixed;
   left:var(--chatSide); right:var(--chatSide);
@@ -79,7 +96,7 @@ html, body {
   border:0;
   background:transparent;
   z-index:3;
-  pointer-events:none;               /* les taps traversent vers la caméra */
+  pointer-events:none;                   /* les taps traversent vers la caméra */
   transition:opacity .25s ease;
 }
 #chat.bottom { bottom:env(safe-area-inset-bottom, 0px); }
@@ -87,11 +104,9 @@ html, body {
 
 #chat.hidden, #scrim.hidden { opacity:0; }
 
-/* --- Bouton chat --- */
-#toggle {
-  position:fixed;
-  top:calc(env(safe-area-inset-top, 0px) + 10px);
-  right:10px;
+/* ---------- Boutons ---------- */
+.btn {
+  position:fixed; right:10px;
   z-index:10;
   width:46px; height:46px;
   border:0; border-radius:14px;
@@ -103,11 +118,36 @@ html, body {
   display:grid; place-items:center;
   cursor:pointer;
 }
-#toggle:active { background:rgba(0,0,0,.7); }
-#toggle.off { opacity:.4; }
+.btn:active      { background:rgba(0,0,0,.7); }
+.btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+
+#toggle      { top:calc(env(safe-area-inset-top, 0px) + 10px); }
+#toggle.off  { opacity:.4; }
 #toggle.none { display:none; }
 
-/* --- Écran d'aide si l'ID manque --- */
+#next        { top:calc(env(safe-area-inset-top, 0px) + 66px); display:none; font-size:16px; }
+#next.on     { display:grid; }
+
+/* ---------- Étiquette du thème (mode dev) ---------- */
+#badge {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 10px);
+  left:50%; transform:translateX(-50%);
+  z-index:10;
+  padding:9px 15px;
+  border-radius:12px;
+  background:rgba(0,0,0,.6);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  color:#fff;
+  font:600 14px/1 system-ui, sans-serif;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+}
+#badge.show { opacity:1; }
+
+/* ---------- Écran d'aide si l'ID manque ---------- */
 #setup {
   position:fixed; inset:0;
   z-index:20;
@@ -132,7 +172,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #chat, #scrim, #toggle { transition:none; }
+  #chat, #scrim, #badge, .btn { transition:none; }
 }
 </style>
 </head>
@@ -147,7 +187,10 @@ html, body {
 
 <iframe id="chat" scrolling="no"></iframe>
 
-<button id="toggle" aria-label="Afficher ou masquer le chat">💬</button>
+<button id="toggle" class="btn" aria-label="Afficher ou masquer le chat">💬</button>
+<button id="next"   class="btn" aria-label="Habillage suivant">🎨</button>
+
+<div id="badge" aria-live="polite"></div>
 
 <div id="setup">
   <div>
@@ -168,23 +211,28 @@ html, body {
   const frag  = new URLSearchParams(location.hash.slice(1));
   const query = new URLSearchParams(location.search);
   const get   = k => (frag.get(k) || query.get(k) || '').trim();
+  const has   = k => frag.has(k) || query.has(k);
 
   const ID      = get('id');
   const PW      = get('pw');
   const SESSION = get('chat');
+  const DEV     = has('dev');
+
+  const $      = s => document.querySelector(s);
+  const cam    = $('#cam');
+  const chat   = $('#chat');
+  const scrim  = $('#scrim');
+  const toggle = $('#toggle');
+  const next   = $('#next');
+  const badge  = $('#badge');
 
   if (!ID) {
-    document.getElementById('setup').classList.add('show');
+    $('#setup').classList.add('show');
     return;
   }
 
-  const root   = document.documentElement;
-  const cam    = document.getElementById('cam');
-  const chat   = document.getElementById('chat');
-  const scrim  = document.getElementById('scrim');
-  const toggle = document.getElementById('toggle');
-
-  /* --- Applique la config au CSS --- */
+  /* --- La config pilote le CSS --- */
+  const root = document.documentElement;
   root.style.setProperty('--scrim',    C.SCRIM);
   root.style.setProperty('--chatH',    C.CHAT_HEIGHT + '%');
   root.style.setProperty('--chatSide', C.CHAT_SIDE + '%');
@@ -192,7 +240,7 @@ html, body {
   chat.classList.add(C.CHAT_ANCHOR);
   scrim.classList.add(C.CHAT_ANCHOR);
 
-  /* --- Caméra : lien VDO.Ninja --- */
+  /* --- Couche 1 : la caméra --- */
   let src = 'https://vdo.ninja/?push=' + encodeURIComponent(ID)
           + '&webcam'
           + '&quality='      + C.QUALITY
@@ -205,17 +253,39 @@ html, body {
 
   cam.src = src;
 
-  /* --- Chat : overlay Social Stream Ninja --- */
+  /* --- Étiquette passagère --- */
+  let timer;
+  const flash = txt => {
+    badge.textContent = txt;
+    badge.classList.add('show');
+    clearTimeout(timer);
+    timer = setTimeout(() => badge.classList.remove('show'), 1400);
+  };
+
+  /* --- Couche 3 : le chat --- */
+  const isURL = /^https?:\/\//i.test(SESSION);
+  const names = Object.keys(THEMES);
+  let index   = Math.max(0, names.indexOf(get('theme') || C.THEME));
+
+  const loadChat = announce => {
+    chat.src = isURL
+      ? SESSION                                    // URL complète acceptée telle quelle
+      : THEMES[names[index]]
+          .replace('{SESSION}', encodeURIComponent(SESSION))
+          .replace('{CSS}', C.CSS_URL);
+    if (announce) flash(names[index]);
+  };
+
   if (SESSION) {
-    chat.src = C.CHAT_URL.replace('{SESSION}', encodeURIComponent(SESSION));
+    loadChat(false);
   } else {
-    // Pas de session fournie : la caméra fonctionne seule
-    chat.style.display = 'none';
+    // Pas de session : la caméra fonctionne seule
+    chat.style.display  = 'none';
     scrim.style.display = 'none';
     toggle.classList.add('none');
   }
 
-  /* --- Bouton afficher / masquer --- */
+  /* --- Bouton 💬 : afficher / masquer le chat --- */
   let visible = true;
   toggle.addEventListener('click', () => {
     visible = !visible;
@@ -224,11 +294,21 @@ html, body {
     toggle.classList.toggle('off',   !visible);
   });
 
+  /* --- Bouton 🎨 : habillage suivant. Uniquement avec &dev --- */
+  if (DEV && SESSION && !isURL) {
+    next.classList.add('on');
+    next.addEventListener('click', () => {
+      index = (index + 1) % names.length;
+      loadChat(true);
+    });
+    flash(names[index]);
+  }
+
   /* --- Garde l'écran allumé --- */
   let lock = null;
   const keepAwake = async () => {
     try { lock = await navigator.wakeLock.request('screen'); }
-    catch (e) { /* non supporté ou refusé : la veille système prend le relais */ }
+    catch (e) { /* refusé ou non supporté : la veille système prend le relais */ }
   };
   if ('wakeLock' in navigator) {
     keepAwake();
