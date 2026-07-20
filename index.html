@@ -33,6 +33,9 @@ const CONFIG = {
   QUALITY : 0,        // 0 = 1080p | 1 = 720p | 2 = 360p
   BITRATE : 4000,     // kbps. Descendre à 2500 si ça saccade en 4G
 
+  FILL_LANDSCAPE : true,  // à l'horizontale, l'aperçu remplit tout l'écran.
+                          // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
+
   /* ---------- Chat ---------- */
   MAX      : 8,       // nombre de messages gardés à l'écran
   LIFETIME : 30,      // secondes avant qu'un message s'efface. 0 = jamais
@@ -197,11 +200,15 @@ body.live #feed.hidden { opacity:0; }
   top:calc(env(safe-area-inset-top, 0px) + 10px);
   left:10px; right:10px;
   z-index:10;
-  display:none;
+  display:flex;
   align-items:center;
   gap:8px;
 }
-body.live #bar { display:flex; }
+/* Avant verrouillage, seul le voyant PC est là : les autres boutons
+   masqueraient l'interface de VDO.Ninja pendant le réglage. */
+body:not(.live) #bMic,
+body:not(.live) #bChat,
+body:not(.live) #bMenu { display:none; }
 
 #dot {
   display:flex; align-items:center; gap:7px;
@@ -506,17 +513,41 @@ body.live #go { display:none; }
   /* ============================================================
      Verrouillage de l'écran
      ============================================================ */
+  /* ============================================================
+     Style injecté dans VDO.Ninja
+
+     Deux choses : masquer ses boutons une fois verrouillé, et
+     faire remplir l'écran à l'aperçu quand le téléphone est à
+     l'horizontale. Le recadrage est purement local — OBS continue
+     de recevoir l'image 16:9 complète.
+     ============================================================ */
+  let locked = false;
+
+  const paint = () => {
+    let css = VDO_UI + '{opacity:' + (locked ? 0 : 1) + ' !important;}';
+    if (C.FILL_LANDSCAPE && matchMedia('(orientation: landscape)').matches) {
+      css += 'video{object-fit:cover !important;'
+           + 'width:100% !important;height:100% !important;}';
+    }
+    cmd({ style: css });
+  };
+
+  cam.addEventListener('load', () => setTimeout(paint, 1200));
+  matchMedia('(orientation: landscape)').addEventListener('change', () => setTimeout(paint, 350));
+
   const lock = () => {
+    locked = true;
     document.body.classList.add('live');
-    cmd({ style: VDO_UI + '{opacity:0 !important;}' });   // ses boutons disparaissent
+    paint();
     cmd({ getDeviceList: true, cib: 'devices' });         // pour le bouton caméra
     toast('Écran verrouillé');
   };
 
   const unlock = () => {
+    locked = false;
     document.body.classList.remove('live');
     menu.classList.remove('open');
-    cmd({ style: VDO_UI + '{opacity:1 !important;}' });
+    paint();
     toast('Écran déverrouillé');
   };
 
