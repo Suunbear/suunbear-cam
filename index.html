@@ -309,13 +309,12 @@ body:not(.live) #bMenu { display:none; }
 
 /* ================= Écran de réglage ================= */
 #go {
-  height:40px;
-  padding:0 12px;
+  width:40px; height:40px;
+  padding:0;
   border:0; border-radius:12px;
   background:var(--purple);
   color:#fff;
-  font:700 13px/1 system-ui, sans-serif;
-  white-space:nowrap;
+  font:700 18px/1 system-ui, sans-serif;
   display:grid; place-items:center;
   box-shadow:0 4px 18px rgba(145,70,255,.5);
   cursor:pointer;
@@ -405,7 +404,7 @@ body.live #go { display:none; }
 <div id="feed"></div>
 
 <div id="corner">
-  <button id="go">🔒 VERROUILLER</button>
+  <button id="go" aria-label="Verrouiller l'écran">🔒</button>
 </div>
 
 <div id="bar">
