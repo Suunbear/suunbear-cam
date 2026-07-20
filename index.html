@@ -31,7 +31,10 @@ const CONFIG = {
 
   /* ---------- Caméra (VDO.Ninja) ---------- */
   QUALITY : 0,        // 0 = 1080p | 1 = 720p | 2 = 360p
-  BITRATE : 4000,     // kbps. Descendre à 2500 si ça saccade en 4G
+  BITRATE : 5000,     // kbps. Doit correspondre au &videobitrate du lien OBS.
+                      // Descendre à 3000 si ça saccade ou si le téléphone chauffe
+  CODEC   : "hardware",   // "hardware" = H264 accéléré, conseillé sur Android
+                          // "vp9" si l'image se déforme | "" pour laisser faire
 
   FILL_LANDSCAPE : true,  // à l'horizontale, l'aperçu remplit tout l'écran.
                           // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
@@ -501,6 +504,8 @@ body.live #go { display:none; }
           + '&videobitrate=' + C.BITRATE
           + '&fullscreen'
           + '&largepreview';
+
+  if (C.CODEC) src += '&codec=' + encodeURIComponent(C.CODEC);
 
   // Le mot de passe part dans le fragment de l'iframe, pas dans la requête
   if (PW) src += '#password=' + encodeURIComponent(PW);
