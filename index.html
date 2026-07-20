@@ -36,6 +36,8 @@ const CONFIG = {
   CODEC   : "hardware",   // "hardware" = H264 accéléré, conseillé sur Android
                           // "vp9" si l'image se déforme | "" pour laisser faire
 
+  AUTO_HEADSET : true,    // bascule seule sur le micro du casque quand il arrive
+
   FILL_LANDSCAPE : true,  // à l'horizontale, l'aperçu remplit tout l'écran.
                           // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
 
@@ -209,6 +211,7 @@ body.live #feed.hidden { opacity:0; }
 }
 /* Avant verrouillage, seul le voyant PC est là : les autres boutons
    masqueraient l'interface de VDO.Ninja pendant le réglage. */
+body:not(.live) #bCam,
 body:not(.live) #bMic,
 body:not(.live) #bChat,
 body:not(.live) #bMenu { display:none; }
@@ -268,7 +271,7 @@ body:not(.live) #bMenu { display:none; }
   top:calc(env(safe-area-inset-top, 0px) + 62px);
   right:10px;
   z-index:11;
-  width:210px;
+  width:255px;
   padding:6px;
   border-radius:15px;
   background:rgba(16,16,18,.92);
@@ -291,6 +294,22 @@ body:not(.live) #bMenu { display:none; }
 #menu button:active { background:rgba(255,255,255,.12); }
 #menu button.danger { color:#ff6b6b; }
 #menu hr { border:0; height:1px; background:rgba(255,255,255,.12); margin:5px 9px; }
+
+/* Liste des micros */
+#menu button.mic {
+  display:block;
+  padding:10px 13px;
+  font-size:14px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#menu button.mic.on { color:#4ade80; font-weight:700; }
+#menu .none {
+  padding:11px 13px;
+  color:rgba(255,255,255,.45);
+  font:500 13px/1.35 system-ui, sans-serif;
+}
 
 /* ================= Écran de réglage ================= */
 #go {
@@ -405,13 +424,15 @@ body.live #go { display:none; }
 <div id="bar">
   <div id="dot">PC</div>
   <div id="spacer"></div>
+  <button class="btn" id="bCam"  aria-label="Changer de caméra">🔄</button>
   <button class="btn" id="bMic"  aria-label="Couper le micro">🎤</button>
   <button class="btn" id="bChat" aria-label="Afficher ou masquer le chat">💬<span id="unread"></span></button>
   <button class="btn" id="bMenu" aria-label="Plus d'options">⋯</button>
 </div>
 
 <div id="menu">
-  <button id="mCam">🔄 &nbsp;Caméra suivante</button>
+  <div id="micList"></div>
+  <hr>
   <button id="mLock">🔓 &nbsp;Déverrouiller l'écran</button>
   <hr>
   <button id="mEnd" class="danger">⏻ &nbsp;Raccrocher</button>
@@ -471,7 +492,7 @@ body.live #go { display:none; }
   const $     = s => document.querySelector(s);
   const cam   = $('#cam'),  feed  = $('#feed'), scrim = $('#scrim');
   const dot   = $('#dot'),  menu  = $('#menu'), toastEl = $('#toast');
-  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu');
+  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu'), bCam = $('#bCam');
   const unread = $('#unread');
 
   if (!ID) { $('#setup').classList.add('show'); return; }
@@ -537,14 +558,14 @@ body.live #go { display:none; }
     cmd({ style: css });
   };
 
-  cam.addEventListener('load', () => setTimeout(paint, 1200));
+  cam.addEventListener('load', () => setTimeout(() => { paint(); askDevices(); }, 1200));
   matchMedia('(orientation: landscape)').addEventListener('change', () => setTimeout(paint, 350));
 
   const lock = () => {
     locked = true;
     document.body.classList.add('live');
     paint();
-    cmd({ getDeviceList: true, cib: 'devices' });         // pour le bouton caméra
+    askDevices();                                        // pour le bouton caméra
     toast('Écran verrouillé');
   };
 
@@ -582,14 +603,105 @@ body.live #go { display:none; }
     if (!menu.contains(e.target) && e.target !== bMenu) menu.classList.remove('open');
   });
 
-  /* --- Caméra suivante --- */
-  let cams = [], camIdx = 0;
-  $('#mCam').addEventListener('click', () => {
-    menu.classList.remove('open');
-    if (cams.length < 2) { toast('Une seule caméra détectée'); return; }
-    camIdx = (camIdx + 1) % cams.length;
-    cmd({ changeVideoDevice: cams[camIdx].deviceId });
-    toast(cams[camIdx].label || ('Caméra ' + (camIdx + 1)));
+  /* --- Caméra avant / arrière ---
+     Le S24+ expose plusieurs objectifs arrière (grand-angle, ultra
+     grand-angle, téléobjectif). On n'en retient qu'un de chaque côté
+     pour que le bouton soit une vraie bascule, pas un défilement. */
+  let camFront = null, camBack = null, lenses = [], lIdx = 0, onFront = true;
+
+  const askDevices = () => cmd({ getDeviceList: true, cib: 'devices' });
+
+  const setDevices = list => {
+    const vids = list.filter(x => x && x.kind === 'videoinput');
+    if (vids.length) {
+      camFront = vids.find(v => /front|avant|user|selfie/i.test(v.label || '')) || null;
+      camBack  = vids.find(v => /back|arri|rear|environment/i.test(v.label || '')) || null;
+      lenses   = vids;
+    }
+    setMics(list.filter(x => x && x.kind === 'audioinput'));
+  };
+
+  /* --- Micros ---
+     Android expose souvent un seul micro « par défaut » et route
+     lui-même vers le casque. Quand il en expose plusieurs, on affiche
+     la liste et on bascule seul sur le casque dès qu'il apparaît. */
+  const micList = $('#micList');
+  const HEADSET = /casque|headset|headphone|écouteur|ecouteur|earbud|airpod|filaire|wired|bluetooth/i;
+
+  let mics = [], micId = null, micManual = false;
+
+  const micName = m => {
+    let l = (m.label || '').replace(/^(default|communications|par défaut)\s*[-–]\s*/i, '').trim();
+    if (!l) l = 'Micro ' + (mics.indexOf(m) + 1);
+    return l.length > 30 ? l.slice(0, 29) + '…' : l;
+  };
+
+  const pickMic = (m, auto) => {
+    micId = m.deviceId;
+    cmd({ changeAudioDevice: micId });
+    drawMics();
+    toast((auto ? 'Casque détecté — ' : '') + micName(m));
+  };
+
+  const drawMics = () => {
+    micList.innerHTML = '';
+    if (mics.length < 2) {
+      const d = document.createElement('div');
+      d.className = 'none';
+      d.textContent = 'Micro géré par Android';
+      micList.appendChild(d);
+      return;
+    }
+    mics.forEach(m => {
+      const b = document.createElement('button');
+      const on = m.deviceId === micId;
+      b.className = 'mic' + (on ? ' on' : '');
+      b.textContent = (on ? '✓ ' : '🎙 ') + micName(m);
+      b.addEventListener('click', () => {
+        micManual = true;
+        menu.classList.remove('open');
+        pickMic(m);
+      });
+      micList.appendChild(b);
+    });
+  };
+
+  const setMics = list => {
+    mics = list;
+    drawMics();
+    if (!C.AUTO_HEADSET || micManual) return;
+
+    const head = mics.find(m => HEADSET.test(m.label || ''));
+    if (head) {
+      if (head.deviceId !== micId) pickMic(head, true);
+    } else if (micId) {
+      // Le casque a été débranché : on revient au micro du téléphone
+      const back = mics.find(m => !HEADSET.test(m.label || ''));
+      if (back && back.deviceId !== micId) { micId = null; pickMic(back); }
+    }
+  };
+
+  /* Android prévient quand un casque est branché ou retiré. */
+  try {
+    navigator.mediaDevices.addEventListener('devicechange',
+      () => setTimeout(askDevices, 600));
+  } catch (e) {}
+
+  bCam.addEventListener('click', () => {
+    if (camFront && camBack) {
+      onFront = !onFront;
+      cmd({ changeVideoDevice: (onFront ? camFront : camBack).deviceId });
+      toast(onFront ? 'Caméra avant' : 'Caméra arrière');
+      return;
+    }
+    if (lenses.length > 1) {                    // secours : on fait défiler
+      lIdx = (lIdx + 1) % lenses.length;
+      cmd({ changeVideoDevice: lenses[lIdx].deviceId });
+      toast(lenses[lIdx].label || ('Caméra ' + (lIdx + 1)));
+      return;
+    }
+    toast('Caméras non détectées');
+    askDevices();
   });
 
   /* --- Raccrocher --- */
@@ -765,9 +877,7 @@ body.live #go { display:none; }
     if (!d || typeof d !== 'object') return;
 
     // Liste des caméras du téléphone
-    if (d.cib === 'devices' && Array.isArray(d.deviceList)) {
-      cams = d.deviceList.filter(x => x && x.kind === 'videoinput');
-    }
+    if (d.cib === 'devices' && Array.isArray(d.deviceList)) setDevices(d.deviceList);
 
     // Le PC (OBS) reçoit-il le flux ?
     // VDO.Ninja nomme l'événement différemment selon qui se connecte
