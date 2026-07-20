@@ -42,7 +42,7 @@ const CONFIG = {
   AVATARS  : true,    // photo de profil
   ICONS    : true,    // icône de la plateforme (Twitch, YouTube…)
   BADGES   : 99,      // nombre max de badges Twitch. 99 = tous, 0 = aucun
-  LINES    : 6,       // lignes max par message, au-delà ça coupe
+  LINES    : 20,      // filet de sécurité. Un message Twitch complet tient en ~12
   FADE_OLD : true,    // les anciens messages s'estompent doucement
 
   /* ---------- Placement ---------- */
@@ -158,10 +158,17 @@ body.live #feed.hidden { opacity:0; }
   transform:translateY(0);
   transition:opacity .45s ease, transform .3s cubic-bezier(.2,.9,.3,1);
 
-  display:-webkit-box;                    /* coupe les pavés interminables */
+  display:-webkit-box;                    /* filet de sécurité ultime */
   -webkit-line-clamp:var(--lines);
   -webkit-box-orient:vertical;
+  overflow:hidden;                        /* sans ça, le texte déborde de la bulle */
 }
+
+/* Twitch plafonne à 500 caractères. Plutôt que de couper, on réduit
+   la police : le message entier tient dans sa bulle, en plus compact. */
+.msg.long  { font-size:calc(var(--font) * .86); }
+.msg.xlong { font-size:calc(var(--font) * .74); }
+.msg.long .av, .msg.xlong .av { vertical-align:-.25em; }
 
 /* Dégradé de fraîcheur : le dernier message est le plus net. */
 #feed.fade .msg:nth-child(1) { --o:1;   }
@@ -342,6 +349,32 @@ body.live #go { display:none; }
   color:#9fe3a0;
   font:13px/1.5 ui-monospace, monospace;
   word-break:break-all;
+}
+
+/* ================= Téléphone à l'horizontale =================
+   La caméra devient 16:9 plein cadre. Le chat se replie dans une
+   colonne à gauche pour ne pas manger l'image. */
+@media (orientation: landscape) {
+  #feed {
+    right:auto;
+    width:52%;
+    max-height:76%;
+    left:calc(var(--side) + env(safe-area-inset-left, 0px));
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+  #scrim {
+    height:82%;
+    background:linear-gradient(to top, #000 0%, rgba(0,0,0,.5) 42%, transparent 100%);
+  }
+  #bar {
+    left:calc(10px + env(safe-area-inset-left, 0px));
+    right:calc(10px + env(safe-area-inset-right, 0px));
+  }
+  #go {
+    left:auto;
+    right:calc(16px + env(safe-area-inset-right, 0px));
+    width:44%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -582,6 +615,13 @@ body.live #go { display:none; }
     if (d.contentimg)  h += '<img class="media" src="' + esc(d.contentimg) + '" onerror="this.remove()">';
 
     el.innerHTML = h;
+
+    /* Longueur réelle du texte, balises d'émotes exclues.
+       Au-delà d'un certain seuil la police rétrécit, pour que
+       même un message de 500 caractères tienne dans sa bulle. */
+    const len = String(d.chatmessage || '').replace(/<[^>]*>/g, '').trim().length;
+    if      (len > 300) el.classList.add('xlong');
+    else if (len > 150) el.classList.add('long');
 
     el.dataset.t = Date.now();
 
