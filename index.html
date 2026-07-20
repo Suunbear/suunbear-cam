@@ -433,7 +433,7 @@ body.live #go { display:none; }
 <div id="menu">
   <div id="micList"></div>
   <hr>
-  <button id="mLock">🔓 &nbsp;Déverrouiller l'écran</button>
+  <button id="mLock">⚙️ &nbsp;Réglages VDO.Ninja</button>
   <hr>
   <button id="mEnd" class="danger">⏻ &nbsp;Raccrocher</button>
 </div>
@@ -536,6 +536,15 @@ body.live #go { display:none; }
   /* Commande envoyée à VDO.Ninja (API IFRAME officielle) */
   const cmd = m => { try { cam.contentWindow.postMessage(m, '*'); } catch (e) {} };
 
+  /* Les changements de périphérique sont acceptés sous deux formes
+     selon la version de VDO.Ninja : la clé directe, ou le couple
+     action/value. On envoie les deux — celle qui n'est pas comprise
+     est simplement ignorée. */
+  const setDevice = (key, id) => {
+    cmd({ [key]: id });
+    setTimeout(() => cmd({ action: key, value: id }), 250);
+  };
+
   /* ============================================================
      Verrouillage de l'écran
      ============================================================ */
@@ -574,7 +583,7 @@ body.live #go { display:none; }
     document.body.classList.remove('live');
     menu.classList.remove('open');
     paint();
-    toast('Écran déverrouillé');
+    toast('Boutons VDO.Ninja réactivés');
   };
 
   $('#go').addEventListener('click', lock);
@@ -638,7 +647,7 @@ body.live #go { display:none; }
 
   const pickMic = (m, auto) => {
     micId = m.deviceId;
-    cmd({ changeAudioDevice: micId });
+    setDevice('changeAudioDevice', micId);
     drawMics();
     toast((auto ? 'Casque détecté — ' : '') + micName(m));
   };
@@ -690,13 +699,13 @@ body.live #go { display:none; }
   bCam.addEventListener('click', () => {
     if (camFront && camBack) {
       onFront = !onFront;
-      cmd({ changeVideoDevice: (onFront ? camFront : camBack).deviceId });
+      setDevice('changeVideoDevice', (onFront ? camFront : camBack).deviceId);
       toast(onFront ? 'Caméra avant' : 'Caméra arrière');
       return;
     }
     if (lenses.length > 1) {                    // secours : on fait défiler
       lIdx = (lIdx + 1) % lenses.length;
-      cmd({ changeVideoDevice: lenses[lIdx].deviceId });
+      setDevice('changeVideoDevice', lenses[lIdx].deviceId);
       toast(lenses[lIdx].label || ('Caméra ' + (lIdx + 1)));
       return;
     }
