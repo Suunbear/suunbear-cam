@@ -56,6 +56,7 @@ const CONFIG = {
   ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
                           // qui isolent, sinon le micro le capte et ça fait écho
   ALERT_TIME   : 12,      // secondes d'affichage d'un bandeau d'alerte
+  ALERT_HYPE   : true,    // bandeau de progression du hype train
 
   /* ---------- Placement ---------- */
   CHAT_HEIGHT : 45,   // % de la hauteur d'écran réservée au chat
@@ -161,20 +162,20 @@ body.live #feed.hidden { opacity:0; }
   z-index:4;
   display:none;
   flex-direction:column-reverse;
-  align-items:center;
+  align-items:flex-start;
   gap:8px;
   pointer-events:none;
 }
 body.live #alerts { display:flex; }
 
 .alert {
-  max-width:100%;
+  max-width:84%;
+  text-align:left;
   padding:11px 18px;
   border-radius:15px;
   background:linear-gradient(135deg, rgba(145,70,255,.92), rgba(96,40,190,.92));
   box-shadow:0 6px 26px rgba(145,70,255,.5), inset 0 1px 0 rgba(255,255,255,.25);
   color:#fff;
-  text-align:center;
   text-shadow:0 1px 3px rgba(0,0,0,.5);
   animation:pop .4s cubic-bezier(.2,1.1,.4,1);
 }
@@ -197,6 +198,27 @@ body.live #alerts { display:flex; }
                box-shadow:0 6px 26px rgba(255,177,78,.5), inset 0 1px 0 rgba(255,255,255,.25); }
 .alert.follow{ background:linear-gradient(135deg, rgba(120,130,145,.9), rgba(80,90,105,.9));
                box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.2); }
+.alert.reward{ background:linear-gradient(135deg, rgba(236,72,153,.92), rgba(180,40,110,.92));
+               box-shadow:0 6px 26px rgba(236,72,153,.5), inset 0 1px 0 rgba(255,255,255,.25); }
+.alert.hype  { background:linear-gradient(135deg, rgba(255,77,116,.94), rgba(145,70,255,.94));
+               box-shadow:0 6px 28px rgba(255,77,116,.55), inset 0 1px 0 rgba(255,255,255,.3);
+               min-width:56%; }
+
+/* Barre de progression du hype train */
+.a-bar {
+  height:6px;
+  margin-top:7px;
+  border-radius:3px;
+  background:rgba(0,0,0,.35);
+  overflow:hidden;
+}
+.a-bar i {
+  display:block;
+  height:100%;
+  border-radius:3px;
+  background:#fff;
+  transition:width .5s ease;
+}
 
 @keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
                   to   { opacity:1; transform:translateY(0) scale(1); } }
@@ -431,10 +453,17 @@ body.live #go { display:none; }
   #feed {
     right:auto;
     width:52%;
-    max-height:76%;
+    max-height:60%;
     left:calc(var(--side) + env(safe-area-inset-left, 0px));
     bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
   }
+  #alerts {
+    right:auto;
+    width:52%;
+    left:calc(var(--side) + env(safe-area-inset-left, 0px));
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 60% + 20px);
+  }
+  .alert { max-width:100%; }
   #scrim {
     height:82%;
     background:linear-gradient(to top, #000 0%, rgba(0,0,0,.5) 42%, transparent 100%);
@@ -808,43 +837,79 @@ body.live #go { display:none; }
       return;
     }
 
-    /* Un événement (sub, don, bit, raid, follow) porte un champ « event »
-       que les messages de chat n'ont pas. On l'affiche en bandeau. */
-    if (C.ALERTS && isEvent(d)) { showAlert(d); return; }
+    /* Événements : liste blanche stricte.
+       Indispensable — « viewer_update » porte lui aussi un champ event
+       et arrive toutes les 30 secondes. Tout ce qui n'est pas listé
+       ci-dessous est ignoré en silence. */
+    const ev = String(d.event || '').toLowerCase();
 
-    if (!d.chatmessage && !d.hasDonation && !d.contentimg) return;
+    if (ev === 'hype_train') { hypeTrain(d); return; }
+
+    if (ev && ALERTS[ev]) {
+      if (C.ALERTS) showAlert(d, ALERTS[ev]);
+      return;
+    }
+    if (ev) return;                       // événement système : silence
+
+    // Don ou bits sans marqueur d'événement (capture DOM)
+    if (C.ALERTS && d.hasDonation) {
+      showAlert(d, /bit/i.test(d.hasDonation)
+        ? { cls:'cheer', kind:'Bits' }
+        : { cls:'dono',  kind:'Don' });
+      return;
+    }
+
+    if (!d.chatmessage && !d.contentimg) return;
     draw(d);
   };
 
-  /* ---------- Reconnaître et classer un événement ---------- */
-  const isEvent = d => {
-    if (d.event || d.eventType) return true;
-    const t = String(d.type || '').toLowerCase();
-    // Certaines plateformes marquent le type directement
-    return /sub|follow|raid|host|cheer|bits|gift|member|donation|tip/.test(t)
-        && !d.chatmessage;   // un vrai message de chat n'est pas une alerte
+  /* ---------- Les événements qui méritent un bandeau ----------
+     Noms canoniques de Social Stream Ninja. Tout le reste
+     (viewer_update, stream_online, user_banned, ad_break…)
+     est volontairement absent : ce ne sont pas des alertes. */
+  const ALERTS = {
+    new_follower      : { cls:'follow', kind:'Nouveau follow' },
+    new_subscriber    : { cls:'sub',    kind:'Nouveau sub' },
+    resub             : { cls:'sub',    kind:'Resub' },
+    subscription_gift : { cls:'sub',    kind:'Subs offerts' },
+    giftpurchase      : { cls:'sub',    kind:'Subs offerts' },
+    giftredemption    : { cls:'sub',    kind:'Sub offert reçu' },
+    sponsorship       : { cls:'sub',    kind:'Nouveau membre' },
+    membermilestone   : { cls:'sub',    kind:'Anniversaire' },
+    subscribe         : { cls:'sub',    kind:'Nouveau sub' },
+    gift              : { cls:'sub',    kind:'Cadeau' },
+    cheer             : { cls:'cheer',  kind:'Bits' },
+    donation          : { cls:'dono',   kind:'Don' },
+    superchat         : { cls:'dono',   kind:'Super Chat' },
+    supersticker      : { cls:'dono',   kind:'Super Sticker' },
+    jeweldonation     : { cls:'dono',   kind:'Don' },
+    raid              : { cls:'raid',   kind:'Raid' },
+    reward            : { cls:'reward', kind:'Points de chaîne' },
+    channel_points    : { cls:'reward', kind:'Points de chaîne' }
   };
 
   const alertBox = $('#alerts');
 
-  const classify = d => {
-    const s = JSON.stringify([d.event, d.eventType, d.type, d.title]).toLowerCase();
-    if (/raid|host/.test(s))            return { cls:'raid',   kind:'Raid' };
-    if (/cheer|bits/.test(s))           return { cls:'cheer',  kind:'Bits' };
-    if (/gift/.test(s))                 return { cls:'sub',    kind:'Sub offert' };
-    if (/sub|member/.test(s))           return { cls:'sub',    kind:'Sub' };
-    if (/dono|donation|tip|superchat/.test(s) || d.hasDonation)
-                                        return { cls:'dono',   kind:'Don' };
-    if (/follow/.test(s))               return { cls:'follow', kind:'Follow' };
-    return { cls:'', kind:'Alerte' };
-  };
+  const showAlert = (d, { cls, kind }) => {
+    const m      = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const who    = d.chatname || m.supporter || m.fromLogin || '';
+    const msg    = d.chatmessage || '';
 
-  const showAlert = d => {
-    const { cls, kind } = classify(d);
+    /* Le chiffre qui compte, selon le type d'événement */
+    let amount = d.hasDonation || '';
+    if (cls === 'raid'   && m.viewers)     amount = m.viewers + ' viewers';
+    if (cls === 'reward' && m.cost)        amount = m.cost + ' pts';
+    if (ALERTS[String(d.event).toLowerCase()] === ALERTS.subscription_gift
+        && m.totalGifted)                  amount = m.totalGifted + ' subs';
 
-    const who    = d.chatname || d.name || d.username || d.from || '';
-    const amount = d.hasDonation || d.amount || '';
-    const detail = d.event || d.eventType || d.chatmessage || d.title || '';
+    /* Précisions : palier Prime ou Tier, ancienneté, récompense */
+    const bits = [];
+    if (m.tier)           bits.push(/prime/i.test(m.tier) ? 'Prime' : 'Tier ' + m.tier);
+    if (m.cumulativeMonths || m.duration) bits.push((m.cumulativeMonths || m.duration) + ' mois');
+    if (d.subtitle)       bits.push(d.subtitle);
+    if (m.alias || m.rewardTitle) bits.push(m.alias || m.rewardTitle);
+
+    const detail = [bits.join(' · '), msg].filter(Boolean).join(' — ');
 
     const el = document.createElement('div');
     el.className = 'alert ' + cls;
@@ -852,17 +917,53 @@ body.live #go { display:none; }
         '<div class="a-kind">' + esc(kind) + '</div>'
       + '<div class="a-main">' + esc(who || kind)
         + (amount ? ' · ' + esc(amount) : '') + '</div>'
-      + (detail && detail !== who ? '<div class="a-sub">' + esc(detail) + '</div>' : '');
+      + (detail ? '<div class="a-sub">' + esc(detail) + '</div>' : '');
 
     alertBox.prepend(el);
     while (alertBox.children.length > 3) alertBox.lastElementChild.remove();
 
-    if (C.ALERT_SOUND && sndOn) beep(cls);
+    if (sndOn) beep(cls);
 
     setTimeout(() => {
       el.classList.add('gone');
       setTimeout(() => el.remove(), 450);
     }, C.ALERT_TIME * 1000);
+  };
+
+  /* ---------- Hype train ----------
+     Cas à part : il envoie une mise à jour à chaque contribution.
+     On garde donc UN seul bandeau qu'on met à jour sur place,
+     au lieu d'en empiler des dizaines. */
+  let hypeEl = null, hypeTimer = null;
+
+  const hypeTrain = d => {
+    if (!C.ALERTS || !C.ALERT_HYPE) return;
+    const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const pct = m.goal ? Math.min(100, Math.round((m.progress / m.goal) * 100))
+                       : (m.progressPercent || 0);
+
+    if (!hypeEl) {
+      hypeEl = document.createElement('div');
+      hypeEl.className = 'alert hype';
+      alertBox.prepend(hypeEl);
+      if (sndOn) beep('raid');
+    }
+
+    const nom  = /treasure/i.test(m.trainType || '') ? 'Treasure Train' : 'Hype Train';
+    const fini = m.phase === 'end';
+
+    hypeEl.innerHTML =
+        '<div class="a-kind">' + esc(nom) + (fini ? ' — terminé' : '') + '</div>'
+      + '<div class="a-main">Niveau ' + esc(m.level || 1) + '</div>'
+      + (fini ? '' : '<div class="a-bar"><i style="width:' + pct + '%"></i></div>');
+
+    clearTimeout(hypeTimer);
+    hypeTimer = setTimeout(() => {
+      if (!hypeEl) return;
+      hypeEl.classList.add('gone');
+      const gone = hypeEl; hypeEl = null;
+      setTimeout(() => gone.remove(), 450);
+    }, fini ? 8000 : 300000);   // 5 min sans nouvelle : le train est fini
   };
 
   if (SESSION) {
