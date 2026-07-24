@@ -51,6 +51,12 @@ const CONFIG = {
   LINES    : 20,      // filet de sécurité. Un message Twitch complet tient en ~12
   FADE_OLD : true,    // les anciens messages s'estompent doucement
 
+  /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
+  ALERTS       : true,    // affiche un bandeau distinct sur les événements
+  ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
+                          // qui isolent, sinon le micro le capte et ça fait écho
+  ALERT_TIME   : 12,      // secondes d'affichage d'un bandeau d'alerte
+
   /* ---------- Placement ---------- */
   CHAT_HEIGHT : 45,   // % de la hauteur d'écran réservée au chat
   CHAT_SIDE   : 3,    // marge gauche/droite en %
@@ -146,6 +152,56 @@ body.live #scrim.hidden   { opacity:0; }
 body.live #feed        { display:flex; }
 body.live #feed.hidden { opacity:0; }
 
+/* ================= Bandeaux d'alerte =================
+   Au-dessus du chat, centrés, impossibles à manquer. */
+#alerts {
+  position:fixed;
+  left:var(--side); right:var(--side);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + var(--bottom) + var(--chatH) + 8px);
+  z-index:4;
+  display:none;
+  flex-direction:column-reverse;
+  align-items:center;
+  gap:8px;
+  pointer-events:none;
+}
+body.live #alerts { display:flex; }
+
+.alert {
+  max-width:100%;
+  padding:11px 18px;
+  border-radius:15px;
+  background:linear-gradient(135deg, rgba(145,70,255,.92), rgba(96,40,190,.92));
+  box-shadow:0 6px 26px rgba(145,70,255,.5), inset 0 1px 0 rgba(255,255,255,.25);
+  color:#fff;
+  text-align:center;
+  text-shadow:0 1px 3px rgba(0,0,0,.5);
+  animation:pop .4s cubic-bezier(.2,1.1,.4,1);
+}
+.alert.gone { animation:fade .4s ease forwards; }
+.alert .a-kind { font:700 12px/1 system-ui, sans-serif; letter-spacing:.06em;
+                 text-transform:uppercase; opacity:.85; }
+.alert .a-main { font:800 18px/1.25 system-ui, sans-serif; margin-top:4px; }
+.alert .a-main img { max-height:1.3em; vertical-align:-.3em; }
+.alert .a-sub  { font:500 14px/1.35 system-ui, sans-serif; margin-top:3px; opacity:.92;
+                 display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+                 overflow:hidden; }
+
+/* Couleur par catégorie, pour reconnaître d'un coup d'œil */
+.alert.sub   { background:linear-gradient(135deg, rgba(145,70,255,.92), rgba(96,40,190,.92)); }
+.alert.cheer { background:linear-gradient(135deg, rgba(29,161,242,.92), rgba(20,110,180,.92));
+               box-shadow:0 6px 26px rgba(29,161,242,.5), inset 0 1px 0 rgba(255,255,255,.25); }
+.alert.dono  { background:linear-gradient(135deg, rgba(74,222,128,.92), rgba(34,160,90,.92));
+               box-shadow:0 6px 26px rgba(74,222,128,.5), inset 0 1px 0 rgba(255,255,255,.25); }
+.alert.raid  { background:linear-gradient(135deg, rgba(255,177,78,.95), rgba(220,130,20,.95));
+               box-shadow:0 6px 26px rgba(255,177,78,.5), inset 0 1px 0 rgba(255,255,255,.25); }
+.alert.follow{ background:linear-gradient(135deg, rgba(120,130,145,.9), rgba(80,90,105,.9));
+               box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.2); }
+
+@keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
+                  to   { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes fade { to   { opacity:0; transform:translateY(-8px) scale(.97); } }
+
 .msg {
   --o:.62;
   flex-shrink:0;                          /* sinon flexbox écrase le message du bas */
@@ -223,6 +279,7 @@ body.live #feed.hidden { opacity:0; }
    masqueraient l'interface de VDO.Ninja pendant le réglage. */
 body:not(.live) #bSet,
 body:not(.live) #bMic,
+body:not(.live) #bSnd,
 body:not(.live) #bChat,
 body:not(.live) #bMenu { display:none; }
 
@@ -401,6 +458,7 @@ body.live #go { display:none; }
         allowfullscreen></iframe>
 
 <div id="scrim"></div>
+<div id="alerts"></div>
 <div id="feed"></div>
 
 <div id="corner">
@@ -412,6 +470,7 @@ body.live #go { display:none; }
   <div id="spacer"></div>
   <button class="btn" id="bSet"  aria-label="Réglages VDO.Ninja">⚙️</button>
   <button class="btn" id="bMic"  aria-label="Couper le micro">🎤</button>
+  <button class="btn" id="bSnd"  aria-label="Son des alertes">🔔</button>
   <button class="btn" id="bChat" aria-label="Afficher ou masquer le chat">💬<span id="unread"></span></button>
   <button class="btn" id="bMenu" aria-label="Plus d'options">⋯</button>
 </div>
@@ -470,7 +529,7 @@ body.live #go { display:none; }
   const $     = s => document.querySelector(s);
   const cam   = $('#cam'),  feed  = $('#feed'), scrim = $('#scrim');
   const dot   = $('#dot'),  menu  = $('#menu'), toastEl = $('#toast');
-  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu'), bSet = $('#bSet');
+  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu'), bSet = $('#bSet'), bSnd = $('#bSnd');
   const unread = $('#unread');
 
   if (!ID) { $('#setup').classList.add('show'); return; }
@@ -569,6 +628,42 @@ body.live #go { display:none; }
     bMic.classList.toggle('off', !micOn);
     toast(micOn ? 'Micro actif' : 'Micro coupé');
   });
+
+  /* --- Son des alertes ---
+     Bip court synthétisé sur place (aucun fichier à héberger).
+     Rappel : à n'activer qu'avec des écouteurs qui isolent. */
+  let sndOn = C.ALERT_SOUND, actx = null;
+  const setSnd = () => {
+    bSnd.textContent = sndOn ? '🔔' : '🔕';
+    bSnd.classList.toggle('off', !sndOn);
+  };
+  setSnd();
+  bSnd.addEventListener('click', () => {
+    sndOn = !sndOn;
+    setSnd();
+    toast(sndOn ? 'Son des alertes activé' : 'Son des alertes coupé');
+    if (sndOn) beep('');    // confirme, et débloque l'audio du navigateur
+  });
+
+  const beep = cls => {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const notes = cls === 'raid'  ? [523, 784]
+                  : cls === 'dono'  ? [659, 988]
+                  : cls === 'cheer' ? [587, 880]
+                  : [523, 659];
+      notes.forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        o.connect(g); g.connect(actx.destination);
+        const t = actx.currentTime + i * 0.13;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+        o.start(t); o.stop(t + 0.24);
+      });
+    } catch (e) {}
+  };
 
   /* --- Menu --- */
   bMenu.addEventListener('click', e => {
@@ -713,8 +808,61 @@ body.live #go { display:none; }
       return;
     }
 
+    /* Un événement (sub, don, bit, raid, follow) porte un champ « event »
+       que les messages de chat n'ont pas. On l'affiche en bandeau. */
+    if (C.ALERTS && isEvent(d)) { showAlert(d); return; }
+
     if (!d.chatmessage && !d.hasDonation && !d.contentimg) return;
     draw(d);
+  };
+
+  /* ---------- Reconnaître et classer un événement ---------- */
+  const isEvent = d => {
+    if (d.event || d.eventType) return true;
+    const t = String(d.type || '').toLowerCase();
+    // Certaines plateformes marquent le type directement
+    return /sub|follow|raid|host|cheer|bits|gift|member|donation|tip/.test(t)
+        && !d.chatmessage;   // un vrai message de chat n'est pas une alerte
+  };
+
+  const alertBox = $('#alerts');
+
+  const classify = d => {
+    const s = JSON.stringify([d.event, d.eventType, d.type, d.title]).toLowerCase();
+    if (/raid|host/.test(s))            return { cls:'raid',   kind:'Raid' };
+    if (/cheer|bits/.test(s))           return { cls:'cheer',  kind:'Bits' };
+    if (/gift/.test(s))                 return { cls:'sub',    kind:'Sub offert' };
+    if (/sub|member/.test(s))           return { cls:'sub',    kind:'Sub' };
+    if (/dono|donation|tip|superchat/.test(s) || d.hasDonation)
+                                        return { cls:'dono',   kind:'Don' };
+    if (/follow/.test(s))               return { cls:'follow', kind:'Follow' };
+    return { cls:'', kind:'Alerte' };
+  };
+
+  const showAlert = d => {
+    const { cls, kind } = classify(d);
+
+    const who    = d.chatname || d.name || d.username || d.from || '';
+    const amount = d.hasDonation || d.amount || '';
+    const detail = d.event || d.eventType || d.chatmessage || d.title || '';
+
+    const el = document.createElement('div');
+    el.className = 'alert ' + cls;
+    el.innerHTML =
+        '<div class="a-kind">' + esc(kind) + '</div>'
+      + '<div class="a-main">' + esc(who || kind)
+        + (amount ? ' · ' + esc(amount) : '') + '</div>'
+      + (detail && detail !== who ? '<div class="a-sub">' + esc(detail) + '</div>' : '');
+
+    alertBox.prepend(el);
+    while (alertBox.children.length > 3) alertBox.lastElementChild.remove();
+
+    if (C.ALERT_SOUND && sndOn) beep(cls);
+
+    setTimeout(() => {
+      el.classList.add('gone');
+      setTimeout(() => el.remove(), 450);
+    }, C.ALERT_TIME * 1000);
   };
 
   if (SESSION) {
