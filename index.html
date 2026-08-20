@@ -43,7 +43,7 @@ const CONFIG = {
                           // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
 
   /* ---------- Chat ---------- */
-  MAX      : 8,       // nombre de messages gardés à l'écran
+  MAX      : 25,      // nombre de messages gardés à l'écran
   LIFETIME : 30,      // secondes avant qu'un message s'efface. 0 = jamais
   KEEP     : 2,       // les X derniers messages ne s'effacent jamais
   FONT     : 18,      // taille du texte en px
@@ -227,6 +227,7 @@ body.live #alerts { display:flex; }
 @keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
                   to   { opacity:1; transform:translateY(0) scale(1); } }
 @keyframes fade { to   { opacity:0; transform:translateY(-8px) scale(.97); } }
+@keyframes msgIn { from { opacity:0; transform:translateY(10px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
 
 .msg {
   --o:.62;
@@ -247,6 +248,7 @@ body.live #alerts { display:flex; }
   opacity:var(--o);
   transform:translateY(0);
   transition:opacity .45s ease, transform .3s cubic-bezier(.2,.9,.3,1);
+  animation:msgIn .34s cubic-bezier(.2,.9,.3,1);   /* entrée douce du nouveau message */
 
   display:-webkit-box;                    /* filet de sécurité ultime */
   -webkit-line-clamp:var(--lines);
@@ -615,6 +617,7 @@ body.live #go { display:none; }
       if (!tgt) return;
       sx = e.touches[0].clientX; sy = e.touches[0].clientY;
       tgt.style.transition = 'none';
+      tgt.style.willChange = 'transform, opacity';   // GPU : suivi du doigt fluide
     }, { passive: true });
 
     feed.addEventListener('touchmove', e => {
@@ -635,15 +638,17 @@ body.live #go { display:none; }
     feed.addEventListener('touchend', () => {
       if (!tgt) return;
       const m = tgt; tgt = null;
-      m.style.transition = '';
-      if (horiz && Math.abs(dx) > 80) {          // seuil franchi → on efface
-        m.style.transform = 'translateX(' + (dx > 0 ? 400 : -400) + 'px)';
+      if (horiz && Math.abs(dx) > 80) {          // seuil franchi → sortie fluide
+        m.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
+        m.style.transform = 'translateX(' + (dx > 0 ? 460 : -460) + 'px)';
         m.style.opacity = 0;
-        setTimeout(() => m.remove(), 300);
-      } else {                                   // sinon, retour en place
+        setTimeout(() => m.remove(), 320);
+      } else {                                   // retour en place, décélération douce
+        m.style.transition = 'transform .34s cubic-bezier(.22,1,.36,1), opacity .3s ease';
         m.classList.remove('dismiss');
         m.style.transform = '';
         m.style.opacity = '';
+        setTimeout(() => { m.style.transition = ''; m.style.willChange = ''; }, 360);
       }
     }, { passive: true });
   }
