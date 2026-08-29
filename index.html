@@ -1051,10 +1051,26 @@ body.live #go { display:none; }
     pipe = document.createElement('iframe');
     pipe.src = 'https://vdo.socialstream.ninja/?ln&salt=vdo.ninja&notmobile'
              + '&password=false&push&label=dock&vd=0&ad=0'
-             + '&novideo&noaudio&autostart&cleanoutput&server'
+             + '&novideo&noaudio&autostart&cleanoutput'
              + '&room=' + encodeURIComponent(SESSION);
     pipe.style.cssText = 'width:0;height:0;position:fixed;left:-100px;top:-100px;border:0;';
     document.body.appendChild(pipe);
+
+    /* --- Alertes via SSE (SAMMI → API SSN → ce flux) ---
+       Les events injectés par SAMMI (action "content", canal 1) arrivent ici
+       en direct, sans dépendre du pipe P2P du chat. EventSource se reconnecte seul. */
+    try {
+      const es = new EventSource('https://io.socialstream.ninja/sse/' + encodeURIComponent(SESSION));
+      es.onmessage = ev => {
+        let d;
+        try { d = JSON.parse(ev.data); } catch (_) { return; }
+        if (d && d.action && d.value !== undefined) d = d.value;          // { action, value }
+        if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
+        if (d && d.overlayNinja) d = d.overlayNinja;
+        if (d && typeof d === 'object' && (d.event || d.chatname)) handle(d);
+      };
+      es.onerror = () => {};   // reconnexion automatique gérée par le navigateur
+    } catch (_) {}
 
     bChat.addEventListener('click', () => {
       visible = !visible;
