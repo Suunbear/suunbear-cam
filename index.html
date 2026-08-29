@@ -58,9 +58,9 @@ const CONFIG = {
   /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
   ALERTS       : true,    // affiche un bandeau distinct sur les événements
   ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
-  ALERT_WEBM   : false,   // animations .webm (à héberger). false = bandeau texte seul, aucun fichier requis
+  ALERT_MAX    : 5,       // nombre de cartes d'alerte affichées en même temps
                           // qui isolent, sinon le micro le capte et ça fait écho
-  ALERT_TIME   : 12,      // secondes d'affichage d'un bandeau d'alerte
+  ALERT_FADE   : false,   // false = les alertes restent jusqu'au swipe · true = fondu après LIFETIME (30 s)
   ALERT_HYPE   : true,    // bandeau de progression du hype train
 
   /* ---------- Placement ---------- */
@@ -158,39 +158,38 @@ body.live #scrim.hidden   { opacity:0; }
 body.live #feed        { display:flex; }
 body.live #feed.hidden { opacity:0; }
 
-/* ================= Alertes (visuel porté d'alertes.html) =================
-   Plein écran, centré, une à la fois. webm muet + phrase soleil (pas de son : écho). */
+/* ================= Alertes : cartes en HAUT (inverse du chat), swipe ↔ ================= */
 #alerts {
-  position:fixed; inset:0; z-index:6;
-  display:none; justify-content:center; align-items:center;
-  padding:10% 6%; pointer-events:none;
+  position:fixed; z-index:6;
+  left:var(--side); right:var(--side);
+  top:calc(env(safe-area-inset-top, 0px) + 12px);
+  display:none; flex-direction:column; align-items:center; gap:8px;
+  pointer-events:none;
 }
 body.live #alerts { display:flex; }
+#alerts.gest .al { pointer-events:auto; touch-action:pan-x; }
 
-.al { display:flex; flex-direction:column; align-items:center; gap:14px;
-      opacity:0; visibility:hidden; max-width:100%; }
-.al.show { visibility:visible; animation:al-pop .55s cubic-bezier(.2,.9,.25,1.15) forwards; }
-.al.hide { visibility:visible; animation:al-fade var(--alFade,700ms) ease forwards; }
-
-.al-vid { width:min(70vw,300px); height:auto; display:none;
-          filter:drop-shadow(0 6px 22px rgba(255,158,44,.35)); }
-.al-vid.on { display:block; }
-
-.al-txt { max-width:94%; text-align:center;
-          font-family:'Mouse Memoirs', system-ui, sans-serif;
-          text-transform:uppercase; font-size:30px; line-height:1.1; letter-spacing:2px;
-          color:#F5E9B8; paint-order:stroke fill; -webkit-text-stroke:4px #000; }
-.al-txt .meta {
+.al {
+  max-width:100%; padding:9px 16px;
+  border:2px solid rgba(255,158,44,.6); border-radius:14px;
+  background:linear-gradient(145deg, rgba(26,18,6,.9), rgba(46,30,8,.82));
+  box-shadow:0 4px 18px rgba(255,158,44,.22), inset 0 0 16px rgba(255,210,90,.06);
+  text-align:center;
+  font-family:'Mouse Memoirs', system-ui, sans-serif;
+  text-transform:uppercase; font-size:25px; line-height:1.12; letter-spacing:1.5px;
+  color:#F5E9B8; text-shadow:0 1px 2px #000, 0 2px 8px rgba(0,0,0,.7);
+  animation:al-in .5s cubic-bezier(.2,.9,.25,1.15);
+}
+.al .meta {
   font-family:'Inter', system-ui, sans-serif; font-weight:700; text-transform:none;
   background:linear-gradient(180deg,#FF9E2C 0%,#FFD25A 25%,#FFF7E6 50%,#FFD25A 75%,#FF9E2C 100%);
   background-size:100% 200%; -webkit-background-clip:text; background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 6px rgba(255,178,88,.9)); -webkit-text-stroke:0;
-  animation:al-shift 1.5s linear infinite alternate, al-pulse 3s ease-in-out infinite;
+  filter:drop-shadow(0 0 5px rgba(255,178,88,.85)); animation:al-shift 1.5s linear infinite alternate;
 }
+.al.gone { animation:al-out .4s ease forwards; }
 @keyframes al-shift { from{background-position:50% 0%} to{background-position:50% 100%} }
-@keyframes al-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
-@keyframes al-pop { 0%{opacity:0;transform:translateY(22px) scale(.9)} 60%{opacity:1;transform:translateY(0) scale(1.02)} 100%{opacity:1;transform:scale(1)} }
-@keyframes al-fade { from{opacity:1} to{opacity:0} }
+@keyframes al-in  { 0%{opacity:0;transform:translateY(-14px) scale(.94)} 100%{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes al-out { to{opacity:0;transform:translateY(-10px) scale(.97)} }
 
 @keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
                   to   { opacity:1; transform:translateY(0) scale(1); } }
@@ -479,7 +478,7 @@ body.live #go { display:none; }
         allowfullscreen></iframe>
 
 <div id="scrim"></div>
-<div id="alerts"><div class="al" id="al"><video class="al-vid" id="alVid" muted playsinline preload="auto"></video><div class="al-txt" id="alTxt"></div></div></div>
+<div id="alerts"></div>
 <div id="feed"></div>
 
 <div id="corner">
@@ -919,7 +918,7 @@ body.live #go { display:none; }
     wishlist:          { webm:'wishlist.webm',   text:"INCROYABLE !<br>{user} participe à la cagnotte {gift} !<br>MERCI !" }
   };
 
-  const alEl = $('#al'), alVid = $('#alVid'), alTxt = $('#alTxt');
+  const alBox = $('#alerts'); if (C.GESTURES) alBox.classList.add('gest');
   const alData = d => {
     const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
     return {
@@ -955,40 +954,44 @@ body.live #go { display:none; }
     ttsAudio = a;
   };
 
-  const alQ = []; let alBusy = false;
-  const alShow = (key, d) => { if (!ALERTS[key]) return; alQ.push({ key, d }); if (!alBusy) alNext(); };
-  const alNext = () => {
-    if (!alQ.length) { alBusy = false; return; }
-    alBusy = true;
-    const { key, d } = alQ.shift(), a = ALERTS[key], data = alData(d);
-    alTxt.innerHTML = a.text.replace(/\{(\w+)\}/g, (_, k) => '<span class="meta">' + esc(data[k] != null ? data[k] : '') + '</span>');
-    const phrase = alTxt.textContent + (cleanMsg(d.chatmessage) ? '. ' + cleanMsg(d.chatmessage) : '');
-
-    let vDone = false, sDone = true, done = false, safety = null;
-    const hide = () => {
-      if (done) return; done = true; clearTimeout(safety);
-      alEl.classList.remove('show'); alEl.classList.add('hide');
-      setTimeout(() => { alEl.classList.remove('hide'); try { alVid.pause(); } catch (_) {} alNext(); }, (C.AL_FADE || 700) + 40);
-    };
-    const tryHide = () => { if (vDone && sDone) setTimeout(hide, 900); };
-
-    // Vidéo : optionnelle (nécessite d'héberger les .webm). OFF = bandeau texte.
-    alVid.classList.remove('on');
-    if (C.ALERT_WEBM && a.webm) {
-      alVid.loop = false; alVid.src = MEDIA + encodeURIComponent(a.webm); alVid.currentTime = 0;
-      alVid.classList.add('on');
-      alVid.onended = () => { vDone = true; tryHide(); };
-      alVid.onerror = () => { alVid.classList.remove('on'); vDone = true; tryHide(); };
-      alVid.play().catch(() => {});
-    } else { vDone = true; }
-
-    // Son : TTS phrase + message viewer (aucun fichier). Seulement si 🔔 activé.
-    if (sndOn) { sDone = false; speak(phrase, () => { sDone = true; tryHide(); }); }
-
-    alEl.classList.remove('hide'); alEl.classList.add('show');
-    if (vDone && sDone) setTimeout(hide, 2800);                                   // bandeau texte seul
-    else safety = setTimeout(hide, sndOn ? 30000 : (C.ALERT_TIME || 8) * 1000);   // sécurité
+  /* Alertes = cartes en HAUT, empilées (inverse du chat), effaçables au swipe ↔. */
+  const alGone = card => {
+    if (!card || card._gone) return; card._gone = true;
+    clearTimeout(card._t); card.classList.add('gone');
+    setTimeout(() => card.remove(), 420);
   };
+  const alShow = (key, d) => {
+    if (!ALERTS[key]) return;
+    const a = ALERTS[key], data = alData(d);
+    const card = document.createElement('div');
+    card.className = 'al';
+    card.innerHTML = a.text.replace(/\{(\w+)\}/g, (_, k) => '<span class="meta">' + esc(data[k] != null ? data[k] : '') + '</span>');
+    alBox.prepend(card);
+    while (alBox.children.length > (C.ALERT_MAX || 4)) alBox.lastElementChild.remove();
+    if (sndOn) {                                    // 🔔 : petit bip + TTS (phrase + message viewer)
+      beep('');
+      const msg = cleanMsg(d.chatmessage);
+      speak(card.textContent + (msg ? '. ' + msg : ''));
+    }
+    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);  // fondu après LIFETIME
+  };
+  if (C.GESTURES) {                                 // swipe ↔ pour effacer une carte
+    let sx = 0, tgt = null, dx = 0, horiz = false;
+    alBox.addEventListener('touchstart', e => {
+      tgt = e.target.closest('.al'); dx = 0; horiz = false;
+      if (!tgt) return; sx = e.touches[0].clientX; tgt.style.transition = 'none'; clearTimeout(tgt._t);
+    }, { passive: true });
+    alBox.addEventListener('touchmove', e => {
+      if (!tgt) return; dx = e.touches[0].clientX - sx;
+      if (Math.abs(dx) > 8) { horiz = true; e.preventDefault();
+        tgt.style.transform = 'translateX(' + dx + 'px)'; tgt.style.opacity = Math.max(0, 1 - Math.abs(dx) / 200); }
+    }, { passive: false });
+    alBox.addEventListener('touchend', () => {
+      if (!tgt) return; const m = tgt; tgt = null; m.style.transition = '';
+      if (horiz && Math.abs(dx) > 80) { m.style.transform = 'translateX(' + (dx > 0 ? 400 : -400) + 'px)'; m.style.opacity = 0; setTimeout(() => m.remove(), 300); }
+      else { m.style.transform = ''; m.style.opacity = ''; if (C.ALERT_FADE) m._t = setTimeout(() => alGone(m), (C.LIFETIME || 30) * 1000); }
+    }, { passive: true });
+  }
 
   if (SESSION) {
     pipe = document.createElement('iframe');
