@@ -58,9 +58,10 @@ const CONFIG = {
   /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
   ALERTS       : true,    // affiche un bandeau distinct sur les événements
   ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
-  ALERT_MAX    : 5,       // nombre de cartes d'alerte affichées en même temps
+  ALERT_MAX    : 25,      // nombre de cartes d'alerte affichées en même temps
                           // qui isolent, sinon le micro le capte et ça fait écho
   ALERT_FADE   : false,   // false = les alertes restent jusqu'au swipe · true = fondu après LIFETIME (30 s)
+  ALERT_LIVE   : 10,      // durée (s) de la barre = temps que l'alerte reste sur le live OBS. Règle-la sur ton OBS.
   ALERT_HYPE   : true,    // bandeau de progression du hype train
 
   /* ---------- Placement ---------- */
@@ -158,38 +159,37 @@ body.live #scrim.hidden   { opacity:0; }
 body.live #feed        { display:flex; }
 body.live #feed.hidden { opacity:0; }
 
-/* ================= Alertes : cartes en HAUT (inverse du chat), swipe ↔ ================= */
+/* ================= Alertes : cartes compactes en HAUT, swipe ↔ ================= */
 #alerts {
   position:fixed; z-index:6;
   left:var(--side); right:var(--side);
-  top:calc(env(safe-area-inset-top, 0px) + 12px);
-  display:none; flex-direction:column; align-items:center; gap:8px;
+  top:calc(env(safe-area-inset-top, 0px) + 46px);   /* ~1 cm sous les icônes du haut de l'écran */
+  display:none; flex-direction:column; align-items:center; gap:6px;
   pointer-events:none;
 }
 body.live #alerts { display:flex; }
 #alerts.gest .al { pointer-events:auto; touch-action:pan-x; }
 
 .al {
-  max-width:100%; padding:9px 16px;
-  border:2px solid rgba(255,158,44,.6); border-radius:14px;
+  min-width:44%; max-width:100%; padding:6px 14px 7px;
+  border:2px solid rgba(255,158,44,.6); border-radius:12px;
   background:linear-gradient(145deg, rgba(26,18,6,.9), rgba(46,30,8,.82));
-  box-shadow:0 4px 18px rgba(255,158,44,.22), inset 0 0 16px rgba(255,210,90,.06);
-  text-align:center;
-  font-family:'Mouse Memoirs', system-ui, sans-serif;
-  text-transform:uppercase; font-size:25px; line-height:1.12; letter-spacing:1.5px;
-  color:#F5E9B8; text-shadow:0 1px 2px #000, 0 2px 8px rgba(0,0,0,.7);
-  animation:al-in .5s cubic-bezier(.2,.9,.25,1.15);
+  box-shadow:0 4px 16px rgba(255,158,44,.2), inset 0 0 14px rgba(255,210,90,.06);
+  text-align:center; color:#F5E9B8;
+  animation:al-in .45s cubic-bezier(.2,.9,.25,1.15);
 }
-.al .meta {
-  font-family:'Inter', system-ui, sans-serif; font-weight:700; text-transform:none;
-  background:linear-gradient(180deg,#FF9E2C 0%,#FFD25A 25%,#FFF7E6 50%,#FFD25A 75%,#FF9E2C 100%);
-  background-size:100% 200%; -webkit-background-clip:text; background-clip:text; color:transparent;
-  filter:drop-shadow(0 0 5px rgba(255,178,88,.85)); animation:al-shift 1.5s linear infinite alternate;
-}
+.al-kind { font:700 10px/1 'Inter', system-ui, sans-serif; letter-spacing:.14em;
+           text-transform:uppercase; color:rgba(255,210,90,.75); margin-bottom:2px; }
+.al-line { font-family:'Mouse Memoirs', system-ui, sans-serif; text-transform:uppercase;
+           font-size:20px; line-height:1.05; letter-spacing:1px;
+           text-shadow:0 1px 2px #000, 0 2px 7px rgba(0,0,0,.7); }
+.al-line .meta { color:#FF9E2C; }   /* meta = ambre plein (pas d'effet dégradé, qui buggait sur mobile) */
+.al-bar { height:3px; margin-top:5px; border-radius:2px; background:rgba(0,0,0,.4); overflow:hidden; }
+.al-bar i { display:block; height:100%; width:100%; background:#FF9E2C; border-radius:2px; }
 .al.gone { animation:al-out .4s ease forwards; }
-@keyframes al-shift { from{background-position:50% 0%} to{background-position:50% 100%} }
-@keyframes al-in  { 0%{opacity:0;transform:translateY(-14px) scale(.94)} 100%{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes al-in  { 0%{opacity:0;transform:translateY(-12px) scale(.94)} 100%{opacity:1;transform:translateY(0) scale(1)} }
 @keyframes al-out { to{opacity:0;transform:translateY(-10px) scale(.97)} }
+@keyframes al-bar { from{width:100%} to{width:0} }
 
 @keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
                   to   { opacity:1; transform:translateY(0) scale(1); } }
@@ -734,7 +734,7 @@ body.live #go { display:none; }
         o.connect(g); g.connect(actx.destination);
         const t = actx.currentTime + i * 0.13;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);   // volume du bip (monte pour + fort)
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
         o.start(t); o.stop(t + 0.24);
       });
@@ -893,29 +893,13 @@ body.live #go { display:none; }
     draw(d);
   };
 
-  /* ---------- Alertes : visuel porté d'alertes.html ----------
-     webm MUET + phrase soleil. Pas de son ni TTS sur le tel (le micro
-     rouvrirait tout en écho ; le stream OBS joue déjà son + TTS).
-     Les .webm sont chargés depuis MEDIA (dossier à créer dans le repo). */
-  const MEDIA = 'media/';
+  /* ---------- Alertes : format compact (type + qui + valeur) ---------- */
   const ALERTS = {
-    new_follower:      { webm:'follow.webm',     text:"Un nouveau Soleil se lève !!!<br>{user} brille de mille feux !!!<br>Merci pour le follow !!!" },
-    new_subscriber:    { webm:'subsresubs.webm', text:"{user} brille un max en prenant un sub !<br>Premier mois d'aboooo !!! Merci !!!" },
-    subscribe:         { webm:'subsresubs.webm', text:"{user} brille un max en prenant un sub !<br>Premier mois d'aboooo !!! Merci !!!" },
-    resub:             { webm:'subsresubs.webm', text:"{user} brille un max avec son sub de {months} mois !" },
-    subscription_gift: { webm:'subgift.webm',    text:"{user} prépare une conspiration<br>avec {recipient} !" },
-    giftpurchase:      { webm:'subgift.webm',    text:"{user} prépare une conspiration colossale<br>en offrant {count} subs aux Soleils !" },
-    cheer:             { webm:'bits.webm',       text:"{user} régale le stream<br>avec {amount} !<br>Cimer !" },
-    donation:          { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le pourboire de {amount} !" },
-    superchat:         { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le Super Chat de {amount} !" },
-    jeweldonation:     { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le don de {amount} !" },
-    raid:              { webm:'raids.webm',      text:"{user} raid les Soleils !!!<br>Ecrivez « Bienvenue » dans le tchat !" },
-    hype_new:          { webm:'hype.webm',       text:"Train de la Hype lancé BORDEL !<br>Niveau {level} du train !" },
-    hype_level:        { webm:'hype.webm',       text:"Niveau {level} du Train de la Hype<br>atteint !!!" },
-    hype_end:          { webm:'hype.webm',       text:"Le Train de la Hype est fini !<br>Niveau {level} atteint. Merci !" },
-    hype_record:       { webm:'hype.webm',       text:"Nouveau record du Train de la Hype !<br>Record : {level} niveaux !" },
-    merch:             { webm:'merch.webm',      text:"{user} se fait plaizz en achetant<br>{product} !<br>Enjoy le goodie !!!" },
-    wishlist:          { webm:'wishlist.webm',   text:"INCROYABLE !<br>{user} participe à la cagnotte {gift} !<br>MERCI !" }
+    new_follower:'FOLLOW', new_subscriber:'SUB', subscribe:'SUB', resub:'RESUB',
+    subscription_gift:'SUBGIFT', giftpurchase:'SUBGIFT', cheer:'BITS',
+    donation:'DON', superchat:'SUPER CHAT', jeweldonation:'DON', raid:'RAID',
+    hype_new:'HYPE', hype_level:'HYPE', hype_end:'HYPE', hype_record:'HYPE RECORD',
+    merch:'MERCH', wishlist:'WISHLIST'
   };
 
   const alBox = $('#alerts'); if (C.GESTURES) alBox.classList.add('gest');
@@ -960,20 +944,30 @@ body.live #go { display:none; }
     clearTimeout(card._t); card.classList.add('gone');
     setTimeout(() => card.remove(), 420);
   };
+  const alMeta = v => '<span class="meta">' + esc(v) + '</span>';
   const alShow = (key, d) => {
-    if (!ALERTS[key]) return;
-    const a = ALERTS[key], data = alData(d);
+    const kind = ALERTS[key]; if (!kind) return;
+    const data = alData(d), parts = [];
+    if (key.indexOf('hype') === 0) { if (data.level) parts.push('Niveau ' + data.level); }
+    else {
+      parts.push(data.user);
+      if (key === 'resub' && data.months) parts.push(data.months + ' mois');
+      else if (data.amount && (key === 'cheer' || key === 'donation' || key === 'superchat' || key === 'jeweldonation')) parts.push(data.amount);
+      else if (key === 'raid' && data.viewers) parts.push(data.viewers + ' viewers');
+      else if (key === 'subscription_gift' && data.recipient) parts.push('\u2192 ' + data.recipient);
+      else if (key === 'giftpurchase' && data.count) parts.push('\u00d7' + data.count);
+      else if (key === 'merch' && data.product) parts.push(data.product);
+      else if (key === 'wishlist' && data.gift) parts.push(data.gift);
+    }
+    const line = parts.filter(Boolean).map(alMeta).join(' \u00b7 ');
     const card = document.createElement('div');
     card.className = 'al';
-    card.innerHTML = a.text.replace(/\{(\w+)\}/g, (_, k) => '<span class="meta">' + esc(data[k] != null ? data[k] : '') + '</span>');
+    card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div>'
+                   + '<div class="al-bar"><i style="animation:al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards"></i></div>';
     alBox.prepend(card);
-    while (alBox.children.length > (C.ALERT_MAX || 4)) alBox.lastElementChild.remove();
-    if (sndOn) {                                    // 🔔 : petit bip + TTS (phrase + message viewer)
-      beep('');
-      const msg = cleanMsg(d.chatmessage);
-      speak(card.textContent + (msg ? '. ' + msg : ''));
-    }
-    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);  // fondu après LIFETIME
+    while (alBox.children.length > (C.ALERT_MAX || 25)) alBox.lastElementChild.remove();
+    if (sndOn) { beep(''); const msg = cleanMsg(d.chatmessage); speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : '')); }
+    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
   };
   if (C.GESTURES) {                                 // swipe ↔ pour effacer une carte
     let sx = 0, tgt = null, dx = 0, horiz = false;
