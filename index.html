@@ -1056,21 +1056,32 @@ body.live #go { display:none; }
     pipe.style.cssText = 'width:0;height:0;position:fixed;left:-100px;top:-100px;border:0;';
     document.body.appendChild(pipe);
 
-    /* --- Alertes via SSE (SAMMI → API SSN → ce flux) ---
-       Les events injectés par SAMMI (action "content", canal 1) arrivent ici
-       en direct, sans dépendre du pipe P2P du chat. EventSource se reconnecte seul. */
-    try {
-      const es = new EventSource('https://io.socialstream.ninja/sse/' + encodeURIComponent(SESSION));
-      es.onmessage = ev => {
-        let d;
-        try { d = JSON.parse(ev.data); } catch (_) { return; }
-        if (d && d.action && d.value !== undefined) d = d.value;          // { action, value }
-        if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
-        if (d && d.overlayNinja) d = d.overlayNinja;
-        if (d && typeof d === 'object' && (d.event || d.chatname)) handle(d);
-      };
-      es.onerror = () => {};   // reconnexion automatique gérée par le navigateur
-    } catch (_) {}
+    /* --- Alertes via WebSocket API SSN (canal 1) ---
+       SAMMI injecte via "content" sur le canal 1 → on s'y abonne en écoute.
+       S'abonner en canal 1 fait aussi passer la réponse d'injection à "true".
+       Reconnexion automatique si la connexion tombe (ou au retour au 1er plan). */
+    let aWS = null, aRetry = null;
+    const connectAlerts = () => {
+      clearTimeout(aRetry);
+      try {
+        aWS = new WebSocket('wss://io.socialstream.ninja/join/' + encodeURIComponent(SESSION) + '/1');
+        aWS.onmessage = ev => {
+          let d;
+          try { d = JSON.parse(ev.data); } catch (_) { return; }
+          if (d && d.action && d.value !== undefined) d = d.value;          // { action, value }
+          if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
+          if (d && d.overlayNinja) d = d.overlayNinja;
+          if (d && typeof d === 'object' && (d.event || d.chatname)) handle(d);
+        };
+        aWS.onclose = () => { aRetry = setTimeout(connectAlerts, 3000); };
+        aWS.onerror = () => { try { aWS.close(); } catch (_) {} };
+      } catch (_) { aRetry = setTimeout(connectAlerts, 3000); }
+    };
+    connectAlerts();
+    // Au retour au premier plan (mobile suspend les sockets en arrière-plan), on relance si besoin
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && (!aWS || aWS.readyState > 1)) connectAlerts();
+    });
 
     bChat.addEventListener('click', () => {
       visible = !visible;
