@@ -58,6 +58,7 @@ const CONFIG = {
   /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
   ALERTS       : true,    // affiche un bandeau distinct sur les événements
   ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
+  ALERT_WEBM   : false,   // animations .webm (à héberger). false = bandeau texte seul, aucun fichier requis
                           // qui isolent, sinon le micro le capte et ça fait écho
   ALERT_TIME   : 12,      // secondes d'affichage d'un bandeau d'alerte
   ALERT_HYPE   : true,    // bandeau de progression du hype train
@@ -157,72 +158,39 @@ body.live #scrim.hidden   { opacity:0; }
 body.live #feed        { display:flex; }
 body.live #feed.hidden { opacity:0; }
 
-/* ================= Bandeaux d'alerte =================
-   Au-dessus du chat, centrés, impossibles à manquer. */
+/* ================= Alertes (visuel porté d'alertes.html) =================
+   Plein écran, centré, une à la fois. webm muet + phrase soleil (pas de son : écho). */
 #alerts {
-  position:fixed;
-  left:var(--side); right:var(--side);
-  bottom:calc(env(safe-area-inset-bottom, 0px) + var(--bottom) + var(--chatH) + 8px);
-  z-index:4;
-  display:none;
-  flex-direction:column-reverse;
-  align-items:flex-start;
-  gap:8px;
-  pointer-events:none;
+  position:fixed; inset:0; z-index:6;
+  display:none; justify-content:center; align-items:center;
+  padding:10% 6%; pointer-events:none;
 }
 body.live #alerts { display:flex; }
 
-.alert {
-  max-width:84%;
-  text-align:left;
-  padding:11px 18px;
-  border-radius:15px;
-  background:linear-gradient(135deg, rgba(145,70,255,.92), rgba(96,40,190,.92));
-  box-shadow:0 6px 26px rgba(145,70,255,.5), inset 0 1px 0 rgba(255,255,255,.25);
-  color:#fff;
-  text-shadow:0 1px 3px rgba(0,0,0,.5);
-  animation:pop .4s cubic-bezier(.2,1.1,.4,1);
-}
-.alert.gone { animation:fade .4s ease forwards; }
-.alert .a-kind { font:700 12px/1 system-ui, sans-serif; letter-spacing:.06em;
-                 text-transform:uppercase; opacity:.85; }
-.alert .a-main { font:800 18px/1.25 system-ui, sans-serif; margin-top:4px; }
-.alert .a-main img { max-height:1.3em; vertical-align:-.3em; }
-.alert .a-sub  { font:500 14px/1.35 system-ui, sans-serif; margin-top:3px; opacity:.92;
-                 display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-                 overflow:hidden; }
+.al { display:flex; flex-direction:column; align-items:center; gap:14px;
+      opacity:0; visibility:hidden; max-width:100%; }
+.al.show { visibility:visible; animation:al-pop .55s cubic-bezier(.2,.9,.25,1.15) forwards; }
+.al.hide { visibility:visible; animation:al-fade var(--alFade,700ms) ease forwards; }
 
-/* Couleur par catégorie, pour reconnaître d'un coup d'œil */
-.alert.sub   { background:linear-gradient(135deg, rgba(145,70,255,.92), rgba(96,40,190,.92)); }
-.alert.cheer { background:linear-gradient(135deg, rgba(29,161,242,.92), rgba(20,110,180,.92));
-               box-shadow:0 6px 26px rgba(29,161,242,.5), inset 0 1px 0 rgba(255,255,255,.25); }
-.alert.dono  { background:linear-gradient(135deg, rgba(74,222,128,.92), rgba(34,160,90,.92));
-               box-shadow:0 6px 26px rgba(74,222,128,.5), inset 0 1px 0 rgba(255,255,255,.25); }
-.alert.raid  { background:linear-gradient(135deg, rgba(255,177,78,.95), rgba(220,130,20,.95));
-               box-shadow:0 6px 26px rgba(255,177,78,.5), inset 0 1px 0 rgba(255,255,255,.25); }
-.alert.follow{ background:linear-gradient(135deg, rgba(120,130,145,.9), rgba(80,90,105,.9));
-               box-shadow:0 6px 22px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.2); }
-.alert.reward{ background:linear-gradient(135deg, rgba(236,72,153,.92), rgba(180,40,110,.92));
-               box-shadow:0 6px 26px rgba(236,72,153,.5), inset 0 1px 0 rgba(255,255,255,.25); }
-.alert.hype  { background:linear-gradient(135deg, rgba(255,77,116,.94), rgba(145,70,255,.94));
-               box-shadow:0 6px 28px rgba(255,77,116,.55), inset 0 1px 0 rgba(255,255,255,.3);
-               min-width:56%; }
+.al-vid { width:min(70vw,300px); height:auto; display:none;
+          filter:drop-shadow(0 6px 22px rgba(255,158,44,.35)); }
+.al-vid.on { display:block; }
 
-/* Barre de progression du hype train */
-.a-bar {
-  height:6px;
-  margin-top:7px;
-  border-radius:3px;
-  background:rgba(0,0,0,.35);
-  overflow:hidden;
+.al-txt { max-width:94%; text-align:center;
+          font-family:'Mouse Memoirs', system-ui, sans-serif;
+          text-transform:uppercase; font-size:30px; line-height:1.1; letter-spacing:2px;
+          color:#F5E9B8; paint-order:stroke fill; -webkit-text-stroke:4px #000; }
+.al-txt .meta {
+  font-family:'Inter', system-ui, sans-serif; font-weight:700; text-transform:none;
+  background:linear-gradient(180deg,#FF9E2C 0%,#FFD25A 25%,#FFF7E6 50%,#FFD25A 75%,#FF9E2C 100%);
+  background-size:100% 200%; -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:drop-shadow(0 0 6px rgba(255,178,88,.9)); -webkit-text-stroke:0;
+  animation:al-shift 1.5s linear infinite alternate, al-pulse 3s ease-in-out infinite;
 }
-.a-bar i {
-  display:block;
-  height:100%;
-  border-radius:3px;
-  background:#fff;
-  transition:width .5s ease;
-}
+@keyframes al-shift { from{background-position:50% 0%} to{background-position:50% 100%} }
+@keyframes al-pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.05)} }
+@keyframes al-pop { 0%{opacity:0;transform:translateY(22px) scale(.9)} 60%{opacity:1;transform:translateY(0) scale(1.02)} 100%{opacity:1;transform:scale(1)} }
+@keyframes al-fade { from{opacity:1} to{opacity:0} }
 
 @keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
                   to   { opacity:1; transform:translateY(0) scale(1); } }
@@ -511,7 +479,7 @@ body.live #go { display:none; }
         allowfullscreen></iframe>
 
 <div id="scrim"></div>
-<div id="alerts"></div>
+<div id="alerts"><div class="al" id="al"><video class="al-vid" id="alVid" muted playsinline preload="auto"></video><div class="al-txt" id="alTxt"></div></div></div>
 <div id="feed"></div>
 
 <div id="corner">
@@ -918,133 +886,108 @@ body.live #go { display:none; }
       return;
     }
 
-    /* Événements : liste blanche stricte.
-       Indispensable — « viewer_update » porte lui aussi un champ event
-       et arrive toutes les 30 secondes. Tout ce qui n'est pas listé
-       ci-dessous est ignoré en silence. */
+    /* Événements : liste blanche. Ce qui n'est pas dans ALERTS est ignoré. */
     const ev = String(d.event || '').toLowerCase();
-
-    if (ev === 'hype_train') { hypeTrain(d); return; }
-
-    if (ev && ALERTS[ev]) {
-      if (C.ALERTS) showAlert(d, ALERTS[ev]);
-      return;
-    }
+    if (ev && ALERTS[ev]) { if (C.ALERTS) alShow(ev, d); return; }
     if (ev) return;                       // événement système : silence
-
-    // Don ou bits sans marqueur d'événement (capture DOM)
-    if (C.ALERTS && d.hasDonation) {
-      showAlert(d, /bit/i.test(d.hasDonation)
-        ? { cls:'cheer', kind:'Bits' }
-        : { cls:'dono',  kind:'Don' });
-      return;
-    }
-
     if (!d.chatmessage && !d.contentimg) return;
     draw(d);
   };
 
-  /* ---------- Les événements qui méritent un bandeau ----------
-     Noms canoniques de Social Stream Ninja. Tout le reste
-     (viewer_update, stream_online, user_banned, ad_break…)
-     est volontairement absent : ce ne sont pas des alertes. */
+  /* ---------- Alertes : visuel porté d'alertes.html ----------
+     webm MUET + phrase soleil. Pas de son ni TTS sur le tel (le micro
+     rouvrirait tout en écho ; le stream OBS joue déjà son + TTS).
+     Les .webm sont chargés depuis MEDIA (dossier à créer dans le repo). */
+  const MEDIA = 'media/';
   const ALERTS = {
-    new_follower      : { cls:'follow', kind:'Nouveau follow' },
-    new_subscriber    : { cls:'sub',    kind:'Nouveau sub' },
-    resub             : { cls:'sub',    kind:'Resub' },
-    subscription_gift : { cls:'sub',    kind:'Subs offerts' },
-    giftpurchase      : { cls:'sub',    kind:'Subs offerts' },
-    giftredemption    : { cls:'sub',    kind:'Sub offert reçu' },
-    sponsorship       : { cls:'sub',    kind:'Nouveau membre' },
-    membermilestone   : { cls:'sub',    kind:'Anniversaire' },
-    subscribe         : { cls:'sub',    kind:'Nouveau sub' },
-    gift              : { cls:'sub',    kind:'Cadeau' },
-    cheer             : { cls:'cheer',  kind:'Bits' },
-    donation          : { cls:'dono',   kind:'Don' },
-    superchat         : { cls:'dono',   kind:'Super Chat' },
-    supersticker      : { cls:'dono',   kind:'Super Sticker' },
-    jeweldonation     : { cls:'dono',   kind:'Don' },
-    raid              : { cls:'raid',   kind:'Raid' },
-    reward            : { cls:'reward', kind:'Points de chaîne' },
-    channel_points    : { cls:'reward', kind:'Points de chaîne' }
+    new_follower:      { webm:'follow.webm',     text:"Un nouveau Soleil se lève !!!<br>{user} brille de mille feux !!!<br>Merci pour le follow !!!" },
+    new_subscriber:    { webm:'subsresubs.webm', text:"{user} brille un max en prenant un sub !<br>Premier mois d'aboooo !!! Merci !!!" },
+    subscribe:         { webm:'subsresubs.webm', text:"{user} brille un max en prenant un sub !<br>Premier mois d'aboooo !!! Merci !!!" },
+    resub:             { webm:'subsresubs.webm', text:"{user} brille un max avec son sub de {months} mois !" },
+    subscription_gift: { webm:'subgift.webm',    text:"{user} prépare une conspiration<br>avec {recipient} !" },
+    giftpurchase:      { webm:'subgift.webm',    text:"{user} prépare une conspiration colossale<br>en offrant {count} subs aux Soleils !" },
+    cheer:             { webm:'bits.webm',       text:"{user} régale le stream<br>avec {amount} !<br>Cimer !" },
+    donation:          { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le pourboire de {amount} !" },
+    superchat:         { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le Super Chat de {amount} !" },
+    jeweldonation:     { webm:'dons.webm',       text:"{user} aime l'or !<br>Merci pour le don de {amount} !" },
+    raid:              { webm:'raids.webm',      text:"{user} raid les Soleils !!!<br>Ecrivez « Bienvenue » dans le tchat !" },
+    hype_new:          { webm:'hype.webm',       text:"Train de la Hype lancé BORDEL !<br>Niveau {level} du train !" },
+    hype_level:        { webm:'hype.webm',       text:"Niveau {level} du Train de la Hype<br>atteint !!!" },
+    hype_end:          { webm:'hype.webm',       text:"Le Train de la Hype est fini !<br>Niveau {level} atteint. Merci !" },
+    hype_record:       { webm:'hype.webm',       text:"Nouveau record du Train de la Hype !<br>Record : {level} niveaux !" },
+    merch:             { webm:'merch.webm',      text:"{user} se fait plaizz en achetant<br>{product} !<br>Enjoy le goodie !!!" },
+    wishlist:          { webm:'wishlist.webm',   text:"INCROYABLE !<br>{user} participe à la cagnotte {gift} !<br>MERCI !" }
   };
 
-  const alertBox = $('#alerts');
-
-  const showAlert = (d, { cls, kind }) => {
-    const m      = (d.meta && typeof d.meta === 'object') ? d.meta : {};
-    const who    = d.chatname || m.supporter || m.fromLogin || '';
-    const msg    = d.chatmessage || '';
-
-    /* Le chiffre qui compte, selon le type d'événement */
-    let amount = d.hasDonation || '';
-    if (cls === 'raid'   && m.viewers)     amount = m.viewers + ' viewers';
-    if (cls === 'reward' && m.cost)        amount = m.cost + ' pts';
-    if (ALERTS[String(d.event).toLowerCase()] === ALERTS.subscription_gift
-        && m.totalGifted)                  amount = m.totalGifted + ' subs';
-
-    /* Précisions : palier Prime ou Tier, ancienneté, récompense */
-    const bits = [];
-    if (m.tier)           bits.push(/prime/i.test(m.tier) ? 'Prime' : 'Tier ' + m.tier);
-    if (m.cumulativeMonths || m.duration) bits.push((m.cumulativeMonths || m.duration) + ' mois');
-    if (d.subtitle)       bits.push(d.subtitle);
-    if (m.alias || m.rewardTitle) bits.push(m.alias || m.rewardTitle);
-
-    const detail = [bits.join(' · '), msg].filter(Boolean).join(' — ');
-
-    const el = document.createElement('div');
-    el.className = 'alert ' + cls;
-    el.innerHTML =
-        '<div class="a-kind">' + esc(kind) + '</div>'
-      + '<div class="a-main">' + esc(who || kind)
-        + (amount ? ' · ' + esc(amount) : '') + '</div>'
-      + (detail ? '<div class="a-sub">' + esc(detail) + '</div>' : '');
-
-    alertBox.prepend(el);
-    while (alertBox.children.length > 3) alertBox.lastElementChild.remove();
-
-    if (sndOn) beep(cls);
-
-    setTimeout(() => {
-      el.classList.add('gone');
-      setTimeout(() => el.remove(), 450);
-    }, C.ALERT_TIME * 1000);
-  };
-
-  /* ---------- Hype train ----------
-     Cas à part : il envoie une mise à jour à chaque contribution.
-     On garde donc UN seul bandeau qu'on met à jour sur place,
-     au lieu d'en empiler des dizaines. */
-  let hypeEl = null, hypeTimer = null;
-
-  const hypeTrain = d => {
-    if (!C.ALERTS || !C.ALERT_HYPE) return;
+  const alEl = $('#al'), alVid = $('#alVid'), alTxt = $('#alTxt');
+  const alData = d => {
     const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
-    const pct = m.goal ? Math.min(100, Math.round((m.progress / m.goal) * 100))
-                       : (m.progressPercent || 0);
+    return {
+      user:      d.chatname || m.supporter || m.fromLogin || 'Un Soleil',
+      amount:    d.hasDonation || '',
+      months:    m.cumulativeMonths || m.duration || m.months || '',
+      recipient: m.recipient || m.fromLogin || '',
+      count:     m.totalGifted || m.count || '',
+      level:     m.level || '',
+      product:   m.product || '',
+      gift:      m.gift || '',
+      viewers:   m.viewers || ''
+    };
+  };
+  /* Message viewer LU par le TTS (jamais affiché) : liens + blocklist retirés, "" si vide/undefined */
+  const TTS_BLOCK = ["zizi","gogol","gogole","golmon","debil","débil","debile","débile","bon a rien","bon à rien","pute","putes","salope","salopes","salaud","connasse","connard","conne","couillasse","chatte","couille","bite","pénis","penis","vagin","bander","bandé","encule","enculé","enculer","suce","sucer","sucé","suceur","suceuse","baiseur","tapette","tapet","tapète","tapete","pd","fdp","fils de pute","sexe","sex","porno","porn","viol","viole","violer","violé","détournement de mineur","detournement de mineur","pedophile","pédophile","pédophiles","pédo","negre","nègre","negro","négro","bougnoul","bamboula","big black cock","bbc","nazi","fuhrer","führer","pétain","petain","le pen","lepen","bardella","zemmour","rn","trump","nigger","nigga","faggot","retard","tranny","kike","chink","whore","slut","cunt","rape","rapist","kys","free followers","free viewers","buy followers","buy viewers","cheap followers","onlyfans","only fans","viewers.shop","streamboo","p3do","put3","s4lope","n3gre","n3gro"];
+  const cleanMsg = s => {
+    s = String(s == null ? '' : s);
+    const t = s.trim().toLowerCase();
+    if (t === '' || t === 'undefined' || t === 'null') return '';
+    s = s.replace(/(https?:\/\/\S+|www\.\S+|\b[\w-]+\.(?:shop|store|xyz|top|live|tv|gg|net|com|org|io|ru|link|click|site|online|info)\b\S*)/gi, ' ');
+    TTS_BLOCK.forEach(w => { s = s.replace(new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), ' '); });
+    return s.replace(/\s+/g, ' ').trim().slice(0, 200);
+  };
+  let ttsAudio = null;
+  const speak = (text, onEnd) => {
+    if (!text) { if (onEnd) onEnd(); return; }
+    if (ttsAudio) { try { ttsAudio.pause(); } catch (_) {} }
+    const a = new Audio('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=fr&q=' + encodeURIComponent(text.slice(0, 200)));
+    a.onended = () => { if (onEnd) onEnd(); };
+    a.onerror = () => { if (onEnd) onEnd(); };
+    a.play().catch(() => { if (onEnd) onEnd(); });
+    ttsAudio = a;
+  };
 
-    if (!hypeEl) {
-      hypeEl = document.createElement('div');
-      hypeEl.className = 'alert hype';
-      alertBox.prepend(hypeEl);
-      if (sndOn) beep('raid');
-    }
+  const alQ = []; let alBusy = false;
+  const alShow = (key, d) => { if (!ALERTS[key]) return; alQ.push({ key, d }); if (!alBusy) alNext(); };
+  const alNext = () => {
+    if (!alQ.length) { alBusy = false; return; }
+    alBusy = true;
+    const { key, d } = alQ.shift(), a = ALERTS[key], data = alData(d);
+    alTxt.innerHTML = a.text.replace(/\{(\w+)\}/g, (_, k) => '<span class="meta">' + esc(data[k] != null ? data[k] : '') + '</span>');
+    const phrase = alTxt.textContent + (cleanMsg(d.chatmessage) ? '. ' + cleanMsg(d.chatmessage) : '');
 
-    const nom  = /treasure/i.test(m.trainType || '') ? 'Treasure Train' : 'Hype Train';
-    const fini = m.phase === 'end';
+    let vDone = false, sDone = true, done = false, safety = null;
+    const hide = () => {
+      if (done) return; done = true; clearTimeout(safety);
+      alEl.classList.remove('show'); alEl.classList.add('hide');
+      setTimeout(() => { alEl.classList.remove('hide'); try { alVid.pause(); } catch (_) {} alNext(); }, (C.AL_FADE || 700) + 40);
+    };
+    const tryHide = () => { if (vDone && sDone) setTimeout(hide, 900); };
 
-    hypeEl.innerHTML =
-        '<div class="a-kind">' + esc(nom) + (fini ? ' — terminé' : '') + '</div>'
-      + '<div class="a-main">Niveau ' + esc(m.level || 1) + '</div>'
-      + (fini ? '' : '<div class="a-bar"><i style="width:' + pct + '%"></i></div>');
+    // Vidéo : optionnelle (nécessite d'héberger les .webm). OFF = bandeau texte.
+    alVid.classList.remove('on');
+    if (C.ALERT_WEBM && a.webm) {
+      alVid.loop = false; alVid.src = MEDIA + encodeURIComponent(a.webm); alVid.currentTime = 0;
+      alVid.classList.add('on');
+      alVid.onended = () => { vDone = true; tryHide(); };
+      alVid.onerror = () => { alVid.classList.remove('on'); vDone = true; tryHide(); };
+      alVid.play().catch(() => {});
+    } else { vDone = true; }
 
-    clearTimeout(hypeTimer);
-    hypeTimer = setTimeout(() => {
-      if (!hypeEl) return;
-      hypeEl.classList.add('gone');
-      const gone = hypeEl; hypeEl = null;
-      setTimeout(() => gone.remove(), 450);
-    }, fini ? 8000 : 300000);   // 5 min sans nouvelle : le train est fini
+    // Son : TTS phrase + message viewer (aucun fichier). Seulement si 🔔 activé.
+    if (sndOn) { sDone = false; speak(phrase, () => { sDone = true; tryHide(); }); }
+
+    alEl.classList.remove('hide'); alEl.classList.add('show');
+    if (vDone && sDone) setTimeout(hide, 2800);                                   // bandeau texte seul
+    else safety = setTimeout(hide, sndOn ? 30000 : (C.ALERT_TIME || 8) * 1000);   // sécurité
   };
 
   if (SESSION) {
@@ -1057,9 +1000,7 @@ body.live #go { display:none; }
     document.body.appendChild(pipe);
 
     /* --- Alertes via WebSocket API SSN (canal 1) ---
-       SAMMI injecte via "content" sur le canal 1 → on s'y abonne en écoute.
-       S'abonner en canal 1 fait aussi passer la réponse d'injection à "true".
-       Reconnexion automatique si la connexion tombe (ou au retour au 1er plan). */
+       SAMMI injecte via "content" sur le canal 1 → on s'y abonne en écoute. */
     let aWS = null, aRetry = null;
     const connectAlerts = () => {
       clearTimeout(aRetry);
@@ -1068,7 +1009,7 @@ body.live #go { display:none; }
         aWS.onmessage = ev => {
           let d;
           try { d = JSON.parse(ev.data); } catch (_) { return; }
-          if (d && d.action && d.value !== undefined) d = d.value;          // { action, value }
+          if (d && d.action && d.value !== undefined) d = d.value;
           if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
           if (d && d.overlayNinja) d = d.overlayNinja;
           if (d && typeof d === 'object' && (d.event || d.chatname)) handle(d);
@@ -1078,7 +1019,6 @@ body.live #go { display:none; }
       } catch (_) { aRetry = setTimeout(connectAlerts, 3000); }
     };
     connectAlerts();
-    // Au retour au premier plan (mobile suspend les sockets en arrière-plan), on relance si besoin
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && (!aWS || aWS.readyState > 1)) connectAlerts();
     });
