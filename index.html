@@ -612,7 +612,7 @@ body.live #go { display:none; }
         m.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
         m.style.transform = 'translateX(' + (dx > 0 ? 460 : -460) + 'px)';
         m.style.opacity = 0;
-        setTimeout(() => m.remove(), 320);
+        setTimeout(() => { m.remove(); feedReleaseNext(); }, 320);
       } else {                                   // retour en place, décélération douce
         m.style.transition = 'transform .34s cubic-bezier(.22,1,.36,1), opacity .3s ease';
         m.classList.remove('dismiss');
@@ -782,6 +782,13 @@ body.live #go { display:none; }
   const esc = s => String(s).replace(/[&<>"']/g, c =>
     ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 
+  /* File d'attente chat : au-delà de C.MAX à l'écran, les nouveaux messages
+     ATTENDENT ; chaque swipe libère le suivant (rien n'est perdu). */
+  const msgQ = [];
+  const insertMsg = el => { feed.prepend(el); void el.offsetWidth; el.classList.remove('enter'); };
+  const addToFeed = el => { if (feed.children.length >= C.MAX) msgQ.push(el); else insertMsg(el); };
+  const feedReleaseNext = () => { if (msgQ.length && feed.children.length < C.MAX) insertMsg(msgQ.shift()); };
+
   const draw = d => {
     const el = document.createElement('div');
     el.className = 'msg enter';
@@ -832,12 +839,7 @@ body.live #go { display:none; }
 
     el.dataset.t = Date.now();
 
-    feed.prepend(el);              // column-reverse : ça se pose en bas
-    void el.offsetWidth;           // force le calcul avant l'animation
-    el.classList.remove('enter');
-
-    // Le plus ancien est le dernier du DOM
-    while (feed.children.length > C.MAX) feed.lastElementChild.remove();
+    addToFeed(el);                // insère, ou met en file d'attente si déjà C.MAX à l'écran
 
     if (!visible) {
       missed++;
@@ -952,6 +954,13 @@ body.live #go { display:none; }
     setTimeout(() => card.remove(), 420);
   };
   const alMeta = v => '<span class="meta">' + esc(v) + '</span>';
+  const alBacklog = [];
+  const alInsert = card => {
+    alBox.prepend(card);
+    card.querySelector('.al-bar i').style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
+    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
+  };
+  const alReleaseNext = () => { if (alBacklog.length && alBox.children.length < (C.ALERT_MAX || 25)) alInsert(alBacklog.shift()); };
   const alShow = (key, d) => {
     const kind = ALERTS[key]; if (!kind) return;
     const data = alData(d), parts = [];
@@ -970,17 +979,13 @@ body.live #go { display:none; }
     const card = document.createElement('div');
     card.className = 'al';
     card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
-    alBox.prepend(card);
-    while (alBox.children.length > (C.ALERT_MAX || 25)) alBox.lastElementChild.remove();
-    const barI = card.querySelector('.al-bar i');
-    if (sndOn) {                                    // bip + TTS ; la barre SUIT le TTS (vide quand la voix se termine)
+    if (sndOn) {                                    // son TEMPS RÉEL (bip + TTS), même si la carte attend en file
       beep('');
       const msg = cleanMsg(d.chatmessage);
-      speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : ''), barI);
-    } else {                                        // pas de son : barre = durée estimée de l'alerte OBS (ALERT_LIVE)
-      barI.style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
+      speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : ''));
     }
-    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
+    if (alBox.children.length >= (C.ALERT_MAX || 25)) alBacklog.push(card);   // plein → file d'attente
+    else alInsert(card);
   };
   if (C.GESTURES) {                                 // swipe ↔ pour effacer une carte
     let sx = 0, tgt = null, dx = 0, horiz = false;
@@ -995,7 +1000,7 @@ body.live #go { display:none; }
     }, { passive: false });
     alBox.addEventListener('touchend', () => {
       if (!tgt) return; const m = tgt; tgt = null; m.style.transition = '';
-      if (horiz && Math.abs(dx) > 80) { m.style.transform = 'translateX(' + (dx > 0 ? 400 : -400) + 'px)'; m.style.opacity = 0; setTimeout(() => m.remove(), 300); }
+      if (horiz && Math.abs(dx) > 80) { m.style.transform = 'translateX(' + (dx > 0 ? 400 : -400) + 'px)'; m.style.opacity = 0; setTimeout(() => { m.remove(); alReleaseNext(); }, 300); }
       else { m.style.transform = ''; m.style.opacity = ''; if (C.ALERT_FADE) m._t = setTimeout(() => alGone(m), (C.LIFETIME || 30) * 1000); }
     }, { passive: true });
   }
