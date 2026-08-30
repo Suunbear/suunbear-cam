@@ -44,7 +44,7 @@ const CONFIG = {
 
   /* ---------- Chat ---------- */
   MAX      : 25,      // nombre de messages gardés à l'écran
-  LIFETIME : 30,      // secondes avant qu'un message s'efface. 0 = jamais
+  LIFETIME : 0,       // secondes avant qu'un message s'efface. 0 = jamais (aucune disparition)
   KEEP     : 2,       // les X derniers messages ne s'effacent jamais
   FONT     : 18,      // taille du texte en px
 
@@ -57,7 +57,7 @@ const CONFIG = {
 
   /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
   ALERTS       : true,    // affiche un bandeau distinct sur les événements
-  ALERT_SOUND  : false,   // son des alertes. ⚠️ n'active qu'avec des écouteurs
+  ALERT_SOUND  : true,    // son des alertes (bip + TTS) activé au lancement. false pour couper. Écouteurs conseillés (écho)
   ALERT_MAX    : 25,      // nombre de cartes d'alerte affichées en même temps
                           // qui isolent, sinon le micro le capte et ça fait écho
   ALERT_FADE   : false,   // false = les alertes restent jusqu'au swipe · true = fondu après LIFETIME (30 s)
@@ -159,16 +159,19 @@ body.live #scrim.hidden   { opacity:0; }
 body.live #feed        { display:flex; }
 body.live #feed.hidden { opacity:0; }
 
-/* ================= Alertes : cartes compactes en HAUT, swipe ↔ ================= */
+/* ================= Alertes : zone HAUT (au-dessus du chat), swipe ↔ + scroll ↕ ================= */
 #alerts {
-  position:fixed; z-index:6;
+  position:fixed; z-index:2;                          /* sous le chat (z-index:3) : à la limite, passe DERRIÈRE le chat */
   left:var(--side); right:var(--side);
-  top:calc(env(safe-area-inset-top, 0px) + 46px);   /* ~1 cm sous les icônes du haut de l'écran */
+  top:calc(env(safe-area-inset-top, 0px) + 62px);     /* décalé sous les icônes du haut */
+  max-height:calc(100vh - var(--chatH) - 92px);       /* s'arrête à la ligne du chat ; au-delà = scroll */
   display:none; flex-direction:column; align-items:center; gap:6px;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
   pointer-events:none;
 }
 body.live #alerts { display:flex; }
-#alerts.gest .al { pointer-events:auto; touch-action:pan-x; }
+#alerts::-webkit-scrollbar { display:none; }
+#alerts.gest { pointer-events:auto; touch-action:pan-y; }   /* ↕ = naviguer, ↔ sur une carte = effacer */
 
 .al {
   min-width:44%; max-width:100%; padding:6px 14px 7px;
@@ -734,7 +737,7 @@ body.live #go { display:none; }
         o.connect(g); g.connect(actx.destination);
         const t = actx.currentTime + i * 0.13;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);   // volume du bip (monte pour + fort)
+        g.gain.exponentialRampToValueAtTime(1.0, t + 0.02);   // volume du bip (max propre = 1.0)
         g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
         o.start(t); o.stop(t + 0.24);
       });
@@ -928,13 +931,17 @@ body.live #go { display:none; }
     return s.replace(/\s+/g, ' ').trim().slice(0, 200);
   };
   let ttsAudio = null;
-  const speak = (text, onEnd) => {
-    if (!text) { if (onEnd) onEnd(); return; }
+  const speak = (text, barEl) => {
+    const empty = () => { if (barEl) barEl.style.width = '0%'; };
+    if (!text) { empty(); return; }
     if (ttsAudio) { try { ttsAudio.pause(); } catch (_) {} }
     const a = new Audio('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=fr&q=' + encodeURIComponent(text.slice(0, 200)));
-    a.onended = () => { if (onEnd) onEnd(); };
-    a.onerror = () => { if (onEnd) onEnd(); };
-    a.play().catch(() => { if (onEnd) onEnd(); });
+    if (barEl) {
+      barEl.style.width = '100%';
+      a.ontimeupdate = () => { if (a.duration) barEl.style.width = Math.max(0, 100 * (1 - a.currentTime / a.duration)) + '%'; };
+    }
+    a.onended = empty; a.onerror = empty;
+    a.play().catch(empty);
     ttsAudio = a;
   };
 
@@ -962,11 +969,17 @@ body.live #go { display:none; }
     const line = parts.filter(Boolean).map(alMeta).join(' \u00b7 ');
     const card = document.createElement('div');
     card.className = 'al';
-    card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div>'
-                   + '<div class="al-bar"><i style="animation:al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards"></i></div>';
+    card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
     alBox.prepend(card);
     while (alBox.children.length > (C.ALERT_MAX || 25)) alBox.lastElementChild.remove();
-    if (sndOn) { beep(''); const msg = cleanMsg(d.chatmessage); speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : '')); }
+    const barI = card.querySelector('.al-bar i');
+    if (sndOn) {                                    // bip + TTS ; la barre SUIT le TTS (vide quand la voix se termine)
+      beep('');
+      const msg = cleanMsg(d.chatmessage);
+      speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : ''), barI);
+    } else {                                        // pas de son : barre = durée estimée de l'alerte OBS (ALERT_LIVE)
+      barI.style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
+    }
     if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
   };
   if (C.GESTURES) {                                 // swipe ↔ pour effacer une carte
