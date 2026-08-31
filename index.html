@@ -44,7 +44,7 @@ const CONFIG = {
 
   /* ---------- Chat ---------- */
   MAX      : 25,      // nombre de messages gardés à l'écran
-  LIFETIME : 0,       // secondes avant qu'un message s'efface. 0 = jamais (aucune disparition)
+  LIFETIME : 60,      // secondes avant qu'un message s'efface en fondu (si non swipé). 0 = jamais
   KEEP     : 2,       // les X derniers messages ne s'effacent jamais
   FONT     : 18,      // taille du texte en px
 
@@ -175,9 +175,11 @@ body.live #alerts { display:flex; }
 
 .al {
   min-width:44%; max-width:100%; padding:6px 14px 7px;
-  border:2px solid rgba(255,158,44,.6); border-radius:12px;
+  border:2px solid var(--alc, rgba(255,158,44,.6)); border-radius:12px;
   background:linear-gradient(145deg, rgba(26,18,6,.9), rgba(46,30,8,.82));
+  background:linear-gradient(145deg, color-mix(in srgb, var(--alc, #FF9E2C) 30%, #140d04), color-mix(in srgb, var(--alc, #FF9E2C) 18%, #241804));
   box-shadow:0 4px 16px rgba(255,158,44,.2), inset 0 0 14px rgba(255,210,90,.06);
+  box-shadow:0 4px 16px color-mix(in srgb, var(--alc, #FF9E2C) 32%, transparent), inset 0 0 14px rgba(255,210,90,.06);
   text-align:center; color:#F5E9B8;
   animation:al-in .45s cubic-bezier(.2,.9,.25,1.15);
 }
@@ -785,9 +787,10 @@ body.live #go { display:none; }
   /* File d'attente chat : au-delà de C.MAX à l'écran, les nouveaux messages
      ATTENDENT ; chaque swipe libère le suivant (rien n'est perdu). */
   const msgQ = [];
+  const unreadBadge = () => { unread.textContent = msgQ.length > 99 ? '99+' : msgQ.length; unread.classList.toggle('on', msgQ.length > 0); };
   const insertMsg = el => { feed.prepend(el); void el.offsetWidth; el.classList.remove('enter'); };
-  const addToFeed = el => { if (feed.children.length >= C.MAX) msgQ.push(el); else insertMsg(el); };
-  const feedReleaseNext = () => { if (msgQ.length && feed.children.length < C.MAX) insertMsg(msgQ.shift()); };
+  const addToFeed = el => { if (feed.children.length >= C.MAX) { msgQ.push(el); unreadBadge(); } else insertMsg(el); };
+  const feedReleaseNext = () => { if (msgQ.length && feed.children.length < C.MAX) { insertMsg(msgQ.shift()); unreadBadge(); } };
 
   const draw = d => {
     const el = document.createElement('div');
@@ -840,12 +843,6 @@ body.live #go { display:none; }
     el.dataset.t = Date.now();
 
     addToFeed(el);                // insère, ou met en file d'attente si déjà C.MAX à l'écran
-
-    if (!visible) {
-      missed++;
-      unread.textContent = missed > 99 ? '99+' : missed;
-      unread.classList.add('on');
-    }
   };
 
   const drop = test => [...feed.children].forEach(el => { if (test(el)) el.remove(); });
@@ -862,7 +859,7 @@ body.live #go { display:none; }
         if (el.classList.contains('gone')) return;    // déjà en train de partir
         if (now - Number(el.dataset.t) < C.LIFETIME * 1000) return;
         el.classList.add('gone');
-        setTimeout(() => el.remove(), 500);
+        setTimeout(() => { el.remove(); feedReleaseNext(); }, 500);
       });
     }, 1000);
   }
@@ -901,10 +898,19 @@ body.live #go { display:none; }
   /* ---------- Alertes : format compact (type + qui + valeur) ---------- */
   const ALERTS = {
     new_follower:'FOLLOW', new_subscriber:'SUB', subscribe:'SUB', resub:'RESUB',
-    subscription_gift:'SUBGIFT', giftpurchase:'SUBGIFT', cheer:'BITS',
+    prime:'PRIME', prime_resub:'PRIME',
+    subscription_gift:'SUBGIFT', giftpurchase:'SUBGIFT COMMU', cheer:'BITS',
     donation:'DON', superchat:'SUPER CHAT', jeweldonation:'DON', raid:'RAID',
-    hype_new:'HYPE', hype_level:'HYPE', hype_end:'HYPE', hype_record:'HYPE RECORD',
+    hype_new:'HYPE DEBUT', hype_level:'HYPE', hype_end:'HYPE FIN', hype_record:'HYPE RECORD',
     merch:'MERCH', wishlist:'WISHLIST'
+  };
+  const ALCOL = {   // couleur de fond par type
+    new_follower:'#22c55e', new_subscriber:'#a855f7', subscribe:'#a855f7', resub:'#8b5cf6',
+    prime:'#38bdf8', prime_resub:'#38bdf8',
+    subscription_gift:'#2dd4bf', giftpurchase:'#14b8a6', cheer:'#60a5fa',
+    donation:'#fbbf24', superchat:'#f59e0b', jeweldonation:'#fbbf24', raid:'#f87171',
+    hype_new:'#fb923c', hype_level:'#fb923c', hype_end:'#f97316', hype_record:'#f472b6',
+    merch:'#c084fc', wishlist:'#f472b6'
   };
 
   const alBox = $('#alerts'); if (C.GESTURES) alBox.classList.add('gest');
@@ -932,19 +938,15 @@ body.live #go { display:none; }
     TTS_BLOCK.forEach(w => { s = s.replace(new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), ' '); });
     return s.replace(/\s+/g, ' ').trim().slice(0, 200);
   };
-  let ttsAudio = null;
-  const speak = (text, barEl) => {
-    const empty = () => { if (barEl) barEl.style.width = '0%'; };
-    if (!text) { empty(); return; }
-    if (ttsAudio) { try { ttsAudio.pause(); } catch (_) {} }
-    const a = new Audio('https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=fr&q=' + encodeURIComponent(text.slice(0, 200)));
-    if (barEl) {
-      barEl.style.width = '100%';
-      a.ontimeupdate = () => { if (a.duration) barEl.style.width = Math.max(0, 100 * (1 - a.currentTime / a.duration)) + '%'; };
-    }
-    a.onended = empty; a.onerror = empty;
-    a.play().catch(empty);
-    ttsAudio = a;
+  // TTS = voix intégrée du téléphone (Web Speech). Nécessite 1 tap écran pour débloquer l'audio.
+  const speak = (text) => {
+    if (!text || !window.speechSynthesis) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(String(text).slice(0, 300));
+      u.lang = 'fr-FR'; u.rate = 1.05; u.volume = 1; u.pitch = 1;
+      speechSynthesis.speak(u);
+    } catch (_) {}
   };
 
   /* Alertes = cartes en HAUT, empilées (inverse du chat), effaçables au swipe ↔. */
@@ -967,7 +969,7 @@ body.live #go { display:none; }
     if (key.indexOf('hype') === 0) { if (data.level) parts.push('Niveau ' + data.level); }
     else {
       parts.push(data.user);
-      if (key === 'resub' && data.months) parts.push(data.months + ' mois');
+      if ((key === 'resub' || key === 'prime_resub') && data.months) parts.push(data.months + ' mois');
       else if (data.amount && (key === 'cheer' || key === 'donation' || key === 'superchat' || key === 'jeweldonation')) parts.push(data.amount);
       else if (key === 'raid' && data.viewers) parts.push(data.viewers + ' viewers');
       else if (key === 'subscription_gift' && data.recipient) parts.push('\u2192 ' + data.recipient);
@@ -978,6 +980,7 @@ body.live #go { display:none; }
     const line = parts.filter(Boolean).map(alMeta).join(' \u00b7 ');
     const card = document.createElement('div');
     card.className = 'al';
+    card.style.setProperty('--alc', ALCOL[key] || '#FF9E2C');
     card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
     if (sndOn) {                                    // son TEMPS RÉEL (bip + TTS), même si la carte attend en file
       beep('');
@@ -1043,7 +1046,6 @@ body.live #go { display:none; }
       feed.classList.toggle('hidden',  !visible);
       scrim.classList.toggle('hidden', !visible);
       bChat.classList.toggle('off',    !visible);
-      if (visible) { missed = 0; unread.classList.remove('on'); }
     });
   } else {
     bChat.classList.add('none');
