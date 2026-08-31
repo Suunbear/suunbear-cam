@@ -44,8 +44,8 @@ const CONFIG = {
 
   /* ---------- Chat ---------- */
   MAX      : 25,      // nombre de messages gardés à l'écran
-  LIFETIME : 60,      // secondes avant qu'un message s'efface en fondu (si non swipé). 0 = jamais
-  KEEP     : 2,       // les X derniers messages ne s'effacent jamais
+  LIFETIME : 120,     // secondes avant qu'un message s'efface en fondu (si non swipé). 0 = jamais
+  KEEP     : 0,       // les X derniers messages ne s'effacent jamais (0 = tous soumis au cooldown)
   FONT     : 18,      // taille du texte en px
 
   AVATARS  : true,    // photo de profil
@@ -573,7 +573,7 @@ body.live #go { display:none; }
      ↕ défiler vers le haut  = fige le chat (fondu + effacement suspendus, on lit l'historique)
      ↕ redescendre tout en bas = reprend le direct
      ↔ glisser un message     = l'efface tout de suite                                        */
-  let frozen = false;
+  let frozen = false, scrollPauseUntil = 0;
   if (C.GESTURES) {
     feed.classList.add('gest');
 
@@ -581,6 +581,7 @@ body.live #go { display:none; }
     feed.addEventListener('scroll', () => {
       frozen = Math.abs(feed.scrollTop) > 8;
       feed.classList.toggle('paused', frozen);
+      if (frozen) scrollPauseUntil = Date.now() + 3000;   // pause l'effacement 3 s après un scroll
     }, { passive: true });
 
     let sx = 0, sy = 0, dx = 0, tgt = null, horiz = false;
@@ -610,9 +611,16 @@ body.live #go { display:none; }
     feed.addEventListener('touchend', () => {
       if (!tgt) return;
       const m = tgt; tgt = null;
-      if (horiz && Math.abs(dx) > 80) {          // seuil franchi → sortie fluide
+      if (horiz && dx > 80) {                    // → DROITE : tout effacer (+ vider la file)
+        msgQ.length = 0; unreadBadge();
+        [...feed.children].forEach(el => {
+          el.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
+          el.style.transform = 'translateX(460px)'; el.style.opacity = 0;
+        });
+        setTimeout(() => { feed.innerHTML = ''; }, 320);
+      } else if (horiz && dx < -80) {            // ← GAUCHE : ce message seul (comme avant)
         m.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
-        m.style.transform = 'translateX(' + (dx > 0 ? 460 : -460) + 'px)';
+        m.style.transform = 'translateX(-460px)';
         m.style.opacity = 0;
         setTimeout(() => { m.remove(); feedReleaseNext(); }, 320);
       } else {                                   // retour en place, décélération douce
@@ -852,7 +860,7 @@ body.live #go { display:none; }
      messages en revenant. Chat animé : tout le reste s'efface. */
   if (C.LIFETIME > 0) {
     setInterval(() => {
-      if (frozen) return;                           // chat figé (lecture historique) : rien ne s'efface
+      if (Date.now() < scrollPauseUntil) return;    // lecture historique en cours : pause l'effacement
       const now = Date.now();
       [...feed.children].forEach((el, i) => {
         if (i < C.KEEP) return;                       // protégé
