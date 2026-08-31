@@ -572,7 +572,7 @@ body.live #go { display:none; }
   /* --- Gestes tactiles sur le chat (CONFIG.GESTURES) ---
      ↕ défiler vers le haut  = fige le chat (fondu + effacement suspendus, on lit l'historique)
      ↕ redescendre tout en bas = reprend le direct
-     ↔ glisser un message     = l'efface tout de suite                                        */
+     ↔ swipe ← gauche = tout effacer · swipe → droite = un message à la fois                                        */
   let frozen = false, scrollPauseUntil = 0;
   if (C.GESTURES) {
     feed.classList.add('gest');
@@ -611,16 +611,16 @@ body.live #go { display:none; }
     feed.addEventListener('touchend', () => {
       if (!tgt) return;
       const m = tgt; tgt = null;
-      if (horiz && dx > 80) {                    // → DROITE : tout effacer (+ vider la file)
+      if (horiz && dx < -80) {                   // ← GAUCHE : tout effacer (+ vider la file)
         msgQ.length = 0; unreadBadge();
         [...feed.children].forEach(el => {
           el.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
-          el.style.transform = 'translateX(460px)'; el.style.opacity = 0;
+          el.style.transform = 'translateX(-460px)'; el.style.opacity = 0;
         });
         setTimeout(() => { feed.innerHTML = ''; }, 320);
-      } else if (horiz && dx < -80) {            // ← GAUCHE : ce message seul (comme avant)
+      } else if (horiz && dx > 80) {             // → DROITE : ce message seul
         m.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
-        m.style.transform = 'translateX(-460px)';
+        m.style.transform = 'translateX(460px)';
         m.style.opacity = 0;
         setTimeout(() => { m.remove(); feedReleaseNext(); }, 320);
       } else {                                   // retour en place, décélération douce
@@ -921,12 +921,42 @@ body.live #go { display:none; }
     merch:'#c084fc', wishlist:'#f472b6'
   };
 
+  /* ---------- TTS façon OBS (repris d'alertes.html) ----------
+     Le TITRE de l'alerte reste dit (FOLLOW, SUB, DON…) ; le reste — pseudo +
+     valeurs (mois, bits, montant…) — est lu via ces gabarits, exactement comme
+     sur l'overlay OBS. Ces phrases ne servent QU'À la voix : l'affichage des
+     cartes ne change pas. Le message du viewer est ajouté à la fin (voir alShow). */
+  const ALTEXT = {
+    new_follower:      "Un nouveau Soleil se lève sur la chaîne !!! {user} brille de mille feux !!! Merci pour le follow !!!",
+    new_subscriber:    "{user} brille un max en prenant un sub! Premier mois d'abooooo!!! Merci!!!",
+    subscribe:         "{user} brille un max en prenant un sub! Premier mois d'abooooo!!! Merci!!!",
+    resub:             "{user} brille un max avec son sub de {months} mois!",
+    prime:             "{user} loue des bus avec son Prime! Premier mois de Prime!",
+    prime_resub:       "{user} loue à nouveau des bus avec son Prime! {months} mois de Prime!",
+    subscription_gift: "{user} prépare une conspiration avec {recipient}!",
+    giftpurchase:      "{user} prépare une conspiration colossale en offrant {count} subs aux Soleils!",
+    cheer:             "{user} régale le stream avec {bits} Bitsss! Cimer!",
+    raid:              "{user} raid les Soleils!!! Ecrivez \"Bienvenue\" dans le tchat!",
+    hype_new:          "Train de la Hype lancé par les Soleils BORDEL! Nous sommes au niveau {level} du train!",
+    hype_level:        "Niveau {level} du Train de la Hype atteint par la soleillerie!!!",
+    hype_end:          "Le Train de la Hype est fini! On a atteint le niveau {level}. Merci pour vos contributions! Vous avez régalez la chaîne!",
+    hype_record:       "Nouveau record du train de la Hype des Soleils!!! Le record est maintenant de {level} niveaux!",
+    donation:          "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    superchat:         "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    jeweldonation:     "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    merch:             "{user} se fait plaizz en achetant {product}! Enjoy le goodie là!!!",
+    wishlist:          "INCROYABLE! {user} vient de participer à la cagnotte du cadeau {gift}! MERCI ça régale le stream!!!"
+  };
+  /* Mots que la voix ÉPELLE (hors de son vocabulaire) → écrits phonétiquement
+     pour le TTS uniquement. L'affichage garde le libellé normal (SUBGIFT, RESUB). */
+  const ALSPOKEN = { resub:'re sub', subscription_gift:'sub gift', giftpurchase:'sub gift communauté' };
+
   const alBox = $('#alerts'); if (C.GESTURES) alBox.classList.add('gest');
   const alData = d => {
     const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
     return {
       user:      d.chatname || m.supporter || m.fromLogin || 'Un Soleil',
-      amount:    d.hasDonation || '',
+      amount:    d.hasDonation || (m.amount ? (m.amount + (m.currency ? ' ' + m.currency : '')) : ''),
       months:    m.cumulativeMonths || m.duration || m.months || '',
       recipient: m.recipient || m.fromLogin || '',
       count:     m.totalGifted || m.count || '',
@@ -946,6 +976,22 @@ body.live #go { display:none; }
     TTS_BLOCK.forEach(w => { s = s.replace(new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), ' '); });
     return s.replace(/\s+/g, ' ').trim().slice(0, 200);
   };
+
+  /* Valeurs des gabarits TTS. Repart d'alData et dérive, pour dons/bits, un
+     montant + une devise SÉPARÉS (comme alertes.html) : soit meta.amount /
+     meta.currency, soit en découpant "5.00 €" / "500 bits" en secours. */
+  const ttsFields = d => {
+    const base = alData(d);
+    const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const numOf = s => { const x = String(s == null ? '' : s).match(/\d+(?:[.,]\d+)?/); return x ? x[0] : ''; };
+    const curOf = s => String(s == null ? '' : s).replace(/[\d.,]/g, '').replace(/bits?/gi, '').replace(/\s+/g, ' ').trim();
+    return Object.assign({}, base, {
+      bits:     m.amount || numOf(d.hasDonation),
+      amount:   m.amount || numOf(d.hasDonation),
+      currency: m.currency || curOf(d.hasDonation)
+    });
+  };
+  const fillTTS = (tpl, data) => tpl.replace(/\{(\w+)\}/g, (_, k) => (data[k] != null ? String(data[k]) : ''));
   // TTS = voix intégrée du téléphone (Web Speech). Nécessite 1 tap écran pour débloquer l'audio.
   const speak = (text) => {
     if (!text || !window.speechSynthesis) return;
@@ -992,8 +1038,11 @@ body.live #go { display:none; }
     card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
     if (sndOn) {                                    // son TEMPS RÉEL (bip + TTS), même si la carte attend en file
       beep('');
-      const msg = cleanMsg(d.chatmessage);
-      speak(kind + '. ' + card.querySelector('.al-line').textContent + (msg ? '. ' + msg : ''));
+      const spokenKind = ALSPOKEN[key] || kind;                       // "sub gift" / "re sub" au lieu d'être épelés
+      const body = ALTEXT[key] ? fillTTS(ALTEXT[key], ttsFields(d))   // phrase façon OBS (pseudo + valeurs)
+                               : card.querySelector('.al-line').textContent;
+      const msg = cleanMsg(d.chatmessage);                            // message du viewer, lu comme sur l'OBS (jamais affiché)
+      speak(spokenKind + '. ' + body + (msg ? '. ' + msg : ''));
     }
     if (alBox.children.length >= (C.ALERT_MAX || 25)) alBacklog.push(card);   // plein → file d'attente
     else alInsert(card);
