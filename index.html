@@ -325,10 +325,11 @@ body:not(.live) #bMenu { display:none; }
 }
 #dot.on::before { background:#4ade80; box-shadow:0 0 9px #4ade80; }
 
-/* Pastille compteur de viewers (dans la barre, à côté du voyant) */
+/* Pastille compteur de viewers (SOUS le voyant PC, hors de la rangée de boutons) */
 #viewers {
+  position:absolute; top:calc(100% + 8px); left:0;
   display:flex; align-items:center; gap:6px;
-  padding:0 12px; height:40px;
+  padding:0 12px; height:36px;
   border-radius:12px;
   background:rgba(0,0,0,.5);
   backdrop-filter:blur(10px);
