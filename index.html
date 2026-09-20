@@ -64,6 +64,11 @@ const CONFIG = {
   ALERT_LIVE   : 10,      // durée (s) de la barre = temps que l'alerte reste sur le live OBS. Règle-la sur ton OBS.
   ALERT_HYPE   : true,    // bandeau de progression du hype train
 
+  /* ---------- Compteur de viewers (Twitch) ---------- */
+  VIEWERS         : true,   // affiche le nombre de viewers (bouton 👁 pour basculer en direct). false = désactivé
+  VIEWERS_CHANNEL : "suun_bear",     // ta chaîne Twitch, ex. "suun_bear". Vide = coupé (peut aussi se passer via &viewers= dans le lien)
+  VIEWERS_POLL    : 30,     // rafraîchissement en secondes (minimum 15)
+
   /* ---------- Placement ---------- */
   CHAT_HEIGHT : 45,   // % de la hauteur d'écran réservée au chat
   CHAT_SIDE   : 3,    // marge gauche/droite en %
@@ -299,6 +304,8 @@ body:not(.live) #bSet,
 body:not(.live) #bMic,
 body:not(.live) #bSnd,
 body:not(.live) #bChat,
+body:not(.live) #bView,
+body:not(.live) #viewers,
 body:not(.live) #bMenu { display:none; }
 
 #dot {
@@ -317,6 +324,21 @@ body:not(.live) #bMenu { display:none; }
   transition:background .3s ease, box-shadow .3s ease;
 }
 #dot.on::before { background:#4ade80; box-shadow:0 0 9px #4ade80; }
+
+/* Pastille compteur de viewers (dans la barre, à côté du voyant) */
+#viewers {
+  display:flex; align-items:center; gap:6px;
+  padding:0 12px; height:40px;
+  border-radius:12px;
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 13px/1 system-ui, sans-serif;
+  white-space:nowrap;
+}
+#viewers b { font-weight:800; }
+#viewers.none { display:none; }
 
 #spacer { flex:1; }
 
@@ -492,10 +514,12 @@ body.live #go { display:none; }
 
 <div id="bar">
   <div id="dot">PC</div>
+  <span id="viewers" class="none">👁&nbsp;<b>–</b></span>
   <div id="spacer"></div>
   <button class="btn" id="bSet"  aria-label="Réglages VDO.Ninja">⚙️</button>
   <button class="btn" id="bMic"  aria-label="Couper le micro">🎤</button>
   <button class="btn" id="bSnd"  aria-label="Son des alertes">🔔</button>
+  <button class="btn" id="bView" aria-label="Afficher ou masquer le nombre de viewers">👁</button>
   <button class="btn" id="bChat" aria-label="Afficher ou masquer le chat">💬<span id="unread"></span></button>
   <button class="btn" id="bMenu" aria-label="Plus d'options">⋯</button>
 </div>
@@ -555,6 +579,7 @@ body.live #go { display:none; }
   const cam   = $('#cam'),  feed  = $('#feed'), scrim = $('#scrim');
   const dot   = $('#dot'),  menu  = $('#menu'), toastEl = $('#toast');
   const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu'), bSet = $('#bSet'), bSnd = $('#bSnd');
+  const bView = $('#bView'), vwEl = $('#viewers');
   const unread = $('#unread');
 
   if (!ID) { $('#setup').classList.add('show'); return; }
@@ -732,6 +757,35 @@ body.live #go { display:none; }
     setSnd();
     toast(sndOn ? 'Son des alertes activé' : 'Son des alertes coupé');
     if (sndOn) beep('');    // confirme, et débloque l'audio du navigateur
+  });
+
+  /* --- Compteur de viewers (Twitch via DecAPI, sans clé ni compte) ---
+     Le tel interroge une API publique toutes les VIEWERS_POLL secondes.
+     Bouton 👁 = affiche/masque en direct et met les requêtes en pause. */
+  const VCH = (get('viewers') || C.VIEWERS_CHANNEL || '').trim().toLowerCase();
+  const vwEnabled = !!(C.VIEWERS && VCH);
+  let vwOn = vwEnabled, vwTimer = null;
+  const vwPaint = () => {
+    bView.classList.toggle('none', !vwEnabled);
+    vwEl.classList.toggle('none', !(vwEnabled && vwOn));
+    bView.classList.toggle('off', !vwOn);
+  };
+  const vwSet = n => { const b = vwEl.querySelector('b'); if (b) b.textContent = n; };
+  const vwFetch = () => {
+    if (!vwEnabled || !vwOn) return;
+    fetch('https://decapi.me/twitch/viewercount/' + encodeURIComponent(VCH) + '?_=' + Date.now())
+      .then(r => r.text())
+      .then(t => { const n = parseInt(String(t).trim(), 10); vwSet(Number.isFinite(n) ? n : '\u2013'); })  // hors-ligne → texte non numérique → «–»
+      .catch(() => vwSet('\u2013'));
+  };
+  const vwStart = () => { clearInterval(vwTimer); vwFetch(); vwTimer = setInterval(vwFetch, Math.max(15, C.VIEWERS_POLL || 30) * 1000); };
+  const vwStop  = () => { clearInterval(vwTimer); vwTimer = null; };
+  vwPaint();
+  if (vwEnabled && vwOn) vwStart();
+  bView.addEventListener('click', () => {
+    vwOn = !vwOn; vwPaint();
+    if (vwOn) vwStart(); else vwStop();
+    toast(vwOn ? 'Viewers affichés' : 'Viewers masqués');
   });
 
   const beep = cls => {
