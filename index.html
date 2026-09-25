@@ -64,6 +64,28 @@ const CONFIG = {
   ALERT_LIVE   : 10,      // durée (s) de la barre = temps que l'alerte reste sur le live OBS. Règle-la sur ton OBS.
   ALERT_HYPE   : true,    // bandeau de progression du hype train
 
+  /* ---------- Synchro avec les alertes OBS du PC ----------
+     Sur le PC, alertes.html joue le mp3 de l'alerte PUIS lit le TTS, puis garde l'alerte 3 s + fondu.
+     Ici : le TTS attend la durée de ce mp3 (sans le jouer), et la barre suit la vraie fin de l'alerte :
+     elle reste pleine pendant la voix, puis se vide en ALERT_HOLD_MS. ALERT_LIVE ne sert plus si SYNC. */
+  ALERT_SYNC      : true,
+  ALERT_TTS_DELAY : 150,    // = tts.delay d'alertes.html (pause entre le mp3 et la voix, ms)
+  ALERT_HOLD_MS   : 3800,   // = 3000 ms d'attente + fadeOutMs (800) d'alertes.html
+  ALERT_MP3_MS : {          // durée (ms) du mp3 de chaque alerte sur le PC (mesurée le 25/09). 0 = pas d'attente
+    new_follower:6139,                                  // follow son.mp3
+    new_subscriber:4754, subscribe:4754, resub:4754,    // subsresubs son.mp3
+    prime:3657, prime_resub:3657,                       // prime son.mp3
+    subscription_gift:3213, giftpurchase:3213,          // subgifts son.mp3
+    cheer:6060,                                         // Bits son.mp3
+    raid:6008,                                          // Raids son.mp3
+    hype_new:4310,                                      // hype1.mp3
+    hype_level:7837,                                    // hype2.mp3
+    hype_end:3005, hype_record:3005,                    // hype3.mp3
+    donation:5460, superchat:5460, jeweldonation:5460,  // Dons son.mp3
+    wishlist:2142,                                      // Wishlist son.mp3
+    merch:5068                                          // Merch son.mp3
+  },
+
   /* ---------- Compteur de viewers (Twitch) ---------- */
   VIEWERS         : true,   // affiche le nombre de viewers (bouton 👁 pour basculer en direct). false = désactivé
   VIEWERS_CHANNEL : "suun_bear",     // ta chaîne Twitch, ex. "suun_bear". Vide = coupé (peut aussi se passer via &viewers= dans le lien)
@@ -1048,13 +1070,24 @@ body.live #go { display:none; }
   };
   const fillTTS = (tpl, data) => tpl.replace(/\{(\w+)\}/g, (_, k) => (data[k] != null ? String(data[k]) : ''));
   // TTS = voix intégrée du téléphone (Web Speech). Nécessite 1 tap écran pour débloquer l'audio.
-  const speak = (text) => {
-    if (!text || !window.speechSynthesis) return;
+  const speak = (text, onEnd) => {
+    const fin = () => { if (onEnd) { const f = onEnd; onEnd = null; f(); } };
+    if (!text || !window.speechSynthesis) { fin(); return; }
     try {
       const u = new SpeechSynthesisUtterance(String(text).slice(0, 300));
       u.lang = 'fr-FR'; u.rate = 1.05; u.volume = 1; u.pitch = 1;
+      u.onend = fin; u.onerror = fin;
       speechSynthesis.speak(u);
-    } catch (_) {}
+    } catch (_) { fin(); }
+  };
+
+  /* Barre synchro : pleine tant que l'alerte OBS parle, puis se vide en ALERT_HOLD_MS.
+     Si la carte attend en file (écran plein), la barre démarre à son affichage. */
+  const barShrink = card => {
+    card._barReady = true;
+    if (card._barStarted || !card.isConnected) return;
+    card._barStarted = true;
+    card.querySelector('.al-bar i').style.animation = 'al-bar ' + ((C.ALERT_HOLD_MS || 3800) / 1000) + 's linear forwards';
   };
 
   /* Alertes = cartes en HAUT, empilées (inverse du chat), effaçables au swipe ↔. */
@@ -1065,9 +1098,11 @@ body.live #go { display:none; }
   };
   const alMeta = v => '<span class="meta">' + esc(v) + '</span>';
   const alBacklog = [];
+  let alChain = Promise.resolve();   // file des voix d'alerte (synchro PC)
   const alInsert = card => {
     alBox.prepend(card);
-    card.querySelector('.al-bar i').style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
+    if (C.ALERT_SYNC) { if (card._barReady) barShrink(card); }
+    else card.querySelector('.al-bar i').style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
     if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
   };
   const alReleaseNext = () => { if (alBacklog.length && alBox.children.length < (C.ALERT_MAX || 25)) alInsert(alBacklog.shift()); };
@@ -1090,14 +1125,27 @@ body.live #go { display:none; }
     card.className = 'al';
     card.style.setProperty('--alc', ALCOL[key] || '#FF9E2C');
     card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
-    if (sndOn) {                                    // son TEMPS RÉEL (bip + TTS), même si la carte attend en file
-      beep('');
-      const spokenKind = ALSPOKEN[key] || kind;                       // "sub gift" / "re sub" au lieu d'être épelés
-      const body = ALTEXT[key] ? fillTTS(ALTEXT[key], ttsFields(d))   // phrase façon OBS (pseudo + valeurs)
-                               : card.querySelector('.al-line').textContent;
-      const msg = cleanMsg(d.chatmessage);                            // message du viewer, lu comme sur l'OBS (jamais affiché)
-      speak(spokenKind + '. ' + body + (msg ? '. ' + msg : ''));
-    }
+    const spokenKind = ALSPOKEN[key] || kind;                         // "sub gift" / "re sub" au lieu d'être épelés
+    const body = ALTEXT[key] ? fillTTS(ALTEXT[key], ttsFields(d))     // phrase façon OBS (pseudo + valeurs)
+                             : card.querySelector('.al-line').textContent;
+    const msg = cleanMsg(d.chatmessage);                              // message du viewer, lu comme sur l'OBS (jamais affiché)
+    const phrase = spokenKind + '. ' + body + (msg ? '. ' + msg : '');
+    // Attente = durée du mp3 de l'alerte sur le PC + la pause avant la voix (comme alertes.html)
+    const wait = C.ALERT_SYNC ? ((C.ALERT_MP3_MS && C.ALERT_MP3_MS[key]) || 0) + (C.ALERT_TTS_DELAY || 0) : 0;
+    // File calquée sur celle d'alertes.html : une alerte démarre quand la précédente a fini
+    // (sa voix + ALERT_HOLD_MS). La carte, elle, s'affiche tout de suite.
+    const jouer = () => new Promise(fini => {
+      let fait = false;
+      const fin = () => { if (fait) return; fait = true; if (C.ALERT_SYNC) barShrink(card); setTimeout(fini, C.ALERT_SYNC ? (C.ALERT_HOLD_MS || 3800) : 0); };
+      setTimeout(fin, wait + 30000);                // sécurité, comme sur le PC
+      if (sndOn) {
+        beep('');
+        setTimeout(() => speak(phrase, fin), wait);
+      } else {                                      // son coupé : durée de voix estimée
+        setTimeout(fin, wait + Math.min(20000, phrase.length * 65));
+      }
+    });
+    alChain = C.ALERT_SYNC ? alChain.then(jouer, jouer) : (jouer(), alChain);
     if (alBox.children.length >= (C.ALERT_MAX || 25)) alBacklog.push(card);   // plein → file d'attente
     else alInsert(card);
   };
