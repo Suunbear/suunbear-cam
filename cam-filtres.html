@@ -44,6 +44,8 @@ const CONFIG = {
   BITRATE : 3000,     // kbps max envoyés à OBS. Réglable via ⚙️. C'est désormais le TEL qui plafonne :
                       // le &videobitrate du lien OBS n'a plus d'effet (le lien OBS reste inchangé)
   FPS     : 30,       // images/s (Samsung bride à 30 de toute façon)
+  MOTION  : true,     // quand le réseau freine (4G) : l'image devient un peu plus douce mais reste fluide,
+                      // au lieu de gros pixels / saccades en bougeant. false = comportement d'index.html
   CODEC   : "hardware",   // "hardware" = H264, encodeur matériel du tel (moins de chauffe)
                           // "vp8" / "vp9" si l'image se déforme | "" pour laisser faire
   CAMERA  : "user",   // caméra au 1er lancement : "user" = avant | "environment" = arrière
@@ -828,6 +830,7 @@ body.live #go { display:none; }
   const useVideo = async (t, old) => {
     await swap(old, t);
     vTrack = t;
+    if (C.MOTION) try { t.contentHint = 'motion'; } catch (_) {}   // voir CONFIG MOTION
     t.addEventListener('ended', () => {            // caméra coupée par le système → on la rouvre
       if (vTrack === t && !hungUp) setTimeout(() => queue(openVideo).catch(camErr), 800);
     });
@@ -958,7 +961,9 @@ body.live #go { display:none; }
   const startSDK = async () => {
     const old = sdk;
     sdk = null; published = false; downSince = Date.now(); dotPaint();
-    if (old) { try { await old.disconnect(); } catch (_) {} }
+    // Ancienne liaison fermée en arrière-plan : si le Wi-Fi est déjà mort, sa fermeture peut traîner,
+    // on ne l'attend pas plus d'1 s avant de repartir sur le nouveau réseau.
+    if (old) await Promise.race([old.disconnect().catch(() => {}), new Promise(r => setTimeout(r, 1000))]);
     if (hungUp || sdk) return;                       // raccroché, ou un autre redémarrage a pris le relais
     const s = new VDONinjaSDK({
       salt        : 'vdo.ninja',       // compatible vdo.ninja : même hash d'ID / mot de passe qu'avant
@@ -973,7 +978,7 @@ body.live #go { display:none; }
       .forEach(ev => s.addEventListener(ev, () => setTimeout(dotPaint, 60)));
     s.addEventListener('reconnectFailed', () => { if (sdk === s && !hungUp) setTimeout(startSDK, 2000); });
     /* « ID déjà utilisé » : l'ancienne connexion n'est pas encore libérée par le serveur
-       (bascule réseau), ou index.html est ouvert ailleurs. On republie toutes les 4 s,
+       (bascule réseau), ou index.html est ouvert ailleurs. On republie toutes les 2 s,
        SANS couper la liaison avec OBS si elle tourne encore. */
     const reseed = () => {
       if (sdk !== s || hungUp || s.state.publishing || !s.state.connected) return;
@@ -982,7 +987,7 @@ body.live #go { display:none; }
     s.addEventListener('alert', e => {
       if (sdk !== s || hungUp || !/already in use/i.test(String(e.detail && e.detail.message))) return;
       if (Date.now() - inUseToast > 15000) { inUseToast = Date.now(); toast('ID caméra encore occupé — nouvel essai…'); }
-      setTimeout(reseed, 4000);
+      setTimeout(reseed, 2000);
     });
     try {
       await s.connect();
@@ -1009,7 +1014,7 @@ body.live #go { display:none; }
     if (hungUp || !sdk || !t || t === 'none' || t === lastNet) return;
     lastNet = t;                                     // vrai changement de réseau → connexion neuve dessus
     toast('Réseau : ' + netName() + ' — reconnexion…');
-    setTimeout(() => { if (!hungUp) startSDK(); }, 1500);
+    setTimeout(() => { if (!hungUp) startSDK(); }, 500);
   });
   addEventListener('online', () => setTimeout(() => {
     if (!hungUp && sdk && !sdk.state.connected) startSDK();
@@ -1198,7 +1203,8 @@ body.live #go { display:none; }
 
   /* État en direct (seulement quand ⚙️ est ouvert : rien ne tourne sinon).
      « relais TURN » = le flux passe par le relais (normal en 4G / CGNAT).
-     « logiciel ⚠️ » = l'encodeur matériel n'est pas utilisé → plus de chauffe. */
+     « logiciel ⚠️ » = l'encodeur matériel n'est pas utilisé → plus de chauffe.
+     « limité : réseau » = la connexion freine : normal en 4G, c'est ce qui pixelise. */
   const prevOut = new Map();
   const statPaint = async () => {
     const L = ['Réseau : ' + netName() + (C.TURN === 'force' ? ' · relais forcé' : '')];
@@ -1232,8 +1238,9 @@ body.live #go { display:none; }
           const cd  = out.codecId && by.get(out.codecId);
           const enc = out.powerEfficientEncoder === true ? 'matériel'
                     : out.powerEfficientEncoder === false ? 'logiciel ⚠️' : (out.encoderImplementation || '');
+          const lim = { bandwidth:'limité : réseau', cpu:'limité : processeur ⚠️' }[out.qualityLimitationReason] || '';
           const sub = [cd && cd.mimeType ? cd.mimeType.split('/')[1] : '', enc,
-                       out.frameWidth ? out.frameWidth + '×' + out.frameHeight : ''].filter(Boolean).join(' · ');
+                       out.frameWidth ? out.frameWidth + '×' + out.frameHeight : '', lim].filter(Boolean).join(' · ');
           if (sub) line += '\n   ' + sub;
         }
         L.push(line);
