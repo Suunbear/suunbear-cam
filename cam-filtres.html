@@ -14,6 +14,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Mouse+Memoirs&display=swap" rel="stylesheet">
 <title>Cam</title>
+<!-- Empreinte du moteur des filtres (MediaPipe) : le navigateur refuse un fichier modifié -->
+<script type="importmap">{"integrity":{"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs":"sha384-v3GXk0Hasw+L0V/A+IZbJSuL8ib7zdTjbdUDM8EkikjcUne7z2LSPh8RNuxiZUU2"}}</script>
 
 <script>
 /* ============================================================
@@ -36,6 +38,10 @@
       état de la connexion (direct / relais TURN, codec, débit).
    2. DIRECT — tu appuies sur 🔒. Le chat apparaît ; ⚙️ reste
       accessible sans déverrouiller.
+
+   FILTRES visage (points de chaîne) : SAMMI → HTTP Request GET
+   https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"triste"}}
+   Calculés par le tel, visibles sur le tel ET sur OBS, 30 s chacun.
    ============================================================ */
 const CONFIG = {
 
@@ -54,6 +60,14 @@ const CONFIG = {
   AUDIO_PROCESSING : true,  // anti-écho + réduction de bruit + gain auto (comme VDO.Ninja)
   TURN    : "auto",   // "auto"  = relais TURN de VDO.Ninja intégré (4G / CGNAT, bascule Wi-Fi → 4G)
                       // "force" = tout passe par le relais (pour tester le chemin 4G depuis le Wi-Fi)
+
+  /* ---------- Filtres visage (points de chaîne) ---------- */
+  FILTERS          : true,  // filtres déclenchés par SAMMI (event "filtre"). false = ignorés
+  FILTER_DURATION  : 30,    // secondes par filtre (fondus compris)
+  FILTER_STRENGTH  : 1,     // intensité : 0.5 = discret · 1 = normal · 1.5 = très caricatural
+  FILTER_QUEUE_MAX : 10,    // filtres max en file d'attente (au-delà : ignorés)
+  FILTER_PRELOAD   : true,  // prépare le moteur au lancement → 1er filtre immédiat.
+                            // Téléchargé une fois (~16 Mo) puis gardé en cache. Au repos, il ne calcule rien.
 
   FILL_LANDSCAPE : true,  // à l'horizontale, l'aperçu remplit tout l'écran.
                           // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
@@ -143,6 +157,43 @@ html, body {
   background:#000;
 }
 #cam.mirror { transform:scaleX(-1); }     /* aperçu seulement : OBS reçoit l'image normale */
+
+/* Filtre : image déformée affichée par-dessus l'aperçu (même cadrage) */
+#fx, #fxsrc {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  object-fit:contain;
+  pointer-events:none;
+}
+#fx     { z-index:1; display:none; background:#000; }
+#fx.on  { display:block; }
+#fx.mirror { transform:scaleX(-1); }
+#fxsrc  { z-index:0; }                     /* source du moteur, cachée sous l'aperçu */
+
+/* Bandeau du filtre en cours (tel uniquement) */
+#fxBan {
+  position:fixed; left:50%; transform:translateX(-50%);
+  top:calc(env(safe-area-inset-top, 0px) + 62px);
+  z-index:9;
+  display:none;
+  min-width:46%; max-width:92%;
+  padding:6px 16px 7px;
+  border:2px solid rgba(255,158,44,.85); border-radius:14px;
+  background:linear-gradient(145deg, rgba(26,18,6,.92), rgba(46,30,8,.86));
+  box-shadow:0 4px 18px rgba(255,158,44,.32), inset 0 0 14px rgba(255,210,90,.08);
+  color:#F5E9B8; text-align:center; pointer-events:none;
+  animation:al-in .45s cubic-bezier(.2,.9,.25,1.15);
+}
+#fxBan.on { display:block; }
+#fxBan .n { font-family:'Mouse Memoirs', system-ui, sans-serif; text-transform:uppercase;
+            font-size:26px; line-height:1.05; letter-spacing:1px; white-space:nowrap;
+            text-shadow:0 1px 2px #000, 0 2px 7px rgba(0,0,0,.7); }
+#fxBan .n b { color:#FF9E2C; font-weight:400; }
+#fxBan .q { font:700 10px/1 'Inter', system-ui, sans-serif; letter-spacing:.12em;
+            text-transform:uppercase; color:rgba(255,210,90,.75); margin-top:2px; }
+#fxBan .bar { height:3px; margin-top:5px; border-radius:2px; background:rgba(0,0,0,.4); overflow:hidden; }
+#fxBan .bar i { display:block; height:100%; background:#FF9E2C; border-radius:2px; transition:width .25s linear; }
+body.fxing #alerts { top:calc(env(safe-area-inset-top, 0px) + 128px); }   /* les alertes passent sous le bandeau */
 body.live #cam { pointer-events:none; }   /* plus aucun tap accidentel */
 
 /* ================= Couche 2 : le voile ================= */
@@ -459,6 +510,9 @@ body:not(.live) #bMenu { display:none; }
 }
 #sheet .row button:active { background:rgba(255,255,255,.2); }
 #sheet .row .ok { background:var(--purple); }
+#sVu { height:6px; margin:7px 2px 0; border-radius:3px; background:rgba(255,255,255,.1); overflow:hidden; }
+#sVu i { display:block; height:100%; width:0; border-radius:3px;
+         background:linear-gradient(90deg, #4ade80 0%, #FFD25A 70%, #ff6b6b 100%); transition:width .08s linear; }
 #sStat {
   margin-top:12px; padding:9px 10px;
   border-radius:10px; background:rgba(255,255,255,.06);
@@ -544,7 +598,7 @@ body.live #go { display:none; }
     bottom:calc(env(safe-area-inset-bottom, 0px) + 60% + 20px);
   }
   .alert { max-width:100%; }
-  body.fill #cam { object-fit:cover; }     /* FILL_LANDSCAPE : l'aperçu remplit l'écran (tel uniquement) */
+  body.fill #cam, body.fill #fx, body.fill #fxsrc { object-fit:cover; }   /* FILL_LANDSCAPE : l'aperçu remplit l'écran (tel uniquement) */
   #scrim {
     height:82%;
     background:linear-gradient(to top, #000 0%, rgba(0,0,0,.5) 42%, transparent 100%);
@@ -564,6 +618,8 @@ body.live #go { display:none; }
 <body>
 
 <video id="cam" autoplay playsinline muted disablepictureinpicture></video>
+<canvas id="fx"></canvas>
+<div id="fxBan"></div>
 
 <div id="scrim"></div>
 <div id="alerts"></div>
@@ -594,6 +650,7 @@ body.live #go { display:none; }
   <select id="sCam"></select>
   <label for="sMic">🎤 Micro</label>
   <select id="sMic"></select>
+  <div id="sVu"><i></i></div>
   <label for="sQual">🖼 Qualité</label>
   <select id="sQual">
     <option value="0">1080p</option>
@@ -610,6 +667,9 @@ body.live #go { display:none; }
     <option value="6000">6000 kbps</option>
   </select>
   <div id="sStat">…</div>
+  <div class="row">
+    <button id="sFx">😭 Tester le filtre</button>
+  </div>
   <div class="row">
     <button id="sFlip">🔄 Avant / arrière</button>
     <button id="sOk" class="ok">OK</button>
@@ -831,11 +891,15 @@ body.live #go { display:none; }
     await swap(old, t);
     vTrack = t;
     if (C.MOTION) try { t.contentHint = 'motion'; } catch (_) {}   // voir CONFIG MOTION
-    t.addEventListener('ended', () => {            // caméra coupée par le système → on la rouvre
-      if (vTrack === t && !hungUp) setTimeout(() => queue(openVideo).catch(camErr), 800);
-    });
+    watchEnded(t);
     preview();
   };
+  /* Caméra coupée par le système → on la rouvre (et on sort d'un filtre en cours). */
+  const watchEnded = t => t.addEventListener('ended', () => {
+    if (vTrack !== t || hungUp) return;
+    if (fx.on) fxEnd();
+    setTimeout(() => queue(openVideo).catch(camErr), 800);
+  });
   const useAudio = async (t, old) => {
     t.enabled = micOn;
     await swap(old, t);
@@ -877,17 +941,22 @@ body.live #go { display:none; }
     await openVideo();
   };
 
-  /* --- Micro cravate : reconnu à son nom ---
-     Android nomme ses micros internes « Speakerphone » / « Headset earpiece ».
-     Tout le reste (USB, filaire…) est un micro externe → prioritaire en mode Auto. */
-  const MIC_IN = /speakerphone|earpiece|built-?in|intégr|interne|internal|default|défaut|haut-parleur/i;
+  /* --- Micro cravate : choisi d'après son nom (mode Auto) ---
+     Chrome Android : « Speakerphone » = micro du tel en mode haut-parleur.
+     « Headset earpiece » = micro « combiné » : Android le fait passer sur la cravate
+     quand elle est branchée (et sur le micro du tel sinon) → choix par défaut.
+     USB / filaire nommé → encore prioritaire. Bluetooth → jamais d'office (qualité téléphone). */
   const SYS = id => !id || id === 'default' || id === 'communications';
   const micScore = d => {
-    if (!d || !d.label || SYS(d.deviceId) || MIC_IN.test(d.label)) return 0;
-    if (/usb/i.test(d.label)) return 3;
-    if (/wired|headset|casque|filaire|lav|cravate|jack|extern/i.test(d.label)) return 2;
+    if (!d || !d.label || SYS(d.deviceId)) return 0;
+    const l = d.label;
+    if (/bluetooth|\bbt\b/i.test(l)) return 0;
+    if (/speakerphone|built-?in|intégr|interne|internal|haut-parleur|default|défaut/i.test(l)) return 0;
+    if (/usb|wired|filaire|lav|cravate|jack|extern/i.test(l)) return 3;
+    if (/earpiece|headset|casque/i.test(l)) return 2;
     return 1;
   };
+  const micName = () => { const d = mics().find(x => x.deviceId === curMic()); return (d && d.label) || 'Micro du téléphone'; };
   const mics = () => devs.filter(d => d.kind === 'audioinput' && !SYS(d.deviceId));
   const listDevs = async () => { try { devs = await md.enumerateDevices(); } catch (_) {} return devs; };
   const micWanted = () => {
@@ -908,8 +977,7 @@ body.live #go { display:none; }
               && (want ? cur === want : micScore(curDev) === 0);
       if (!ok) {
         await openAudio(want);
-        const d = mics().find(x => x.deviceId === curMic());
-        toast('🎤 ' + (micScore(d) > 0 ? 'Micro cravate' : 'Micro du téléphone'));
+        toast('🎤 ' + micName());
       }
     } catch (_) { toast('🎤 Micro indisponible'); }
     fillLists();
@@ -1046,6 +1114,7 @@ body.live #go { display:none; }
     await micCheck();                              // noms des micros dispo après autorisation → cravate auto
     ensureSDK();
     if (!document.body.classList.contains('live')) sheetOpen(true);   // réglages ouverts pendant la préparation
+    if (C.FILTERS && C.FILTER_PRELOAD) setTimeout(() => ensureLM().catch(() => {}), 4000);   // moteur des filtres prêt d'avance
   };
   setTimeout(boot, 0);
 
@@ -1167,8 +1236,7 @@ body.live #go { display:none; }
       return opt(d.deviceId, name, d.deviceId === curV);
     }).join('') || opt('', 'Caméra');
 
-    const cur = mics().find(d => d.deviceId === curMic());
-    sMic.innerHTML = opt('auto', 'Auto — ' + (micScore(cur) > 0 ? 'cravate' : 'micro du tel'), pref.mic === 'auto')
+    sMic.innerHTML = opt('auto', 'Auto — ' + micName(), pref.mic === 'auto')
                    + mics().map(d => opt(d.deviceId, (micScore(d) > 0 ? '🎙 ' : '') + (d.label || 'Micro'),
                                          pref.mic === d.deviceId)).join('');
 
@@ -1178,19 +1246,24 @@ body.live #go { display:none; }
   };
 
   const afterCam = () => { fillLists(); ensureSDK(); };
+  /* Pendant un filtre, la caméra est prise par le moteur : on attend la fin. */
+  const fxBusy = () => { if (!fx.on) return false; toast('Attends la fin du filtre'); fillLists(); return true; };
   sCam.addEventListener('change', () => {
+    if (fxBusy()) return;
     const d = devs.find(x => x.deviceId === sCam.value);
     pref.cam = sCam.value; save('cam', pref.cam);
     if (d && side(d.label)) { pref.facing = FRONT.test(d.label) ? 'user' : 'environment'; save('facing', pref.facing); }
     queue(openVideo).then(afterCam, camErr);
   });
   $('#sFlip').addEventListener('click', () => {
+    if (fxBusy()) return;
     pref.facing = (vTrack && isFront(vTrack)) ? 'environment' : 'user'; pref.cam = '';
     save('facing', pref.facing); save('cam', '');
     queue(openVideo).then(() => { afterCam(); toast(pref.facing === 'user' ? 'Caméra avant' : 'Caméra arrière'); }, camErr);
   });
   sMic.addEventListener('change', () => { pref.mic = sMic.value; save('mic', pref.mic); micCheck(); });
   sQual.addEventListener('change', () => {
+    if (fxBusy()) return;
     pref.qual = +sQual.value; save('qual', pref.qual);
     queue(applyQual).then(() => { afterCam(); toast('Qualité : ' + QNAME[pref.qual]); }, camErr);
   });
@@ -1200,6 +1273,42 @@ body.live #go { display:none; }
     toast('Débit : ' + pref.rate + ' kbps');
   });
   $('#sOk').addEventListener('click', () => sheetOpen(false));
+  $('#sFx').addEventListener('click', () => fxRequest({ meta:{ nom:'triste' } }));   // test sans SAMMI
+
+  /* --- Vumètre 🎤 : le micro capte-t-il ? (tourne seulement quand ⚙️ est ouvert) --- */
+  const vuBar = $('#sVu i');
+  let vuSrc = null, vuOf = null, vuAn = null, vuBuf = null, vuRaf = 0;
+  const vuStop = () => {
+    cancelAnimationFrame(vuRaf); vuRaf = 0;
+    try { if (vuSrc) vuSrc.disconnect(); } catch (_) {}
+    vuSrc = null; vuOf = null; vuBar.style.width = '0%';
+  };
+  const vuTick = () => {
+    vuRaf = 0;
+    if (!sheet.classList.contains('open')) return vuStop();
+    try {
+      if (aTrack !== vuOf) {                       // nouveau micro → on rebranche le vumètre dessus
+        try { if (vuSrc) vuSrc.disconnect(); } catch (_) {}
+        vuSrc = null; vuOf = aTrack;
+        if (aTrack && aTrack.readyState === 'live') {
+          actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+          if (!vuAn || vuAn.context !== actx) { vuAn = actx.createAnalyser(); vuAn.fftSize = 1024; vuBuf = new Float32Array(vuAn.fftSize); }
+          vuSrc = actx.createMediaStreamSource(new MediaStream([aTrack]));
+          vuSrc.connect(vuAn);                     // analyse seulement : rien n'est joué
+        }
+      }
+      let pct = 0;
+      if (vuSrc && actx.state === 'running') {
+        vuAn.getFloatTimeDomainData(vuBuf);
+        let e = 0; for (let i = 0; i < vuBuf.length; i++) e += vuBuf[i] * vuBuf[i];
+        const db = 20 * Math.log10(Math.sqrt(e / vuBuf.length) + 1e-9);
+        pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));   // -60 dB → 0 % · 0 dB → 100 %
+      }
+      vuBar.style.width = pct.toFixed(0) + '%';
+    } catch (_) {}
+    vuRaf = requestAnimationFrame(vuTick);
+  };
+  sheet.addEventListener('pointerdown', () => { if (actx && actx.state === 'suspended') actx.resume().catch(() => {}); });
 
   /* État en direct (seulement quand ⚙️ est ouvert : rien ne tourne sinon).
      « relais TURN » = le flux passe par le relais (normal en 4G / CGNAT).
@@ -1210,6 +1319,8 @@ body.live #go { display:none; }
     const L = ['Réseau : ' + netName() + (C.TURN === 'force' ? ' · relais forcé' : '')];
     const vs = vTrack && vTrack.readyState === 'live' ? vTrack.getSettings() : null;
     L.push('Caméra : ' + (vs ? vs.width + '×' + vs.height + ' · ' + Math.round(vs.frameRate || 0) + ' fps' : 'coupée'));
+    if (C.FILTERS) L.push('Filtres : ' + ({ ok:'prêts ✅', load:'préparation…', err:'indisponibles ⚠️' }[lmState] || 'en attente')
+                       + (lmState === 'ok' && lmGpu === false ? ' (sans GPU)' : ''));
     if (hungUp) L.push('Raccroché');
     else if (!sdk || !sdk.state.connected) L.push('VDO.Ninja : connexion…');
     else {
@@ -1254,7 +1365,11 @@ body.live #go { display:none; }
   const sheetOpen = on => {
     sheet.classList.toggle('open', on);
     clearInterval(statT); statT = null;
-    if (on) { listDevs().then(fillLists); statPaint(); statT = setInterval(statPaint, 2000); }
+    if (on) {
+      listDevs().then(fillLists); statPaint(); statT = setInterval(statPaint, 2000);
+      if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+      if (!vuRaf) vuRaf = requestAnimationFrame(vuTick);
+    }
   };
   bSet.addEventListener('click', e => { e.stopPropagation(); sheetOpen(!sheet.classList.contains('open')); });
 
@@ -1263,6 +1378,7 @@ body.live #go { display:none; }
     menu.classList.remove('open');
     if (!confirm('Raccrocher et couper la caméra ?')) return;
     hungUp = true;
+    fxQ.length = 0; fxCleanup();
     const s = sdk; sdk = null; published = false;
     if (s) s.disconnect().catch(() => {});
     [vTrack, aTrack].forEach(t => { if (t) t.stop(); });
@@ -1270,6 +1386,287 @@ body.live #go { display:none; }
     dotPaint();
     toast('Caméra coupée');
   });
+
+  /* ============================================================
+     Filtres visage (points de chaîne → SAMMI → SSN canal 1 → ici)
+
+     Hors filtre : RIEN ne tourne, la caméra brute part telle quelle.
+     Pendant un filtre : suivi du visage (MediaPipe FaceLandmarker)
+     + déformation (WebGL) → canvas.captureStream → envoyé à OBS ET
+     affiché sur le tel. Tout s'arrête à la fin du filtre.
+
+     Déclenchement (HTTP Request GET depuis SAMMI) :
+     https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"triste"}}
+     ============================================================ */
+  const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';   // version figée (empreinte dans l'importmap)
+  const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+
+  /* Déformations : [point du visage, vers le bas, vers le centre, rayon]
+     En fractions de l'écart entre les yeux : ça suit la distance au tel.
+     « vers le bas » négatif = vers le haut. Indices = carte MediaPipe Face Mesh. */
+  const FX = {
+    triste: { name:'😭 Triste', pts:[
+      [61,  .22, .03, .32], [291, .22, .03, .32],       // coins de la bouche tirés vers le bas
+      [91,  .08,   0, .14], [321, .08,   0, .14],       // … la lèvre du bas suit (bouche en arc)
+      [17,  .05,   0, .14],                             // lèvre du bas qui boude
+      [14, -.02,   0, .08],                             // … et remonte un peu au centre
+      [107, -.12, .02, .20], [336, -.12, .02, .20],     // sourcils intérieurs relevés (chien battu)
+      [70,  .05,   0, .16], [300, .05,   0, .16],       // bouts des sourcils qui tombent
+      [33,  .035,  0, .12], [263, .035,  0, .12]        // coins des yeux tombants
+    ]}
+  };
+
+  /* --- Moteur de suivi : chargé une fois, puis au repos (aucun calcul hors filtre) --- */
+  let lm = null, lmP = null, lmState = 'off', lmGpu = null, lmTs = 0;
+  const lmTime = () => (lmTs = Math.max(lmTs + 1, performance.now()));   // horodatage toujours croissant (exigé par MediaPipe)
+  const ensureLM = () => lmP || (lmP = (async () => {
+    lmState = 'load';
+    const V = await import(MP_BASE + '/vision_bundle.mjs');
+    const files = await V.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+    const make = delegate => V.FaceLandmarker.createFromOptions(files, {
+      baseOptions:{ modelAssetPath:MP_MODEL, delegate }, runningMode:'VIDEO', numFaces:1
+    });
+    try { lm = await make('GPU'); lmGpu = true; }
+    catch (_) { lm = await make('CPU'); lmGpu = false; }   // GPU indispo → processeur (plus lent)
+    try {                                                  // échauffement à vide : le 1er filtre démarre sans à-coup
+      const w = document.createElement('canvas'); w.width = w.height = 64;
+      w.getContext('2d').fillRect(0, 0, 64, 64);
+      lm.detectForVideo(w, lmTime());
+    } catch (_) {}
+    lmState = 'ok';
+    return lm;
+  })().catch(e => { lmP = null; lmState = 'err'; throw e; }));
+
+  /* --- Déformation WebGL : chaque point « tire » les pixels autour de lui (atténuation douce) --- */
+  const FX_N = 16;
+  const VS = 'attribute vec2 a;varying vec2 v;'
+           + 'void main(){v=vec2((a.x+1.)*.5,(1.-a.y)*.5);gl_Position=vec4(a,0.,1.);}';
+  const FS = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n'
+           + 'uniform sampler2D t;uniform vec2 res;uniform int n;'
+           + 'uniform vec2 c[' + FX_N + '];uniform vec2 dd[' + FX_N + '];uniform float r[' + FX_N + '];varying vec2 v;'
+           + 'void main(){vec2 p=v*res;vec2 o=vec2(0.);'
+           + 'for(int i=0;i<' + FX_N + ';i++){if(i>=n)break;vec2 q=p-c[i];o+=dd[i]*exp(-dot(q,q)/(r[i]*r[i]));}'
+           + 'gl_FragColor=texture2D(t,clamp((p-o)/res,0.,1.));}';
+  const fxCv = $('#fx'), fxBan = $('#fxBan');
+  let glp = null;
+  fxCv.addEventListener('webglcontextlost', e => { e.preventDefault(); glp = null; if (fx.on) fxEnd(); });
+  const glInit = () => {
+    if (glp) return glp;
+    const gl = fxCv.getContext('webgl', { alpha:false, antialias:false, depth:false, stencil:false,
+                                          premultipliedAlpha:false, preserveDrawingBuffer:false });
+    if (!gl) throw new Error('WebGL indisponible');
+    const sh = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    const pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const a = gl.getAttribLocation(pr, 'a');
+    gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+    [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR));
+    const u = k => gl.getUniformLocation(pr, k);
+    glp = { gl, res:u('res'), n:u('n'), c:u('c'), d:u('dd'), r:u('r') };
+    gl.uniform1i(u('t'), 0);
+    return glp;
+  };
+
+  /* --- État du filtre en cours --- */
+  const fx = { on:false, ending:false, key:'', t0:0, face:0, seen:0, miss:0, sm:{}, skip:false, n:0,
+               vid:null, src:null, track:null, rvfc:0, raf:0, useRaf:false, got:false, rafT:0,
+               drawn:null, ban:0, last:0 };
+  const fxQ = [];
+  const FADE = 0.5;                                          // fondu d'entrée / sortie (s)
+  const dur  = () => Math.max(3, C.FILTER_DURATION || 30);
+  const bufC = new Float32Array(FX_N * 2), bufD = new Float32Array(FX_N * 2), bufR = new Float32Array(FX_N);
+
+  const fxFrame = () => {
+    if (!fx.on) return;
+    const v = fx.vid, W = v.videoWidth, H = v.videoHeight, now = performance.now();
+    const dt = Math.min(0.1, (now - (fx.last || now)) / 1000); fx.last = now;
+    if (W && H && glp) {
+      if (fxCv.width !== W || fxCv.height !== H) { fxCv.width = W; fxCv.height = H; }
+
+      /* 1. Suivi du visage (sauté 1 image sur 2 si le tel est à la peine) */
+      if (lm && !fx.skip) {
+        const t0 = performance.now();
+        let p = null;
+        try { const res = lm.detectForVideo(v, lmTime()); p = res && res.faceLandmarks && res.faceLandmarks[0]; } catch (_) {}
+        fx.miss = p ? 0 : fx.miss + 1;
+        if (p) {
+          fx.seen = now;
+          FX[fx.key].pts.forEach(q => sm(p, q[0], W, H));
+          sm(p, 33, W, H); sm(p, 263, W, H);
+        }
+        fx.skip = performance.now() - t0 > 28;
+      } else fx.skip = false;
+      const faceOn = fx.seen && fx.miss < 3;                          // visage perdu (3 ratés de suite) → la déformation s'efface
+      fx.face = Math.max(0, Math.min(1, fx.face + (faceOn ? 1 : -1) * dt / 0.25));
+
+      /* 2. Intensité : fondu d'entrée, maintien, fondu de sortie */
+      const el = fx.t0 ? (now - fx.t0) / 1000 : 0;
+      const amt = fx.t0 ? Math.max(0, Math.min(1, el / FADE, (dur() - el) / FADE)) : 0;
+      if (fx.t0 && el >= dur() && !fx.ending) fxEnd();             // fin : on continue de dessiner (image normale) le temps de rebasculer
+
+      /* 3. Points de déformation dans le repère du visage (suit l'inclinaison de la tête) */
+      let n = 0;
+      const k = (C.FILTER_STRENGTH == null ? 1 : C.FILTER_STRENGTH) * amt * fx.face;
+      const e1 = fx.sm[33], e2 = fx.sm[263];
+      if (k > 0.001 && e1 && e2) {
+        const ex = e2[0] - e1[0], ey = e2[1] - e1[1], fw = Math.hypot(ex, ey) || 1;
+        const rx = ex / fw, ry = ey / fw, dx = -ry, dy = rx;              // « droite » et « bas » du visage
+        const mx = (e1[0] + e2[0]) / 2, my = (e1[1] + e2[1]) / 2;
+        for (const [i, kd, ki, kr] of FX[fx.key].pts) {
+          const p = fx.sm[i]; if (!p || n >= FX_N) continue;
+          const sd = Math.sign((p[0] - mx) * rx + (p[1] - my) * ry);   // côté du visage → sens « vers le centre »
+          let ox = (dx * kd - rx * sd * ki) * fw * k, oy = (dy * kd - ry * sd * ki) * fw * k;
+          const rad = kr * fw, L = Math.hypot(ox, oy), mxL = rad * 0.55;   // au-delà l'image se replierait
+          if (L > mxL) { ox *= mxL / L; oy *= mxL / L; }
+          bufC[n * 2] = p[0] + ox; bufC[n * 2 + 1] = p[1] + oy;
+          bufD[n * 2] = ox;        bufD[n * 2 + 1] = oy;
+          bufR[n] = rad; n++;
+        }
+      }
+
+      fx.n = n;
+
+      /* 4. Dessin */
+      const gl = glp.gl;
+      gl.viewport(0, 0, W, H);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+      gl.uniform2f(glp.res, W, H); gl.uniform1i(glp.n, n);
+      gl.uniform2fv(glp.c, bufC); gl.uniform2fv(glp.d, bufD); gl.uniform1fv(glp.r, bufR);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      if (fx.drawn) { fx.drawn(); fx.drawn = null; }
+    }
+    fxSched();
+  };
+  /* Une image dessinée par image caméra (requestVideoFrameCallback), sinon secours
+     plafonné à FPS images/s (l'écran du S24+ tourne à 120 Hz : sans plafond, ça chaufferait). */
+  const fxSched = () => {
+    if (!fx.on) return;
+    if (fx.useRaf) fx.raf = requestAnimationFrame(t => {
+      if (t - fx.rafT >= 1000 / FPS - 4) { fx.rafT = t; fxFrame(); } else fxSched();
+    });
+    else fx.rvfc = fx.vid.requestVideoFrameCallback(() => { fx.got = true; fxFrame(); });
+  };
+  const sm = (p, i, W, H) => {                               // lissage : évite que la déformation tremble
+    const q = p[i]; if (!q) return;
+    const x = q.x * W, y = q.y * H, o = fx.sm[i];
+    if (!o) fx.sm[i] = [x, y]; else { o[0] += (x - o[0]) * 0.55; o[1] += (y - o[1]) * 0.55; }
+  };
+
+  /* --- Bandeau (tel uniquement : OBS ne le voit pas) --- */
+  const fxBanPaint = () => {
+    if (!fx.on) { fxBan.classList.remove('on'); return; }
+    const d = dur(), el = fx.t0 ? (performance.now() - fx.t0) / 1000 : 0;
+    const left = Math.max(0, Math.ceil(d - el));
+    fxBan.innerHTML = '<div class="n">' + esc(FX[fx.key].name) + ' <b>' + (fx.t0 ? '– ' + left + ' s' : '…') + '</b></div>'
+      + (fxQ.length ? '<div class="q">+' + fxQ.length + ' en attente</div>' : '')
+      + '<div class="bar"><i style="width:' + (fx.t0 ? Math.max(0, 100 - el / d * 100) : 100).toFixed(1) + '%"></i></div>';
+    fxBan.classList.add('on');
+  };
+
+  /* --- Démarrage ---
+     La caméra passe sur un CLONE avant la bascule : le SDK arrête l'ancienne piste
+     sans prévenir OBS d'une « vidéo coupée », et le clone garde la caméra vivante. */
+  const fxStart = async key => {
+    if (fx.on || hungUp) return false;
+    fx.on = true; fx.key = key; fx.t0 = 0; fx.face = 0; fx.seen = 0; fx.miss = 0; fx.sm = {}; fx.last = 0;
+    document.body.classList.add('fxing');
+    fxBanPaint(); clearInterval(fx.ban); fx.ban = setInterval(fxBanPaint, 250);
+    try {
+      await ensureLM();
+      glInit();
+      // bascule dans la même file que les changements caméra/micro : jamais les deux en même temps
+      return await queue(async () => {
+        if (!fx.on || hungUp || !vTrack || vTrack.readyState !== 'live') throw new Error('caméra indisponible');
+        const src = vTrack.clone();
+        fx.src = src;
+        let v = fx.vid;
+        if (!v) {                                            // source du moteur, placée SOUS l'aperçu (invisible)
+          v = fx.vid = Object.assign(document.createElement('video'), { muted:true, playsInline:true, autoplay:true });
+          v.id = 'fxsrc'; document.body.prepend(v);
+        }
+        v.srcObject = new MediaStream([src]);
+        await v.play();
+        const first = new Promise((r, j) => { fx.drawn = r; setTimeout(() => j(new Error('pas d\'image')), 4000); });
+        fx.useRaf = false; fx.got = false; fx.rafT = 0;
+        fxSched();
+        setTimeout(() => {                                   // image caméra jamais signalée → mode secours
+          if (fx.on && !fx.got) { try { v.cancelVideoFrameCallback(fx.rvfc); } catch (_) {} fx.useRaf = true; fxSched(); }
+        }, 700);
+        await first;                                         // le canvas a une image : on peut basculer
+        if (!fx.on) throw new Error('annulé');
+        fxCv.classList.toggle('mirror', cam.classList.contains('mirror'));
+        fxCv.classList.add('on');                            // le tel affiche désormais l'image filtrée
+        const ct = fxCv.captureStream(FPS).getVideoTracks()[0];
+        if (C.MOTION) try { ct.contentHint = 'motion'; } catch (_) {}
+        fx.track = ct;
+        const old = vTrack;
+        vTrack = src; watchEnded(src);
+        await swap(old, ct);                                 // OBS reçoit le canvas
+        if (old.readyState === 'live') old.stop();
+        fx.t0 = performance.now();                           // le compte à rebours part maintenant
+        return true;
+      });
+    } catch (e) {
+      if (fx.on) {
+        toast('Filtre indisponible' + (lmState === 'err' ? ' (moteur non chargé)' : ''));
+        await fxEnd(true);
+      }
+      return false;
+    }
+  };
+
+  /* --- Fin (ou arrêt forcé) : retour à la caméra brute, tout s'arrête --- */
+  const fxEnd = async failed => {
+    if (!fx.on || fx.ending) return;
+    fx.ending = true;
+    const ct = fx.track;
+    if (ct && vTrack) await swap(ct, vTrack);                // OBS repasse sur la caméra (le SDK arrête le canvas)
+    if (ct) {
+      preview();                                             // l'aperçu normal revient sous le canvas…
+      await new Promise(r => { setTimeout(r, 500); if (cam.requestVideoFrameCallback) cam.requestVideoFrameCallback(() => r()); });
+    }
+    fxCleanup();                                             // … puis le canvas disparaît (pas de flash noir)
+    if (!hungUp && fxQ.length) setTimeout(fxNext, failed ? 1500 : 300);
+  };
+  const fxCleanup = () => {
+    fx.on = false; fx.ending = false; fx.t0 = 0; fx.drawn = null;
+    clearInterval(fx.ban);
+    cancelAnimationFrame(fx.raf);
+    if (fx.vid) { try { fx.vid.cancelVideoFrameCallback(fx.rvfc); } catch (_) {} fx.vid.srcObject = null; }
+    if (fx.src && fx.src !== vTrack && fx.src.readyState === 'live') fx.src.stop();   // clone jamais publié
+    fx.src = null;
+    if (fx.track && fx.track.readyState === 'live') fx.track.stop();
+    fx.track = null;
+    fxCv.classList.remove('on');
+    document.body.classList.remove('fxing');
+    fxBanPaint();
+  };
+  if (frag.has('debug') || query.has('debug')) window.__fx = fx;                      // &debug dans l'adresse : état du filtre lisible (tests)
+  const fxNext = () => { if (!fx.on && fxQ.length) fxStart(fxQ.shift()); };
+
+  /* --- Demande de filtre (SAMMI ou bouton test) : lancé tout de suite, ou mis en file --- */
+  const fxRequest = d => {
+    const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const key = String(m.nom || (d && d.nom) || '').toLowerCase()
+                  .normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    if (!FX[key] || hungUp) return;                          // filtre inconnu (ou pas encore créé) : ignoré
+    if (fx.on) {
+      if (fxQ.length < (C.FILTER_QUEUE_MAX == null ? 10 : C.FILTER_QUEUE_MAX)) { fxQ.push(key); fxBanPaint(); }
+      return;
+    }
+    fxStart(key);
+  };
 
   /* ============================================================
      Couche 3 — le chat
@@ -1386,6 +1783,7 @@ body.live #go { display:none; }
 
     /* Événements : liste blanche. Ce qui n'est pas dans ALERTS est ignoré. */
     const ev = String(d.event || '').toLowerCase();
+    if (ev === 'filtre') { if (C.FILTERS) fxRequest(d); return; }   // filtre visage : pas de carte d'alerte
     if (ev && ALERTS[ev]) { if (C.ALERTS) alShow(ev, d); return; }
     if (ev) return;                       // événement système : silence
     if (!d.chatmessage && !d.contentimg) return;
