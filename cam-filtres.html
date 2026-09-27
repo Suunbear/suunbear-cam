@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex, nofollow">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Mouse+Memoirs&display=swap" rel="stylesheet">
+<title>Cam</title>
+
+<script>
+/* ============================================================
+   SUUNBEAR CAM — caméra du téléphone + chat, pour Twitch
+   Aucun secret dans ce fichier : le dépôt peut rester public.
+
+   Favori à mettre sur l'écran d'accueil du téléphone :
+   .../suunbear-cam/#id=TON_ID&pw=TON_MDP&chat=TA_SESSION
+
+   « chat » attend l'ID de session Social Stream Ninja, pas une URL.
+
+   cam-filtres.html = VERSION TEST : caméra envoyée par le SDK
+   VDO.Ninja (plus d'iframe). index.html reste la version en prod
+   tant que celle-ci n'est pas validée. Lien OBS inchangé.
+   ⚠️ Ne jamais ouvrir les deux pages en même temps (même ID caméra).
+
+   Deux temps :
+   1. RÉGLAGE — la caméra s'ouvre et part vers OBS. ⚙️ = caméra
+      (avant/arrière), micro (cravate auto), qualité, débit, et
+      état de la connexion (direct / relais TURN, codec, débit).
+   2. DIRECT — tu appuies sur 🔒. Le chat apparaît ; ⚙️ reste
+      accessible sans déverrouiller.
+   ============================================================ */
+const CONFIG = {
+
+  /* ---------- Caméra (SDK VDO.Ninja, sans iframe) ---------- */
+  QUALITY : 1,        // 0 = 1080p | 1 = 720p | 2 = 360p. Réglable en direct via ⚙️ (le choix ⚙️ est retenu)
+  BITRATE : 3000,     // kbps max envoyés à OBS. Réglable via ⚙️. C'est désormais le TEL qui plafonne :
+                      // le &videobitrate du lien OBS n'a plus d'effet (le lien OBS reste inchangé)
+  FPS     : 30,       // images/s (Samsung bride à 30 de toute façon)
+  CODEC   : "hardware",   // "hardware" = H264, encodeur matériel du tel (moins de chauffe)
+                          // "vp8" / "vp9" si l'image se déforme | "" pour laisser faire
+  CAMERA  : "user",   // caméra au 1er lancement : "user" = avant | "environment" = arrière
+  MIRROR  : true,     // aperçu caméra avant en miroir, sur le tel uniquement (OBS reçoit l'image normale)
+  MIC_AUTO: true,     // micro cravate choisi d'office s'il est branché (bascule auto au branchement / débranchement)
+  AUDIO_PROCESSING : true,  // anti-écho + réduction de bruit + gain auto (comme VDO.Ninja)
+  TURN    : "auto",   // "auto"  = relais TURN de VDO.Ninja intégré (4G / CGNAT, bascule Wi-Fi → 4G)
+                      // "force" = tout passe par le relais (pour tester le chemin 4G depuis le Wi-Fi)
+
+  FILL_LANDSCAPE : true,  // à l'horizontale, l'aperçu remplit tout l'écran.
+                          // N'affecte que le téléphone : OBS reçoit le 16:9 entier.
+
+  /* ---------- Chat ---------- */
+  MAX      : 25,      // nombre de messages gardés à l'écran
+  LIFETIME : 120,     // secondes avant qu'un message s'efface en fondu (si non swipé). 0 = jamais
+  KEEP     : 0,       // les X derniers messages ne s'effacent jamais (0 = tous soumis au cooldown)
+  FONT     : 18,      // taille du texte en px
+
+  AVATARS  : true,    // photo de profil
+  ICONS    : true,    // icône de la plateforme (Twitch, YouTube…)
+  BADGES   : 99,      // nombre max de badges Twitch. 99 = tous, 0 = aucun
+  LINES    : 20,      // filet de sécurité. Un message Twitch complet tient en ~12
+  FADE_OLD : true,    // les anciens messages s'estompent doucement
+  GESTURES : true,    // gestes chat : glisser ↕ = défiler + figer · glisser ↔ = effacer un message. false = écran 100% inerte
+
+  /* ---------- Alertes (subs, dons, bits, raids, follows) ---------- */
+  ALERTS       : true,    // affiche un bandeau distinct sur les événements
+  ALERT_SOUND  : true,    // son des alertes (bip + TTS) activé au lancement. false pour couper. Écouteurs conseillés (écho)
+  ALERT_MAX    : 25,      // nombre de cartes d'alerte affichées en même temps
+                          // qui isolent, sinon le micro le capte et ça fait écho
+  ALERT_FADE   : false,   // false = les alertes restent jusqu'au swipe · true = fondu après LIFETIME (30 s)
+  ALERT_LIVE   : 10,      // durée (s) de la barre = temps que l'alerte reste sur le live OBS. Règle-la sur ton OBS.
+  ALERT_HYPE   : true,    // bandeau de progression du hype train
+
+  /* ---------- Compteur de viewers (Twitch) ---------- */
+  VIEWERS         : true,   // affiche le nombre de viewers (bouton 👁 pour basculer en direct). false = désactivé
+  VIEWERS_CHANNEL : "suun_bear",     // ta chaîne Twitch, ex. "suun_bear". Vide = coupé (peut aussi se passer via &viewers= dans le lien)
+  VIEWERS_POLL    : 30,     // rafraîchissement en secondes (minimum 15)
+
+  /* ---------- Placement ---------- */
+  CHAT_HEIGHT : 45,   // % de la hauteur d'écran réservée au chat
+  CHAT_SIDE   : 3,    // marge gauche/droite en %
+  CHAT_BOTTOM : 28,   // marge basse en px, au-dessus de la barre de gestes
+  SCRIM       : 0.45, // voile sombre derrière le chat. 0 = aucun
+
+  /* ---------- Sécurité ---------- */
+  CONFIRM_EXIT : true // confirmation avant de quitter ou rafraîchir
+};
+
+/* Couleur de la barre latérale, selon la plateforme d'origine. */
+const PLATFORM = {
+  twitch:'#9146ff', youtube:'#ff0033', youtubeshorts:'#ff0033', kick:'#53fc18',
+  tiktok:'#ff0050', discord:'#5865f2', instagram:'#e1306c', facebook:'#1877f2',
+  x:'#e7e9ea', twitter:'#e7e9ea', telegram:'#2aabee', trovo:'#1cb46c',
+  rumble:'#85c742', reddit:'#ff4500', slack:'#e01e5a', zoom:'#2d8cff'
+};
+
+/* Moteur VDO.Ninja (SDK officiel) chargé depuis jsDelivr. Version figée +
+   empreinte SRI : le navigateur refuse le fichier s'il a été modifié. */
+const SDK_URL = 'https://cdn.jsdelivr.net/npm/@vdoninja/sdk@1.6.1/vdoninja-sdk.min.js';
+const SDK_SRI = 'sha384-WTjeAkCeiR7+wUhbeTVSJrqdjDfpxXbtEKQaLBULgKHN1cas0vxG33UnrhzsPtcT';
+</script>
+
+<style>
+:root {
+  --scrim  : 0.45;
+  --chatH  : 56%;
+  --side   : 3%;
+  --bottom : 28px;
+  --font   : 18px;
+  --lines  : 3;
+  --accent : #8a8f98;
+  --purple : #9146ff;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+html, body {
+  width:100%; height:100%;
+  background:#000;
+  overflow:hidden;
+  overscroll-behavior:none;               /* tue le pull-to-refresh */
+  -webkit-tap-highlight-color:transparent;
+  font-family:system-ui, -apple-system, Roboto, "Segoe UI", sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ================= Couche 1 : la caméra ================= */
+#cam {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  border:0;
+  z-index:1;
+  object-fit:contain;
+  background:#000;
+}
+#cam.mirror { transform:scaleX(-1); }     /* aperçu seulement : OBS reçoit l'image normale */
+body.live #cam { pointer-events:none; }   /* plus aucun tap accidentel */
+
+/* ================= Couche 2 : le voile ================= */
+#scrim {
+  position:fixed; left:0; right:0; bottom:0;
+  height:calc(var(--chatH) + 8%);
+  z-index:2;
+  pointer-events:none;
+  opacity:0;
+  background:linear-gradient(to top, #000 0%, rgba(0,0,0,.65) 40%, transparent 100%);
+  transition:opacity .3s ease;
+}
+body.live #scrim          { opacity:var(--scrim); }
+body.live #scrim.hidden   { opacity:0; }
+
+/* ================= Couche 3 : le chat =================
+   column-reverse : le plus récent se pose en bas, les vieux
+   sortent par le haut. Aucun défilement, donc rien ne peut
+   se retrouver hors de l'écran. */
+#feed {
+  position:fixed;
+  left:var(--side); right:var(--side);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + var(--bottom));
+  max-height:var(--chatH);
+  z-index:3;
+  pointer-events:none;
+  display:none;
+  flex-direction:column-reverse;
+  align-items:flex-start;
+  gap:6px;
+  overflow:hidden;
+  transition:opacity .3s ease;
+}
+body.live #feed        { display:flex; }
+body.live #feed.hidden { opacity:0; }
+
+/* ================= Alertes : zone HAUT (au-dessus du chat), swipe ↔ + scroll ↕ ================= */
+#alerts {
+  position:fixed; z-index:2;                          /* sous le chat (z-index:3) : à la limite, passe DERRIÈRE le chat */
+  left:var(--side); right:var(--side);
+  top:calc(env(safe-area-inset-top, 0px) + 62px);     /* décalé sous les icônes du haut */
+  max-height:calc(100vh - var(--chatH) - 92px);       /* s'arrête à la ligne du chat ; au-delà = scroll */
+  display:none; flex-direction:column; align-items:center; gap:6px;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  pointer-events:none;
+}
+body.live #alerts { display:flex; }
+#alerts::-webkit-scrollbar { display:none; }
+#alerts.gest { pointer-events:auto; touch-action:pan-y; }   /* ↕ = naviguer, ↔ sur une carte = effacer */
+
+.al {
+  min-width:44%; max-width:100%; padding:6px 14px 7px;
+  border:2px solid var(--alc, rgba(255,158,44,.6)); border-radius:12px;
+  background:linear-gradient(145deg, rgba(26,18,6,.9), rgba(46,30,8,.82));
+  background:linear-gradient(145deg, color-mix(in srgb, var(--alc, #FF9E2C) 30%, #140d04), color-mix(in srgb, var(--alc, #FF9E2C) 18%, #241804));
+  box-shadow:0 4px 16px rgba(255,158,44,.2), inset 0 0 14px rgba(255,210,90,.06);
+  box-shadow:0 4px 16px color-mix(in srgb, var(--alc, #FF9E2C) 32%, transparent), inset 0 0 14px rgba(255,210,90,.06);
+  text-align:center; color:#F5E9B8;
+  animation:al-in .45s cubic-bezier(.2,.9,.25,1.15);
+}
+.al-kind { font:700 10px/1 'Inter', system-ui, sans-serif; letter-spacing:.14em;
+           text-transform:uppercase; color:rgba(255,210,90,.75); margin-bottom:2px; }
+.al-line { font-family:'Mouse Memoirs', system-ui, sans-serif; text-transform:uppercase;
+           font-size:20px; line-height:1.05; letter-spacing:1px;
+           text-shadow:0 1px 2px #000, 0 2px 7px rgba(0,0,0,.7); }
+.al-line .meta { color:#FF9E2C; }   /* meta = ambre plein (pas d'effet dégradé, qui buggait sur mobile) */
+.al-bar { height:3px; margin-top:5px; border-radius:2px; background:rgba(0,0,0,.4); overflow:hidden; }
+.al-bar i { display:block; height:100%; width:100%; background:#FF9E2C; border-radius:2px; }
+.al.gone { animation:al-out .4s ease forwards; }
+@keyframes al-in  { 0%{opacity:0;transform:translateY(-12px) scale(.94)} 100%{opacity:1;transform:translateY(0) scale(1)} }
+@keyframes al-out { to{opacity:0;transform:translateY(-10px) scale(.97)} }
+@keyframes al-bar { from{width:100%} to{width:0} }
+
+@keyframes pop  { from { opacity:0; transform:translateY(14px) scale(.94); }
+                  to   { opacity:1; transform:translateY(0) scale(1); } }
+@keyframes fade { to   { opacity:0; transform:translateY(-8px) scale(.97); } }
+@keyframes msgIn { from { opacity:0; transform:translateY(10px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+
+.msg {
+  --o:.62;
+  flex-shrink:0;                          /* sinon flexbox écrase le message du bas */
+  max-width:100%;
+  padding:6px 12px 7px;
+  border:2px solid rgba(255,158,44,.55);   /* DA soleil : cadre ambre complet, sans 3D */
+  border-radius:3px 15px 15px 3px;
+  background:linear-gradient(145deg, rgba(26,18,6,.82), rgba(46,30,8,.72));
+  color:#F7EFD8;                        /* crème */
+  font-family:'Inter', system-ui, sans-serif;
+  font-size:var(--font);
+  line-height:1.34;
+  word-wrap:break-word;
+  overflow-wrap:anywhere;
+  text-shadow:0 1px 2px #000, 0 2px 10px rgba(0,0,0,.9);
+  box-shadow:0 3px 14px rgba(255,158,44,.16), inset 0 0 16px rgba(255,210,90,.06);
+  opacity:var(--o);
+  transform:translateY(0);
+  transition:opacity .45s ease, transform .3s cubic-bezier(.2,.9,.3,1);
+  animation:msgIn .34s cubic-bezier(.2,.9,.3,1);   /* entrée douce du nouveau message */
+
+  display:-webkit-box;                    /* filet de sécurité ultime */
+  -webkit-line-clamp:var(--lines);
+  -webkit-box-orient:vertical;
+  overflow:hidden;                        /* sans ça, le texte déborde de la bulle */
+}
+
+/* Twitch plafonne à 500 caractères. Plutôt que de couper, on réduit
+   la police : le message entier tient dans sa bulle, en plus compact. */
+.msg.long  { font-size:calc(var(--font) * .86); }
+.msg.xlong { font-size:calc(var(--font) * .74); }
+.msg.long .av, .msg.xlong .av { vertical-align:-.25em; }
+
+/* Dégradé de fraîcheur : le dernier message est le plus net. */
+#feed.fade .msg:nth-child(1) { --o:1;   }
+#feed.fade .msg:nth-child(2) { --o:.94; }
+#feed.fade .msg:nth-child(3) { --o:.88; }
+#feed.fade .msg:nth-child(4) { --o:.82; }
+#feed.fade .msg:nth-child(5) { --o:.76; }
+#feed.fade .msg:nth-child(6) { --o:.70; }
+
+/* --- Gestes tactiles sur le chat (CONFIG.GESTURES) --- */
+body.live #feed.gest            { pointer-events:auto; overflow-y:auto;
+                                  touch-action:pan-y; -webkit-overflow-scrolling:touch;
+                                  scrollbar-width:none; }
+body.live #feed.gest::-webkit-scrollbar { width:0; height:0; }
+body.live #feed.gest.hidden     { pointer-events:none; }
+#feed.paused .msg:not(.dismiss) { --o:1 !important; opacity:1 !important; }
+.msg.dragging                   { transition:none !important; }
+
+.msg.enter { opacity:0; transform:translateY(18px); }
+.msg.gone  { opacity:0 !important; transform:translateY(-10px); }
+
+.av  { width:1.3em; height:1.3em; border-radius:50%; object-fit:cover;
+       vertical-align:-.28em; margin-right:.32em; background:#333;
+       box-shadow:0 0 0 1px rgba(255,158,44,.4); }
+.bdg { height:.95em; vertical-align:-.08em; margin-right:.2em;
+       filter:drop-shadow(0 0 3px #FF9E2C); }
+.nm  { font-family:'Inter', system-ui, sans-serif; font-weight:700;
+       color:#FFD25A !important; margin-right:.15em; }   /* gold : force la DA sur les couleurs Twitch */
+.src { width:.9em; height:.9em; vertical-align:-.05em; margin:0 .3em 0 .1em;
+       filter:drop-shadow(0 0 3px #FF9E2C); }
+.don { font-family:'Mouse Memoirs', system-ui, sans-serif; text-transform:uppercase;
+       letter-spacing:.03em; color:#FFD25A; margin-right:.3em; }
+.tx  { color:#F7EFD8; }
+.tx img   { max-height:1.5em; vertical-align:-.35em; }
+.media    { display:block; max-width:100%; max-height:110px;
+            margin-top:6px; border-radius:9px;
+            box-shadow:0 2px 10px rgba(255,158,44,.18); }
+
+/* ================= Barre du haut ================= */
+#bar {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 10px);
+  left:10px; right:10px;
+  z-index:10;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+/* Coin bas-gauche : le verrou, avant la mise en direct */
+#corner {
+  position:fixed;
+  left:calc(10px + env(safe-area-inset-left, 0px));
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 10px);
+  z-index:10;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:8px;
+}
+/* Avant verrouillage : voyant PC + ⚙️ seulement. */
+body:not(.live) #bMic,
+body:not(.live) #bSnd,
+body:not(.live) #bChat,
+body:not(.live) #bView,
+body:not(.live) #viewers,
+body:not(.live) #bMenu { display:none; }
+
+#dot {
+  display:flex; align-items:center; gap:7px;
+  padding:0 12px; height:40px;
+  border-radius:12px;
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 13px/1 system-ui, sans-serif;
+}
+#dot::before {
+  content:''; width:9px; height:9px; border-radius:50%;
+  background:#71767b;
+  transition:background .3s ease, box-shadow .3s ease;
+}
+#dot.on::before { background:#4ade80; box-shadow:0 0 9px #4ade80; }
+
+/* Pastille compteur de viewers (SOUS le voyant PC, hors de la rangée de boutons) */
+#viewers {
+  position:absolute; top:calc(100% + 8px); left:0;
+  display:flex; align-items:center; gap:6px;
+  padding:0 12px; height:36px;
+  border-radius:12px;
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 13px/1 system-ui, sans-serif;
+  white-space:nowrap;
+}
+#viewers b { font-weight:800; }
+#viewers.none { display:none; }
+
+#spacer { flex:1; }
+
+
+.btn {
+  width:44px; height:44px;
+  border:0; border-radius:13px;
+  background:rgba(0,0,0,.5);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 18px/1 system-ui, sans-serif;
+  display:grid; place-items:center;
+  cursor:pointer;
+  position:relative;
+  flex-shrink:0;
+}
+.btn:active        { background:rgba(0,0,0,.75); }
+.btn:focus-visible { outline:2px solid #fff; outline-offset:2px; }
+.btn.off           { opacity:.45; }
+.btn.none          { display:none; }
+
+#unread {
+  position:absolute; top:-5px; right:-5px;
+  min-width:20px; height:20px; padding:0 5px;
+  border-radius:10px;
+  background:#e0245e;
+  color:#fff;
+  font:700 11px/20px system-ui, sans-serif;
+  text-align:center;
+  display:none;
+}
+#unread.on { display:block; }
+
+/* ================= Menu ================= */
+#menu {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 62px);
+  right:10px;
+  z-index:11;
+  width:190px;
+  padding:6px;
+  border-radius:15px;
+  background:rgba(16,16,18,.92);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 10px 34px rgba(0,0,0,.6);
+  display:none;
+}
+#menu.open { display:block; }
+#menu button {
+  display:flex; align-items:center; gap:11px;
+  width:100%; padding:12px 13px;
+  border:0; border-radius:10px;
+  background:transparent;
+  color:#fff;
+  font:500 15px/1 system-ui, sans-serif;
+  text-align:left;
+  cursor:pointer;
+}
+#menu button:active { background:rgba(255,255,255,.12); }
+#menu button.danger { color:#ff6b6b; }
+#menu hr { border:0; height:1px; background:rgba(255,255,255,.12); margin:5px 9px; }
+
+
+/* ================= Réglages caméra (⚙️) ================= */
+#sheet {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 62px);
+  right:10px;
+  z-index:11;
+  width:min(340px, calc(100vw - 20px));
+  max-height:calc(100vh - env(safe-area-inset-top, 0px) - 80px);
+  overflow-y:auto;
+  padding:12px;
+  border-radius:15px;
+  background:rgba(16,16,18,.92);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  box-shadow:0 10px 34px rgba(0,0,0,.6);
+  color:#fff;
+  font:500 14px/1.3 system-ui, sans-serif;
+  display:none;
+}
+#sheet.open { display:block; }
+#sheet label {
+  display:block; margin:11px 2px 5px;
+  font:700 11px/1 system-ui, sans-serif; letter-spacing:.08em;
+  text-transform:uppercase; color:rgba(255,255,255,.6);
+}
+#sheet label:first-child { margin-top:0; }
+#sheet select {
+  width:100%; padding:10px 12px;
+  border:1px solid rgba(255,255,255,.14); border-radius:10px;
+  background:#222; color:#fff;
+  font:500 15px/1.2 system-ui, sans-serif;
+}
+#sheet .row { display:flex; gap:8px; margin-top:12px; }
+#sheet .row button {
+  flex:1; padding:11px;
+  border:0; border-radius:10px;
+  background:rgba(255,255,255,.1); color:#fff;
+  font:600 14px/1 system-ui, sans-serif; cursor:pointer;
+}
+#sheet .row button:active { background:rgba(255,255,255,.2); }
+#sheet .row .ok { background:var(--purple); }
+#sStat {
+  margin-top:12px; padding:9px 10px;
+  border-radius:10px; background:rgba(255,255,255,.06);
+  font:500 12px/1.45 ui-monospace, monospace; color:#d6d6d6;
+  white-space:pre-wrap;
+}
+
+/* ================= Écran de réglage ================= */
+#go {
+  width:40px; height:40px;
+  padding:0;
+  border:0; border-radius:12px;
+  background:var(--purple);
+  color:#fff;
+  font:700 18px/1 system-ui, sans-serif;
+  display:grid; place-items:center;
+  box-shadow:0 4px 18px rgba(145,70,255,.5);
+  cursor:pointer;
+}
+#go:active    { transform:scale(.96); }
+body.live #go { display:none; }
+
+/* ================= Message passager ================= */
+#toast {
+  position:fixed;
+  left:50%; transform:translateX(-50%);
+  top:calc(env(safe-area-inset-top, 0px) + 64px);
+  z-index:12;
+  max-width:80%;
+  padding:10px 16px;
+  border-radius:13px;
+  background:rgba(0,0,0,.72);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  color:#fff;
+  font:600 14px/1.3 system-ui, sans-serif;
+  text-align:center;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .22s ease;
+}
+#toast.show { opacity:1; }
+
+/* ================= Écran d'aide ================= */
+#setup {
+  position:fixed; inset:0;
+  z-index:20;
+  display:none;
+  place-items:center;
+  padding:2rem;
+  background:#000;
+  color:#fff;
+  font:15px/1.6 system-ui, sans-serif;
+  text-align:center;
+}
+#setup.show { display:grid; }
+#setup code {
+  display:block;
+  margin-top:1rem;
+  padding:.9rem;
+  border-radius:10px;
+  background:#161616;
+  color:#9fe3a0;
+  font:13px/1.5 ui-monospace, monospace;
+  word-break:break-all;
+}
+
+/* ================= Téléphone à l'horizontale =================
+   La caméra devient 16:9 plein cadre. Le chat se replie dans une
+   colonne à gauche pour ne pas manger l'image. */
+@media (orientation: landscape) {
+  #feed {
+    right:auto;
+    width:52%;
+    max-height:60%;
+    left:calc(var(--side) + env(safe-area-inset-left, 0px));
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
+  }
+  #alerts {
+    right:auto;
+    width:52%;
+    left:calc(var(--side) + env(safe-area-inset-left, 0px));
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 60% + 20px);
+  }
+  .alert { max-width:100%; }
+  body.fill #cam { object-fit:cover; }     /* FILL_LANDSCAPE : l'aperçu remplit l'écran (tel uniquement) */
+  #scrim {
+    height:82%;
+    background:linear-gradient(to top, #000 0%, rgba(0,0,0,.5) 42%, transparent 100%);
+  }
+  #bar {
+    left:calc(10px + env(safe-area-inset-left, 0px));
+    right:calc(10px + env(safe-area-inset-right, 0px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg, #feed, #scrim, #toast, #go { transition:none; }
+}
+</style>
+</head>
+
+<body>
+
+<video id="cam" autoplay playsinline muted disablepictureinpicture></video>
+
+<div id="scrim"></div>
+<div id="alerts"></div>
+<div id="feed"></div>
+
+<div id="corner">
+  <button id="go" aria-label="Verrouiller l'écran">🔒</button>
+</div>
+
+<div id="bar">
+  <div id="dot">PC</div>
+  <span id="viewers" class="none">👁&nbsp;<b>–</b></span>
+  <div id="spacer"></div>
+  <button class="btn" id="bSet"  aria-label="Réglages caméra">⚙️</button>
+  <button class="btn" id="bMic"  aria-label="Couper le micro">🎤</button>
+  <button class="btn" id="bSnd"  aria-label="Son des alertes">🔔</button>
+  <button class="btn" id="bView" aria-label="Afficher ou masquer le nombre de viewers">👁</button>
+  <button class="btn" id="bChat" aria-label="Afficher ou masquer le chat">💬<span id="unread"></span></button>
+  <button class="btn" id="bMenu" aria-label="Plus d'options">⋯</button>
+</div>
+
+<div id="menu">
+  <button id="mEnd" class="danger">⏻ &nbsp;Raccrocher</button>
+</div>
+
+<div id="sheet">
+  <label for="sCam">📷 Caméra</label>
+  <select id="sCam"></select>
+  <label for="sMic">🎤 Micro</label>
+  <select id="sMic"></select>
+  <label for="sQual">🖼 Qualité</label>
+  <select id="sQual">
+    <option value="0">1080p</option>
+    <option value="1">720p (anti-chauffe)</option>
+    <option value="2">360p</option>
+  </select>
+  <label for="sRate">📶 Débit vidéo</label>
+  <select id="sRate">
+    <option value="1500">1500 kbps</option>
+    <option value="2000">2000 kbps</option>
+    <option value="2500">2500 kbps</option>
+    <option value="3000">3000 kbps (anti-chauffe)</option>
+    <option value="4500">4500 kbps</option>
+    <option value="6000">6000 kbps</option>
+  </select>
+  <div id="sStat">…</div>
+  <div class="row">
+    <button id="sFlip">🔄 Avant / arrière</button>
+    <button id="sOk" class="ok">OK</button>
+  </div>
+</div>
+
+
+<div id="toast"></div>
+
+<div id="setup">
+  <div>
+    Ajoute tes identifiants à la fin de l'adresse.
+    <code>#id=TON_ID&amp;pw=TON_MDP&amp;chat=TA_SESSION</code>
+  </div>
+</div>
+
+<script>
+(() => {
+  const C = CONFIG;
+
+  /* ------------------------------------------------------------
+     Les identifiants viennent du fragment (#), jamais du code.
+     Un fragment n'est jamais envoyé au serveur : ni GitHub ni
+     Cloudflare ne le voient passer. Le ? est accepté en secours.
+     ------------------------------------------------------------ */
+  const frag  = new URLSearchParams(location.hash.slice(1));
+  const query = new URLSearchParams(location.search);
+  const get   = k => (frag.get(k) || query.get(k) || '').trim();
+
+  /* ------------------------------------------------------------
+     En mode application, l'icône de l'écran d'accueil ouvre
+     l'adresse SANS le #. On garde donc une copie locale des
+     identifiants, sur le téléphone uniquement, rien ne sort.
+     Ajoute &reset à l'adresse pour tout effacer.
+     ------------------------------------------------------------ */
+  const KEY = 'suunbearcam.';
+  const save = (k, v) => { try { localStorage.setItem(KEY + k, v); } catch (e) {} };
+  const load = k       => { try { return localStorage.getItem(KEY + k) || ''; } catch (e) { return ''; } };
+
+  if (frag.has('reset') || query.has('reset')) {
+    ['id', 'pw', 'chat', 'cam', 'facing', 'mic', 'qual', 'rate']       // + réglages ⚙️ → retour au CONFIG
+      .forEach(k => { try { localStorage.removeItem(KEY + k); } catch (e) {} });
+  }
+
+  const pick = k => {
+    const v = get(k);
+    if (v) { save(k, v); return v; }
+    return load(k);
+  };
+
+  const ID      = pick('id');
+  const PW      = pick('pw');
+  const SESSION = pick('chat');
+
+  const $     = s => document.querySelector(s);
+  const cam   = $('#cam'),  feed  = $('#feed'), scrim = $('#scrim');
+  const dot   = $('#dot'),  menu  = $('#menu'), toastEl = $('#toast');
+  const bMic  = $('#bMic'), bChat = $('#bChat'), bMenu = $('#bMenu'), bSet = $('#bSet'), bSnd = $('#bSnd');
+  const bView = $('#bView'), vwEl = $('#viewers');
+  const unread = $('#unread');
+
+  if (!ID) { $('#setup').classList.add('show'); return; }
+
+  /* --- La config pilote le CSS --- */
+  const root = document.documentElement;
+  root.style.setProperty('--scrim',  C.SCRIM);
+  root.style.setProperty('--chatH',  C.CHAT_HEIGHT + '%');
+  root.style.setProperty('--side',   C.CHAT_SIDE + '%');
+  root.style.setProperty('--bottom', C.CHAT_BOTTOM + 'px');
+  root.style.setProperty('--font',   C.FONT + 'px');
+  root.style.setProperty('--lines',  C.LINES);
+  if (C.FADE_OLD) feed.classList.add('fade');
+
+  /* --- Gestes tactiles sur le chat (CONFIG.GESTURES) ---
+     ↕ défiler vers le haut  = fige le chat (fondu + effacement suspendus, on lit l'historique)
+     ↕ redescendre tout en bas = reprend le direct
+     ↔ swipe ← gauche = tout effacer · swipe → droite = un message à la fois                                        */
+  let frozen = false, scrollPauseUntil = 0;
+  if (C.GESTURES) {
+    feed.classList.add('gest');
+
+    // column-reverse : le message le plus récent est en bas, à scrollTop ~ 0.
+    feed.addEventListener('scroll', () => {
+      frozen = Math.abs(feed.scrollTop) > 8;
+      feed.classList.toggle('paused', frozen);
+      if (frozen) scrollPauseUntil = Date.now() + 3000;   // pause l'effacement 3 s après un scroll
+    }, { passive: true });
+
+    let sx = 0, sy = 0, dx = 0, tgt = null, horiz = false;
+    feed.addEventListener('touchstart', e => {
+      tgt = e.target.closest('.msg'); horiz = false; dx = 0;
+      if (!tgt) return;
+      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      tgt.style.transition = 'none';
+      tgt.style.willChange = 'transform, opacity';   // GPU : suivi du doigt fluide
+    }, { passive: true });
+
+    feed.addEventListener('touchmove', e => {
+      if (!tgt) return;
+      dx = e.touches[0].clientX - sx;
+      const dy = e.touches[0].clientY - sy;
+      if (!horiz && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        horiz = true;
+        tgt.classList.add('dismiss');            // exclut du gel d'opacité pendant le glissement
+      }
+      if (horiz) {
+        e.preventDefault();                      // stoppe le défilement le temps du swipe
+        tgt.style.transform = 'translateX(' + dx + 'px)';
+        tgt.style.opacity   = Math.max(0, 1 - Math.abs(dx) / 200);
+      }
+    }, { passive: false });
+
+    feed.addEventListener('touchend', () => {
+      if (!tgt) return;
+      const m = tgt; tgt = null;
+      if (horiz && dx < -80) {                   // ← GAUCHE : tout effacer (+ vider la file)
+        msgQ.length = 0; unreadBadge();
+        [...feed.children].forEach(el => {
+          el.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
+          el.style.transform = 'translateX(-460px)'; el.style.opacity = 0;
+        });
+        setTimeout(() => { feed.innerHTML = ''; }, 320);
+      } else if (horiz && dx > 80) {             // → DROITE : ce message seul
+        m.style.transition = 'transform .3s cubic-bezier(.4,0,.2,1), opacity .28s linear';
+        m.style.transform = 'translateX(460px)';
+        m.style.opacity = 0;
+        setTimeout(() => { m.remove(); feedReleaseNext(); }, 320);
+      } else {                                   // retour en place, décélération douce
+        m.style.transition = 'transform .34s cubic-bezier(.22,1,.36,1), opacity .3s ease';
+        m.classList.remove('dismiss');
+        m.style.transform = '';
+        m.style.opacity = '';
+        setTimeout(() => { m.style.transition = ''; m.style.willChange = ''; }, 360);
+      }
+    }, { passive: true });
+  }
+
+  /* --- Petit message passager --- */
+  let toastTimer;
+  const toast = txt => {
+    toastEl.textContent = txt;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1700);
+  };
+
+  /* ============================================================
+     Couche 1 — la caméra (SDK VDO.Ninja, sans iframe)
+
+     La page ouvre elle-même caméra + micro et les publie avec le
+     moteur de VDO.Ninja. Même ID, même mot de passe, même salt :
+     le lien OBS (vdo.ninja/?view=ID&password=PW) ne change pas.
+
+     Relais TURN intégré : serveurs TURN de VDO.Ninja récupérés
+     d'office, bascule auto sur le relais si le direct échoue, et
+     connexion neuve si le réseau change (Wi-Fi → 4G en plein live).
+     ============================================================ */
+  const md     = navigator.mediaDevices;
+  const QUAL   = [[1920, 1080], [1280, 720], [640, 360]];
+  const QNAME  = ['1080p', '720p', '360p'];
+  const CODECS = { hardware:'H264', h264:'H264', vp8:'VP8', vp9:'VP9', av1:'AV1' };
+  const FPS    = C.FPS || 30;
+  const num    = (v, d) => (v === '' || isNaN(+v)) ? d : +v;
+  const pref   = {                                // choix faits dans ⚙️, retenus sur le tel
+    cam    : load('cam'),                         // caméra précise ('' = selon avant/arrière)
+    facing : load('facing') || C.CAMERA || 'user',
+    mic    : load('mic') || 'auto',               // 'auto' = cravate si branchée, sinon micro du tel
+    qual   : num(load('qual'), C.QUALITY),
+    rate   : num(load('rate'), C.BITRATE)
+  };
+  if (C.FILL_LANDSCAPE) document.body.classList.add('fill');
+
+  const media = new MediaStream();   // LE flux publié vers OBS (même objet que celui confié au SDK)
+  let vTrack = null, aTrack = null, micOn = true, devs = [];
+  let sdk = null, published = false, hungUp = false;
+  let downSince = 0, everSeen = false, lostSince = 0, inUseToast = 0;
+
+  /* Une seule opération caméra/micro à la fois (évite les conflits si on tape vite). */
+  let chain = Promise.resolve();
+  const queue = fn => { const p = chain.then(fn, fn); chain = p.catch(() => {}); return p; };
+
+  const vCons = () => {
+    const [w, h] = QUAL[pref.qual] || QUAL[1];
+    const c = { width:{ ideal:w }, height:{ ideal:h }, frameRate:{ ideal:FPS, max:FPS } };
+    if (pref.cam) c.deviceId = { exact:pref.cam }; else c.facingMode = { ideal:pref.facing };
+    return c;
+  };
+  const aCons = id => {
+    const p = C.AUDIO_PROCESSING !== false;
+    const c = { echoCancellation:p, noiseSuppression:p, autoGainControl:p };
+    if (id) c.deviceId = { exact:id };
+    return c;
+  };
+  const FRONT = /front|avant|user/i, BACK = /back|rear|arri|environment/i;
+  const isFront = t => {
+    const s = (t && t.getSettings) ? t.getSettings() : {};
+    return s.facingMode ? s.facingMode === 'user' : FRONT.test(t ? t.label : '');
+  };
+  const camErr = e => toast('Caméra : ' + (!e ? 'erreur'
+                          : e.name === 'NotAllowedError'  ? 'accès refusé'
+                          : e.name === 'NotReadableError' ? 'occupée par une autre appli'
+                          : (e.message || e.name)));
+
+  /* Remplace une piste dans le flux publié sans couper OBS (replaceTrack). */
+  const swap = async (old, neu) => {
+    if (sdk && published) {
+      try { if (old) await sdk.replaceTrack(old, neu); else await sdk.addTrack(neu, media); } catch (_) {}
+    }
+    if (old && media.getTracks().includes(old)) media.removeTrack(old);
+    if (!media.getTracks().includes(neu)) media.addTrack(neu);
+  };
+
+  const preview = () => {
+    cam.srcObject = vTrack ? new MediaStream([vTrack]) : null;
+    cam.classList.toggle('mirror', !!(C.MIRROR && vTrack && isFront(vTrack)));
+    const p = cam.play && cam.play(); if (p && p.catch) p.catch(() => {});
+  };
+  const useVideo = async (t, old) => {
+    await swap(old, t);
+    vTrack = t;
+    t.addEventListener('ended', () => {            // caméra coupée par le système → on la rouvre
+      if (vTrack === t && !hungUp) setTimeout(() => queue(openVideo).catch(camErr), 800);
+    });
+    preview();
+  };
+  const useAudio = async (t, old) => {
+    t.enabled = micOn;
+    await swap(old, t);
+    aTrack = t;
+    t.addEventListener('ended', () => { if (aTrack === t && !hungUp) setTimeout(micCheck, 600); });  // micro débranché
+  };
+
+  const openVideo = async () => {
+    const old = vTrack;
+    if (old) old.stop();                           // Android : une seule caméra ouverte à la fois
+    let s;
+    try { s = await md.getUserMedia({ video:vCons() }); }
+    catch (e) {
+      if (!pref.cam) throw e;
+      pref.cam = ''; save('cam', '');              // caméra retenue introuvable → avant/arrière
+      s = await md.getUserMedia({ video:vCons() });
+    }
+    await useVideo(s.getVideoTracks()[0], old);
+  };
+  const openAudio = async id => {
+    const old = aTrack;
+    if (old) old.stop();
+    let s;
+    try { s = await md.getUserMedia({ audio:aCons(id) }); }
+    catch (e) { if (!id) throw e; s = await md.getUserMedia({ audio:aCons('') }); }
+    await useAudio(s.getAudioTracks()[0], old);
+  };
+
+  /* Qualité : ajustement à chaud, sinon on rouvre la caméra dans la bonne définition. */
+  const applyQual = async () => {
+    const [w, h] = QUAL[pref.qual] || QUAL[1];
+    if (vTrack && vTrack.readyState === 'live') {
+      try {
+        await vTrack.applyConstraints({ width:{ ideal:w }, height:{ ideal:h }, frameRate:{ ideal:FPS, max:FPS } });
+        const s = vTrack.getSettings();
+        if (Math.max(s.width || 0, s.height || 0) === w) return;
+      } catch (_) {}
+    }
+    await openVideo();
+  };
+
+  /* --- Micro cravate : reconnu à son nom ---
+     Android nomme ses micros internes « Speakerphone » / « Headset earpiece ».
+     Tout le reste (USB, filaire…) est un micro externe → prioritaire en mode Auto. */
+  const MIC_IN = /speakerphone|earpiece|built-?in|intégr|interne|internal|default|défaut|haut-parleur/i;
+  const SYS = id => !id || id === 'default' || id === 'communications';
+  const micScore = d => {
+    if (!d || !d.label || SYS(d.deviceId) || MIC_IN.test(d.label)) return 0;
+    if (/usb/i.test(d.label)) return 3;
+    if (/wired|headset|casque|filaire|lav|cravate|jack|extern/i.test(d.label)) return 2;
+    return 1;
+  };
+  const mics = () => devs.filter(d => d.kind === 'audioinput' && !SYS(d.deviceId));
+  const listDevs = async () => { try { devs = await md.enumerateDevices(); } catch (_) {} return devs; };
+  const micWanted = () => {
+    if (pref.mic !== 'auto') return mics().some(d => d.deviceId === pref.mic) ? pref.mic : '';
+    if (!C.MIC_AUTO) return '';
+    const best = mics().sort((a, b) => micScore(b) - micScore(a))[0];
+    return best && micScore(best) > 0 ? best.deviceId : '';
+  };
+  const curMic = () => (aTrack && aTrack.readyState === 'live' && aTrack.getSettings().deviceId) || '';
+  const micCheck = () => queue(async () => {
+    if (hungUp) return;
+    try {
+      await listDevs();
+      const want = micWanted(), cur = curMic();
+      const curDev = mics().find(d => d.deviceId === cur);
+      const ok = aTrack && aTrack.readyState === 'live'
+              && (SYS(cur) || curDev)                        // le micro en cours existe toujours
+              && (want ? cur === want : micScore(curDev) === 0);
+      if (!ok) {
+        await openAudio(want);
+        const d = mics().find(x => x.deviceId === curMic());
+        toast('🎤 ' + (micScore(d) > 0 ? 'Micro cravate' : 'Micro du téléphone'));
+      }
+    } catch (_) { toast('🎤 Micro indisponible'); }
+    fillLists();
+  });
+  if (md && md.addEventListener) {                   // branchement / débranchement en direct
+    let dcT;
+    md.addEventListener('devicechange', () => { clearTimeout(dcT); dcT = setTimeout(micCheck, 700); });
+  }
+
+  /* --- Envoi vers OBS : SDK VDO.Ninja --- */
+  let sdkLoad = null;
+  const loadSDK = () => sdkLoad || (sdkLoad = new Promise(res => {
+    const tryLoad = () => {
+      if (window.VDONinjaSDK) return res();
+      const sc = document.createElement('script');
+      sc.src = SDK_URL; sc.integrity = SDK_SRI; sc.crossOrigin = 'anonymous';
+      sc.onload  = () => res();
+      sc.onerror = () => { sc.remove(); toast('VDO.Ninja injoignable — nouvel essai…'); setTimeout(tryLoad, 4000); };
+      document.head.appendChild(sc);
+    };
+    tryLoad();
+  }));
+  loadSDK();                                         // chargé pendant que la caméra s'ouvre
+
+  const pubOpts = () => {
+    const v = { maxBitrate:pref.rate };              // kbps
+    const codec = CODECS[String(C.CODEC || '').toLowerCase()];
+    if (codec) v.codec = codec;
+    return { streamID:ID, media:{ video:v } };
+  };
+
+  /* Voyant PC : OBS reçoit-il le flux ? (connexions actives du SDK) */
+  const obsCount = () => {
+    let n = 0;
+    if (sdk) for (const g of sdk.connections.values()) {
+      const pc = g && g.publisher && g.publisher.pc;
+      const st = pc && (pc.connectionState || pc.iceConnectionState);
+      if (st === 'connected' || st === 'completed') n++;
+    }
+    return n;
+  };
+  const dotPaint = () => {
+    const n = obsCount();
+    if (n) { everSeen = true; lostSince = 0; }
+    dot.classList.toggle('on', n > 0);
+    dot.textContent = n > 0 ? 'PC' : (everSeen ? 'PC ?' : 'PC');
+  };
+
+  const startSDK = async () => {
+    const old = sdk;
+    sdk = null; published = false; downSince = Date.now(); dotPaint();
+    if (old) { try { await old.disconnect(); } catch (_) {} }
+    if (hungUp || sdk) return;                       // raccroché, ou un autre redémarrage a pris le relais
+    const s = new VDONinjaSDK({
+      salt        : 'vdo.ninja',       // compatible vdo.ninja : même hash d'ID / mot de passe qu'avant
+      password    : PW || undefined,   // vide = mot de passe par défaut de VDO.Ninja (comme l'iframe)
+      turnServers : null,              // null = serveurs TURN de VDO.Ninja récupérés d'office
+      forceTURN   : C.TURN === 'force',
+      autoRelay   : true,              // direct qui échoue → bascule sur le relais
+      maxReconnectAttempts : 1e6, reconnectDelay : 500, disconnectGracePeriod : 3000
+    });
+    sdk = s;
+    ['peerConnected', 'peerDisconnected', 'connectionRecovered', 'connectionFailed', 'hangup', 'bye']
+      .forEach(ev => s.addEventListener(ev, () => setTimeout(dotPaint, 60)));
+    s.addEventListener('reconnectFailed', () => { if (sdk === s && !hungUp) setTimeout(startSDK, 2000); });
+    /* « ID déjà utilisé » : l'ancienne connexion n'est pas encore libérée par le serveur
+       (bascule réseau), ou index.html est ouvert ailleurs. On republie toutes les 4 s,
+       SANS couper la liaison avec OBS si elle tourne encore. */
+    const reseed = () => {
+      if (sdk !== s || hungUp || s.state.publishing || !s.state.connected) return;
+      s.publish(media, pubOpts()).catch(() => { if (sdk === s && !hungUp) startSDK(); });
+    };
+    s.addEventListener('alert', e => {
+      if (sdk !== s || hungUp || !/already in use/i.test(String(e.detail && e.detail.message))) return;
+      if (Date.now() - inUseToast > 15000) { inUseToast = Date.now(); toast('ID caméra encore occupé — nouvel essai…'); }
+      setTimeout(reseed, 4000);
+    });
+    try {
+      await s.connect();
+      if (sdk !== s) return;
+      await s.publish(media, pubOpts());
+      if (sdk === s) published = true;
+    } catch (_) {
+      setTimeout(() => { if (sdk === s && !hungUp) startSDK(); }, 3000);
+    }
+  };
+  const ensureSDK = () => {
+    if (!sdk && !hungUp && media.getTracks().length) loadSDK().then(() => { if (!sdk && !hungUp) startSDK(); });
+  };
+
+  /* --- Filets de sécurité réseau (bascule Wi-Fi ↔ 4G en plein live) --- */
+  const nc = navigator.connection;
+  const netName = () => {
+    const t = nc && nc.type;
+    return t === 'wifi' ? 'Wi-Fi' : t === 'cellular' ? '4G/5G' : t === 'none' ? 'hors ligne' : '?';
+  };
+  let lastNet = nc && nc.type;
+  if (nc && nc.addEventListener) nc.addEventListener('change', () => {
+    const t = nc.type;
+    if (hungUp || !sdk || !t || t === 'none' || t === lastNet) return;
+    lastNet = t;                                     // vrai changement de réseau → connexion neuve dessus
+    toast('Réseau : ' + netName() + ' — reconnexion…');
+    setTimeout(() => { if (!hungUp) startSDK(); }, 1500);
+  });
+  addEventListener('online', () => setTimeout(() => {
+    if (!hungUp && sdk && !sdk.state.connected) startSDK();
+  }, 3000));
+  setInterval(() => {
+    if (hungUp || !sdk) return;
+    dotPaint();
+    const now = Date.now();
+    if (sdk.state.connected) downSince = 0;
+    else if (!downSince) downSince = now;
+    else if (now - downSince > 20000) return startSDK();        // signal VDO.Ninja coupé depuis 20 s
+    if (everSeen && !obsCount()) {                              // OBS perdu depuis 45 s → connexion neuve
+      if (!lostSince) lostSince = now;
+      else if (now - lostSince > 45000) { lostSince = 0; everSeen = false; startSDK(); }
+    }
+  }, 5000);
+
+  /* --- Démarrage : caméra + micro (une seule demande d'autorisation), puis envoi --- */
+  const boot = async () => {
+    await listDevs();
+    let s = null;
+    try { s = await md.getUserMedia({ video:vCons(), audio:aCons(micWanted()) }); } catch (_) {}
+    if (s) {
+      await useVideo(s.getVideoTracks()[0], null);
+      if (s.getAudioTracks()[0]) await useAudio(s.getAudioTracks()[0], null);
+    } else {
+      await queue(openVideo).catch(camErr);        // essai séparé : caméra seule (le micro suit)
+    }
+    await micCheck();                              // noms des micros dispo après autorisation → cravate auto
+    ensureSDK();
+    if (!document.body.classList.contains('live')) sheetOpen(true);   // réglages ouverts pendant la préparation
+  };
+  setTimeout(boot, 0);
+
+  /* ============================================================
+     Verrouillage de l'écran
+     ============================================================ */
+  const lock = () => {
+    document.body.classList.add('live');
+    sheetOpen(false);
+    toast('Écran verrouillé');
+  };
+
+  $('#go').addEventListener('click', lock);
+
+  /* ============================================================
+     Contrôles
+     ============================================================ */
+
+  /* --- Micro --- */
+  bMic.addEventListener('click', () => {
+    micOn = !micOn;
+    if (aTrack) aTrack.enabled = micOn;       // la piste reste ouverte : elle devient muette
+    bMic.textContent = micOn ? '🎤' : '🔇';
+    bMic.classList.toggle('off', !micOn);
+    toast(micOn ? 'Micro actif' : 'Micro coupé');
+  });
+
+  /* --- Son des alertes ---
+     Bip court synthétisé sur place (aucun fichier à héberger).
+     Rappel : à n'activer qu'avec des écouteurs qui isolent. */
+  let sndOn = C.ALERT_SOUND, actx = null;
+  const setSnd = () => {
+    bSnd.textContent = sndOn ? '🔔' : '🔕';
+    bSnd.classList.toggle('off', !sndOn);
+  };
+  setSnd();
+  bSnd.addEventListener('click', () => {
+    sndOn = !sndOn;
+    setSnd();
+    toast(sndOn ? 'Son des alertes activé' : 'Son des alertes coupé');
+    if (sndOn) beep('');    // confirme, et débloque l'audio du navigateur
+  });
+
+  /* --- Compteur de viewers (Twitch via DecAPI, sans clé ni compte) ---
+     Le tel interroge une API publique toutes les VIEWERS_POLL secondes.
+     Bouton 👁 = affiche/masque en direct et met les requêtes en pause. */
+  const VCH = (get('viewers') || C.VIEWERS_CHANNEL || '').trim().toLowerCase();
+  const vwEnabled = !!(C.VIEWERS && VCH);
+  let vwOn = vwEnabled, vwTimer = null;
+  const vwPaint = () => {
+    bView.classList.toggle('none', !vwEnabled);
+    vwEl.classList.toggle('none', !(vwEnabled && vwOn));
+    bView.classList.toggle('off', !vwOn);
+  };
+  const vwSet = n => { const b = vwEl.querySelector('b'); if (b) b.textContent = n; };
+  const vwFetch = () => {
+    if (!vwEnabled || !vwOn) return;
+    fetch('https://decapi.me/twitch/viewercount/' + encodeURIComponent(VCH) + '?_=' + Date.now())
+      .then(r => r.text())
+      .then(t => { const n = parseInt(String(t).trim(), 10); vwSet(Number.isFinite(n) ? n : '\u2013'); })  // hors-ligne → texte non numérique → «–»
+      .catch(() => vwSet('\u2013'));
+  };
+  const vwStart = () => { clearInterval(vwTimer); vwFetch(); vwTimer = setInterval(vwFetch, Math.max(15, C.VIEWERS_POLL || 30) * 1000); };
+  const vwStop  = () => { clearInterval(vwTimer); vwTimer = null; };
+  vwPaint();
+  if (vwEnabled && vwOn) vwStart();
+  bView.addEventListener('click', () => {
+    vwOn = !vwOn; vwPaint();
+    if (vwOn) vwStart(); else vwStop();
+    toast(vwOn ? 'Viewers affichés' : 'Viewers masqués');
+  });
+
+  const beep = cls => {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const notes = cls === 'raid'  ? [523, 784]
+                  : cls === 'dono'  ? [659, 988]
+                  : cls === 'cheer' ? [587, 880]
+                  : [523, 659];
+      notes.forEach((f, i) => {
+        const o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'sine'; o.frequency.value = f;
+        o.connect(g); g.connect(actx.destination);
+        const t = actx.currentTime + i * 0.13;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(1.0, t + 0.02);   // volume du bip (max propre = 1.0)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+        o.start(t); o.stop(t + 0.24);
+      });
+    } catch (e) {}
+  };
+
+  /* --- Menu --- */
+  bMenu.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  document.addEventListener('click', e => {
+    if (!menu.contains(e.target) && e.target !== bMenu) menu.classList.remove('open');
+    if (sheet.classList.contains('open') && !sheet.contains(e.target)
+        && e.target !== bSet && e.target.id !== 'go') sheetOpen(false);
+  });
+
+  /* --- Réglages caméra (⚙️) : caméra, micro, qualité, débit, état ---
+     Remplace le menu ⚙️ de VDO.Ninja (plus d'iframe). Dispo avant ET
+     pendant le direct, sans déverrouiller. Les choix sont retenus
+     sur le tel (&reset dans l'adresse = retour au CONFIG). */
+  const sheet = $('#sheet'), sCam = $('#sCam'), sMic = $('#sMic'),
+        sQual = $('#sQual'), sRate = $('#sRate'), sStat = $('#sStat');
+  const opt  = (v, t, sel) => '<option value="' + esc(v) + '"' + (sel ? ' selected' : '') + '>' + esc(t) + '</option>';
+  const side = l => FRONT.test(l) ? 'Avant' : BACK.test(l) ? 'Arrière' : '';
+
+  const fillLists = () => {
+    const cams = devs.filter(d => d.kind === 'videoinput' && d.deviceId);
+    const curV = vTrack ? vTrack.getSettings().deviceId : '';
+    sCam.innerHTML = cams.map(d => {
+      const sd = side(d.label), same = cams.filter(x => side(x.label) === sd);
+      const name = sd ? sd + (same.length > 1 ? ' ' + (same.indexOf(d) + 1) : '') : (d.label || 'Caméra');
+      return opt(d.deviceId, name, d.deviceId === curV);
+    }).join('') || opt('', 'Caméra');
+
+    const cur = mics().find(d => d.deviceId === curMic());
+    sMic.innerHTML = opt('auto', 'Auto — ' + (micScore(cur) > 0 ? 'cravate' : 'micro du tel'), pref.mic === 'auto')
+                   + mics().map(d => opt(d.deviceId, (micScore(d) > 0 ? '🎙 ' : '') + (d.label || 'Micro'),
+                                         pref.mic === d.deviceId)).join('');
+
+    sQual.value = String(pref.qual);
+    if (![...sRate.options].some(o => +o.value === pref.rate)) sRate.insertAdjacentHTML('beforeend', opt(pref.rate, pref.rate + ' kbps'));
+    sRate.value = String(pref.rate);
+  };
+
+  const afterCam = () => { fillLists(); ensureSDK(); };
+  sCam.addEventListener('change', () => {
+    const d = devs.find(x => x.deviceId === sCam.value);
+    pref.cam = sCam.value; save('cam', pref.cam);
+    if (d && side(d.label)) { pref.facing = FRONT.test(d.label) ? 'user' : 'environment'; save('facing', pref.facing); }
+    queue(openVideo).then(afterCam, camErr);
+  });
+  $('#sFlip').addEventListener('click', () => {
+    pref.facing = (vTrack && isFront(vTrack)) ? 'environment' : 'user'; pref.cam = '';
+    save('facing', pref.facing); save('cam', '');
+    queue(openVideo).then(() => { afterCam(); toast(pref.facing === 'user' ? 'Caméra avant' : 'Caméra arrière'); }, camErr);
+  });
+  sMic.addEventListener('change', () => { pref.mic = sMic.value; save('mic', pref.mic); micCheck(); });
+  sQual.addEventListener('change', () => {
+    pref.qual = +sQual.value; save('qual', pref.qual);
+    queue(applyQual).then(() => { afterCam(); toast('Qualité : ' + QNAME[pref.qual]); }, camErr);
+  });
+  sRate.addEventListener('change', () => {
+    pref.rate = +sRate.value; save('rate', pref.rate);
+    if (sdk && published) sdk.updatePublisherMedia({ videoBitrate:pref.rate }).catch(() => {});
+    toast('Débit : ' + pref.rate + ' kbps');
+  });
+  $('#sOk').addEventListener('click', () => sheetOpen(false));
+
+  /* État en direct (seulement quand ⚙️ est ouvert : rien ne tourne sinon).
+     « relais TURN » = le flux passe par le relais (normal en 4G / CGNAT).
+     « logiciel ⚠️ » = l'encodeur matériel n'est pas utilisé → plus de chauffe. */
+  const prevOut = new Map();
+  const statPaint = async () => {
+    const L = ['Réseau : ' + netName() + (C.TURN === 'force' ? ' · relais forcé' : '')];
+    const vs = vTrack && vTrack.readyState === 'live' ? vTrack.getSettings() : null;
+    L.push('Caméra : ' + (vs ? vs.width + '×' + vs.height + ' · ' + Math.round(vs.frameRate || 0) + ' fps' : 'coupée'));
+    if (hungUp) L.push('Raccroché');
+    else if (!sdk || !sdk.state.connected) L.push('VDO.Ninja : connexion…');
+    else {
+      let n = 0;
+      for (const [uuid, g] of sdk.connections) {
+        const pc = g && g.publisher && g.publisher.pc;
+        if (!pc || pc.connectionState === 'closed') continue;
+        let r; try { r = await pc.getStats(); } catch (_) { continue; }
+        n++;
+        const by = new Map(); let pair = null, out = null;
+        r.forEach(x => by.set(x.id, x));
+        r.forEach(x => {
+          if (x.type === 'transport' && x.selectedCandidatePairId) pair = by.get(x.selectedCandidatePairId) || pair;
+          if (x.type === 'outbound-rtp' && x.kind === 'video') out = x;
+        });
+        if (!pair) r.forEach(x => { if (!pair && x.type === 'candidate-pair' && x.nominated && x.state === 'succeeded') pair = x; });
+        const lc = pair && by.get(pair.localCandidateId), rc = pair && by.get(pair.remoteCandidateId);
+        const relay = (lc && lc.candidateType === 'relay') || (rc && rc.candidateType === 'relay');
+        const up = (pc.connectionState || pc.iceConnectionState) === 'connected';
+        let line = 'OBS ' + (up ? '✅ ' : '⏳ ') + (pair ? (relay ? 'relais TURN' : 'direct') : 'connexion…');
+        if (pair && typeof pair.currentRoundTripTime === 'number') line += ' · ' + Math.round(pair.currentRoundTripTime * 1000) + ' ms';
+        if (out) {
+          const p = prevOut.get(uuid);
+          if (p && out.timestamp > p.t) line += ' · ' + ((out.bytesSent - p.b) * 8 / (out.timestamp - p.t) / 1000).toFixed(1).replace('.', ',') + ' Mb/s';
+          prevOut.set(uuid, { b:out.bytesSent, t:out.timestamp });
+          const cd  = out.codecId && by.get(out.codecId);
+          const enc = out.powerEfficientEncoder === true ? 'matériel'
+                    : out.powerEfficientEncoder === false ? 'logiciel ⚠️' : (out.encoderImplementation || '');
+          const sub = [cd && cd.mimeType ? cd.mimeType.split('/')[1] : '', enc,
+                       out.frameWidth ? out.frameWidth + '×' + out.frameHeight : ''].filter(Boolean).join(' · ');
+          if (sub) line += '\n   ' + sub;
+        }
+        L.push(line);
+      }
+      if (!n) L.push('OBS : en attente…');
+    }
+    sStat.textContent = L.join('\n');
+  };
+
+  let statT = null;
+  const sheetOpen = on => {
+    sheet.classList.toggle('open', on);
+    clearInterval(statT); statT = null;
+    if (on) { listDevs().then(fillLists); statPaint(); statT = setInterval(statPaint, 2000); }
+  };
+  bSet.addEventListener('click', e => { e.stopPropagation(); sheetOpen(!sheet.classList.contains('open')); });
+
+  /* --- Raccrocher --- */
+  $('#mEnd').addEventListener('click', () => {
+    menu.classList.remove('open');
+    if (!confirm('Raccrocher et couper la caméra ?')) return;
+    hungUp = true;
+    const s = sdk; sdk = null; published = false;
+    if (s) s.disconnect().catch(() => {});
+    [vTrack, aTrack].forEach(t => { if (t) t.stop(); });
+    cam.srcObject = null;
+    dotPaint();
+    toast('Caméra coupée');
+  });
+
+  /* ============================================================
+     Couche 3 — le chat
+     Les messages arrivent de Social Stream Ninja par WebRTC,
+     via un iframe invisible. On les redessine nous-mêmes.
+     ============================================================ */
+  let pipe = null, visible = true, missed = 0, counter = 0;
+
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+  /* File d'attente chat : au-delà de C.MAX à l'écran, les nouveaux messages
+     ATTENDENT ; chaque swipe libère le suivant (rien n'est perdu). */
+  const msgQ = [];
+  const unreadBadge = () => { unread.textContent = msgQ.length > 99 ? '99+' : msgQ.length; unread.classList.toggle('on', msgQ.length > 0); };
+  const insertMsg = el => { feed.prepend(el); void el.offsetWidth; el.classList.remove('enter'); };
+  const addToFeed = el => { if (feed.children.length >= C.MAX) { msgQ.push(el); unreadBadge(); } else insertMsg(el); };
+  const feedReleaseNext = () => { if (msgQ.length && feed.children.length < C.MAX) { insertMsg(msgQ.shift()); unreadBadge(); } };
+
+  const draw = d => {
+    const el = document.createElement('div');
+    el.className = 'msg enter';
+    el.dataset.mid  = String(d.mid || d.id || ('m' + (++counter)));
+    el.dataset.name = d.chatname ? String(d.chatname) : '';
+    el.style.setProperty('--accent', PLATFORM[d.type] || '#8a8f98');
+
+    let h = '';
+
+    if (C.AVATARS && d.chatimg) {
+      h += '<img class="av" src="' + esc(d.chatimg) + '" onerror="this.remove()">';
+    }
+
+    if (C.BADGES > 0 && Array.isArray(d.chatbadges)) {
+      d.chatbadges.slice(0, C.BADGES).forEach(b => {
+        if (typeof b === 'string') {
+          h += '<img class="bdg" src="' + esc(b) + '" onerror="this.remove()">';
+        } else if (b && b.type === 'img' && b.src) {
+          h += '<img class="bdg" src="' + esc(b.src) + '" onerror="this.remove()">';
+        } else if (b && b.type === 'svg' && b.html) {
+          h += '<span class="bdg">' + b.html + '</span>';
+        }
+      });
+    }
+
+    if (d.chatname) {
+      const col = d.nameColor ? ' style="color:' + esc(d.nameColor) + '"' : '';
+      h += '<span class="nm"' + col + '>' + esc(d.chatname) + '</span>';
+    }
+
+    if (C.ICONS && d.type) {
+      h += '<img class="src" src="https://socialstream.ninja/sources/images/'
+         + encodeURIComponent(d.type) + '.png" onerror="this.remove()">';
+    }
+
+    if (d.hasDonation) h += '<span class="don">' + esc(d.hasDonation) + '</span>';
+    if (d.chatmessage) h += '<span class="tx">' + d.chatmessage + '</span>';
+    if (d.contentimg)  h += '<img class="media" src="' + esc(d.contentimg) + '" onerror="this.remove()">';
+
+    el.innerHTML = h;
+
+    /* Longueur réelle du texte, balises d'émotes exclues.
+       Au-delà d'un certain seuil la police rétrécit, pour que
+       même un message de 500 caractères tienne dans sa bulle. */
+    const len = String(d.chatmessage || '').replace(/<[^>]*>/g, '').trim().length;
+    if      (len > 300) el.classList.add('xlong');
+    else if (len > 150) el.classList.add('long');
+
+    el.dataset.t = Date.now();
+
+    addToFeed(el);                // insère, ou met en file d'attente si déjà C.MAX à l'écran
+  };
+
+  const drop = test => [...feed.children].forEach(el => { if (test(el)) el.remove(); });
+
+  /* Efface les messages périmés — sauf les plus récents, qui restent
+     affichés quoi qu'il arrive. Chat calme : tu retrouves les derniers
+     messages en revenant. Chat animé : tout le reste s'efface. */
+  if (C.LIFETIME > 0) {
+    setInterval(() => {
+      if (Date.now() < scrollPauseUntil) return;    // lecture historique en cours : pause l'effacement
+      const now = Date.now();
+      [...feed.children].forEach((el, i) => {
+        if (i < C.KEEP) return;                       // protégé
+        if (el.classList.contains('gone')) return;    // déjà en train de partir
+        if (now - Number(el.dataset.t) < C.LIFETIME * 1000) return;
+        el.classList.add('gone');
+        setTimeout(() => { el.remove(); feedReleaseNext(); }, 500);
+      });
+    }, 1000);
+  }
+
+  const handle = d => {
+    if (!d || typeof d !== 'object') return;
+    if (d.content) d = d.content;
+
+    if ('clearAll' in d || d.action === 'clear' || d.action === 'clearAll') {
+      feed.innerHTML = ''; return;
+    }
+    if ('deleteMessage' in d) {
+      drop(el => el.dataset.mid === String(d.deleteMessage)); return;
+    }
+    if (d.delete && typeof d.delete === 'object') {
+      const t = d.delete;
+      drop(el => (t.id && el.dataset.mid === String(t.id))
+              || (t.chatname && el.dataset.name === String(t.chatname)));
+      return;
+    }
+    if (d.timeoutUser || d.blockUser) {
+      const u = d.timeoutUser || d.blockUser;
+      const n = u.chatname || u.username;
+      if (n) drop(el => el.dataset.name === String(n));
+      return;
+    }
+
+    /* Événements : liste blanche. Ce qui n'est pas dans ALERTS est ignoré. */
+    const ev = String(d.event || '').toLowerCase();
+    if (ev && ALERTS[ev]) { if (C.ALERTS) alShow(ev, d); return; }
+    if (ev) return;                       // événement système : silence
+    if (!d.chatmessage && !d.contentimg) return;
+    draw(d);
+  };
+
+  /* ---------- Alertes : format compact (type + qui + valeur) ---------- */
+  const ALERTS = {
+    new_follower:'FOLLOW', new_subscriber:'SUB', subscribe:'SUB', resub:'RESUB',
+    prime:'PRIME', prime_resub:'PRIME',
+    subscription_gift:'SUBGIFT', giftpurchase:'SUBGIFT COMMU', cheer:'BITS',
+    donation:'DON', superchat:'SUPER CHAT', jeweldonation:'DON', raid:'RAID',
+    hype_new:'HYPE DEBUT', hype_level:'HYPE', hype_end:'HYPE FIN', hype_record:'HYPE RECORD',
+    merch:'MERCH', wishlist:'WISHLIST'
+  };
+  const ALCOL = {   // couleur de fond par type
+    new_follower:'#22c55e', new_subscriber:'#a855f7', subscribe:'#a855f7', resub:'#8b5cf6',
+    prime:'#38bdf8', prime_resub:'#38bdf8',
+    subscription_gift:'#2dd4bf', giftpurchase:'#14b8a6', cheer:'#60a5fa',
+    donation:'#fbbf24', superchat:'#f59e0b', jeweldonation:'#fbbf24', raid:'#f87171',
+    hype_new:'#fb923c', hype_level:'#fb923c', hype_end:'#f97316', hype_record:'#f472b6',
+    merch:'#c084fc', wishlist:'#f472b6'
+  };
+
+  /* ---------- TTS façon OBS (repris d'alertes.html) ----------
+     Le TITRE de l'alerte reste dit (FOLLOW, SUB, DON…) ; le reste — pseudo +
+     valeurs (mois, bits, montant…) — est lu via ces gabarits, exactement comme
+     sur l'overlay OBS. Ces phrases ne servent QU'À la voix : l'affichage des
+     cartes ne change pas. Le message du viewer est ajouté à la fin (voir alShow). */
+  const ALTEXT = {
+    new_follower:      "Un nouveau Soleil se lève sur la chaîne !!! {user} brille de mille feux !!! Merci pour le follow !!!",
+    new_subscriber:    "{user} brille un max en prenant un sub! Premier mois d'abo!!! Merci!!!",
+    subscribe:         "{user} brille un max en prenant un sub! Premier mois d'abo!!! Merci!!!",
+    resub:             "{user} brille un max avec son sub de {months} mois!",
+    prime:             "{user} loue des bus avec son Prime! Premier mois de Prime!",
+    prime_resub:       "{user} loue à nouveau des bus avec son Prime! {months} mois de Prime!",
+    subscription_gift: "{user} prépare une conspiration avec {recipient}!",
+    giftpurchase:      "{user} prépare une conspiration colossale en offrant {count} subs aux Soleils!",
+    cheer:             "{user} régale le stream avec {bits} Bitsss! Cimer!",
+    raid:              "{user} raid les Soleils!!! Ecrivez \"Bienvenue\" dans le tchat!",
+    hype_new:          "Train de la Hype lancé par les Soleils BORDEL! Nous sommes au niveau {level} du train!",
+    hype_level:        "Niveau {level} du Train de la Hype atteint par la soleillerie!!!",
+    hype_end:          "Le Train de la Hype est fini! On a atteint le niveau {level}. Merci pour vos contributions! Vous avez régalez la chaîne!",
+    hype_record:       "Nouveau record du train de la Hype des Soleils!!! Le record est maintenant de {level} niveaux!",
+    donation:          "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    superchat:         "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    jeweldonation:     "{user} aime l'or! Merci pour le pourboire de {amount} {currency}!",
+    merch:             "{user} se fait plaizz en achetant {product}! Enjoy le goodie là!!!",
+    wishlist:          "INCROYABLE! {user} vient de participer à la cagnotte du cadeau {gift}! MERCI ça régale le stream!!!"
+  };
+  /* Mots que la voix ÉPELLE (hors de son vocabulaire) → écrits phonétiquement
+     pour le TTS uniquement. L'affichage garde le libellé normal (SUBGIFT, RESUB). */
+  const ALSPOKEN = { resub:'re sub', subscription_gift:'sub gift', giftpurchase:'sub gift communauté' };
+
+  const alBox = $('#alerts'); if (C.GESTURES) alBox.classList.add('gest');
+  const alData = d => {
+    const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+    return {
+      user:      d.chatname || m.supporter || m.fromLogin || 'Un Soleil',
+      amount:    d.hasDonation || (m.amount ? (m.amount + (m.currency ? ' ' + m.currency : '')) : ''),
+      months:    m.cumulativeMonths || m.duration || m.months || '',
+      recipient: m.recipient || m.fromLogin || '',
+      count:     m.totalGifted || m.count || '',
+      level:     m.level || '',
+      product:   m.product || '',
+      gift:      m.gift || '',
+      viewers:   m.viewers || ''
+    };
+  };
+  /* Message viewer LU par le TTS (jamais affiché) : liens + blocklist retirés, "" si vide/undefined */
+  const TTS_BLOCK = ["zizi","gogol","gogole","golmon","debil","débil","debile","débile","bon a rien","bon à rien","pute","putes","salope","salopes","salaud","connasse","connard","conne","couillasse","chatte","couille","bite","pénis","penis","vagin","bander","bandé","encule","enculé","enculer","suce","sucer","sucé","suceur","suceuse","baiseur","tapette","tapet","tapète","tapete","pd","fdp","fils de pute","sexe","sex","porno","porn","viol","viole","violer","violé","détournement de mineur","detournement de mineur","pedophile","pédophile","pédophiles","pédo","negre","nègre","negro","négro","bougnoul","bamboula","big black cock","bbc","nazi","fuhrer","führer","pétain","petain","le pen","lepen","bardella","zemmour","rn","trump","nigger","nigga","faggot","retard","tranny","kike","chink","whore","slut","cunt","rape","rapist","kys","free followers","free viewers","buy followers","buy viewers","cheap followers","onlyfans","only fans","viewers.shop","streamboo","p3do","put3","s4lope","n3gre","n3gro"];
+  const cleanMsg = s => {
+    s = String(s == null ? '' : s);
+    const t = s.trim().toLowerCase();
+    if (t === '' || t === 'undefined' || t === 'null') return '';
+    s = s.replace(/(https?:\/\/\S+|www\.\S+|\b[\w-]+\.(?:shop|store|xyz|top|live|tv|gg|net|com|org|io|ru|link|click|site|online|info)\b\S*)/gi, ' ');
+    TTS_BLOCK.forEach(w => { s = s.replace(new RegExp('\\b' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), ' '); });
+    return s.replace(/\s+/g, ' ').trim().slice(0, 200);
+  };
+
+  /* Valeurs des gabarits TTS. Repart d'alData et dérive, pour dons/bits, un
+     montant + une devise SÉPARÉS (comme alertes.html) : soit meta.amount /
+     meta.currency, soit en découpant "5.00 €" / "500 bits" en secours. */
+  const ttsFields = d => {
+    const base = alData(d);
+    const m = (d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const numOf = s => { const x = String(s == null ? '' : s).match(/\d+(?:[.,]\d+)?/); return x ? x[0] : ''; };
+    const curOf = s => String(s == null ? '' : s).replace(/[\d.,]/g, '').replace(/bits?/gi, '').replace(/\s+/g, ' ').trim();
+    return Object.assign({}, base, {
+      bits:     m.amount || numOf(d.hasDonation),
+      amount:   m.amount || numOf(d.hasDonation),
+      currency: m.currency || curOf(d.hasDonation)
+    });
+  };
+  const fillTTS = (tpl, data) => tpl.replace(/\{(\w+)\}/g, (_, k) => (data[k] != null ? String(data[k]) : ''));
+  // TTS = voix intégrée du téléphone (Web Speech). Nécessite 1 tap écran pour débloquer l'audio.
+  const speak = (text) => {
+    if (!text || !window.speechSynthesis) return;
+    try {
+      const u = new SpeechSynthesisUtterance(String(text).slice(0, 300));
+      u.lang = 'fr-FR'; u.rate = 1.05; u.volume = 1; u.pitch = 1;
+      speechSynthesis.speak(u);
+    } catch (_) {}
+  };
+
+  /* Alertes = cartes en HAUT, empilées (inverse du chat), effaçables au swipe ↔. */
+  const alGone = card => {
+    if (!card || card._gone) return; card._gone = true;
+    clearTimeout(card._t); card.classList.add('gone');
+    setTimeout(() => card.remove(), 420);
+  };
+  const alMeta = v => '<span class="meta">' + esc(v) + '</span>';
+  const alBacklog = [];
+  const alInsert = card => {
+    alBox.prepend(card);
+    card.querySelector('.al-bar i').style.animation = 'al-bar ' + (C.ALERT_LIVE || 10) + 's linear forwards';
+    if (C.ALERT_FADE) card._t = setTimeout(() => alGone(card), (C.LIFETIME || 30) * 1000);
+  };
+  const alReleaseNext = () => { if (alBacklog.length && alBox.children.length < (C.ALERT_MAX || 25)) alInsert(alBacklog.shift()); };
+  const alShow = (key, d) => {
+    const kind = ALERTS[key]; if (!kind) return;
+    const data = alData(d), parts = [];
+    if (key.indexOf('hype') === 0) { if (data.level) parts.push('Niveau ' + data.level); }
+    else {
+      parts.push(data.user);
+      if ((key === 'resub' || key === 'prime_resub') && data.months) parts.push(data.months + ' mois');
+      else if (data.amount && (key === 'cheer' || key === 'donation' || key === 'superchat' || key === 'jeweldonation')) parts.push(data.amount);
+      else if (key === 'raid' && data.viewers) parts.push(data.viewers + ' viewers');
+      else if (key === 'subscription_gift' && data.recipient) parts.push('\u2192 ' + data.recipient);
+      else if (key === 'giftpurchase' && data.count) parts.push('\u00d7' + data.count);
+      else if (key === 'merch' && data.product) parts.push(data.product);
+      else if (key === 'wishlist' && data.gift) parts.push(data.gift);
+    }
+    const line = parts.filter(Boolean).map(alMeta).join(' \u00b7 ');
+    const card = document.createElement('div');
+    card.className = 'al';
+    card.style.setProperty('--alc', ALCOL[key] || '#FF9E2C');
+    card.innerHTML = '<div class="al-kind">' + esc(kind) + '</div><div class="al-line">' + line + '</div><div class="al-bar"><i></i></div>';
+    if (sndOn) {                                    // son TEMPS RÉEL (bip + TTS), même si la carte attend en file
+      beep('');
+      const spokenKind = ALSPOKEN[key] || kind;                       // "sub gift" / "re sub" au lieu d'être épelés
+      const body = ALTEXT[key] ? fillTTS(ALTEXT[key], ttsFields(d))   // phrase façon OBS (pseudo + valeurs)
+                               : card.querySelector('.al-line').textContent;
+      const msg = cleanMsg(d.chatmessage);                            // message du viewer, lu comme sur l'OBS (jamais affiché)
+      speak(spokenKind + '. ' + body + (msg ? '. ' + msg : ''));
+    }
+    if (alBox.children.length >= (C.ALERT_MAX || 25)) alBacklog.push(card);   // plein → file d'attente
+    else alInsert(card);
+  };
+  if (C.GESTURES) {                                 // swipe ↔ pour effacer une carte
+    let sx = 0, tgt = null, dx = 0, horiz = false;
+    alBox.addEventListener('touchstart', e => {
+      tgt = e.target.closest('.al'); dx = 0; horiz = false;
+      if (!tgt) return; sx = e.touches[0].clientX; tgt.style.transition = 'none'; clearTimeout(tgt._t);
+    }, { passive: true });
+    alBox.addEventListener('touchmove', e => {
+      if (!tgt) return; dx = e.touches[0].clientX - sx;
+      if (Math.abs(dx) > 8) { horiz = true; e.preventDefault();
+        tgt.style.transform = 'translateX(' + dx + 'px)'; tgt.style.opacity = Math.max(0, 1 - Math.abs(dx) / 200); }
+    }, { passive: false });
+    alBox.addEventListener('touchend', () => {
+      if (!tgt) return; const m = tgt; tgt = null; m.style.transition = '';
+      if (horiz && Math.abs(dx) > 80) { m.style.transform = 'translateX(' + (dx > 0 ? 400 : -400) + 'px)'; m.style.opacity = 0; setTimeout(() => { m.remove(); alReleaseNext(); }, 300); }
+      else { m.style.transform = ''; m.style.opacity = ''; if (C.ALERT_FADE) m._t = setTimeout(() => alGone(m), (C.LIFETIME || 30) * 1000); }
+    }, { passive: true });
+  }
+
+  if (SESSION) {
+    pipe = document.createElement('iframe');
+    pipe.src = 'https://vdo.socialstream.ninja/?ln&salt=vdo.ninja&notmobile'
+             + '&password=false&push&label=dock&vd=0&ad=0'
+             + '&novideo&noaudio&autostart&cleanoutput'
+             + '&room=' + encodeURIComponent(SESSION);
+    pipe.style.cssText = 'width:0;height:0;position:fixed;left:-100px;top:-100px;border:0;';
+    document.body.appendChild(pipe);
+
+    /* --- Alertes via WebSocket API SSN (canal 1) ---
+       SAMMI injecte via "content" sur le canal 1 → on s'y abonne en écoute. */
+    let aWS = null, aRetry = null;
+    const connectAlerts = () => {
+      clearTimeout(aRetry);
+      try {
+        aWS = new WebSocket('wss://io.socialstream.ninja/join/' + encodeURIComponent(SESSION) + '/1');
+        aWS.onmessage = ev => {
+          let d;
+          try { d = JSON.parse(ev.data); } catch (_) { return; }
+          if (d && d.action && d.value !== undefined) d = d.value;
+          if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
+          if (d && d.overlayNinja) d = d.overlayNinja;
+          if (d && typeof d === 'object' && (d.event || d.chatname)) handle(d);
+        };
+        aWS.onclose = () => { aRetry = setTimeout(connectAlerts, 3000); };
+        aWS.onerror = () => { try { aWS.close(); } catch (_) {} };
+      } catch (_) { aRetry = setTimeout(connectAlerts, 3000); }
+    };
+    connectAlerts();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && (!aWS || aWS.readyState > 1)) connectAlerts();
+    });
+
+    bChat.addEventListener('click', () => {
+      visible = !visible;
+      feed.classList.toggle('hidden',  !visible);
+      scrim.classList.toggle('hidden', !visible);
+      bChat.classList.toggle('off',    !visible);
+    });
+  } else {
+    bChat.classList.add('none');
+  }
+
+  /* ============================================================
+     Écoute de l'iframe du chat (SSN)
+     La caméra ne passe plus par un iframe : le voyant PC est
+     piloté par les événements du SDK (voir Couche 1).
+     ============================================================ */
+  window.addEventListener('message', e => {
+    if (pipe && e.source === pipe.contentWindow) {
+      const r = e.data && e.data.dataReceived;
+      if (r && typeof r === 'object' && r.overlayNinja) handle(r.overlayNinja);
+    }
+  });
+
+  /* ============================================================
+     Confort
+     ============================================================ */
+
+  /* --- Garde l'écran allumé --- */
+  let awake = null;
+  const keepAwake = async () => {
+    try { awake = await navigator.wakeLock.request('screen'); }
+    catch (e) { /* refusé ou non supporté : la veille système prend le relais */ }
+  };
+  if ('wakeLock' in navigator) {
+    keepAwake();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') keepAwake();
+    });
+  }
+
+  /* --- Anti-rafraîchissement accidentel --- */
+  if (C.CONFIRM_EXIT) {
+    window.addEventListener('beforeunload', e => {
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  }
+})();
+</script>
+
+</body>
+</html>
