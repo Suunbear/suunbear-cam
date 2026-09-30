@@ -2,7 +2,7 @@
   "name": "Suunbear Cam",
   "short_name": "Cam",
   "description": "Camera mobile et chat pour le stream",
-  "start_url": "./",
+  "start_url": "./camtel.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
