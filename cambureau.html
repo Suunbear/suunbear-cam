@@ -79,11 +79,13 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const has   = k => frag.has(k) || query.has(k);
   const get   = k => (frag.get(k) || query.get(k) || '').trim();
   const SESSION = get('chat');
+  const RAW = has('brut');                          // diagnostic : image affichée telle qu'elle arrive (proportions réelles)
   if (+get('dur') > 0) C.FILTER_DURATION = +get('dur');
 
   const $ = s => document.querySelector(s);
   const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
   cv.style.transition = 'opacity ' + C.OVERLAY_FADE + 's linear';
+  if (RAW) { cv.style.objectFit = 'contain'; cv.style.background = '#5a0a3c'; }   // bandes violettes = zones vides de l'image reçue
   const log = (...a) => console.log('[cambureau]', ...a);
   const ST = { frames:0, dets:0, detMs:0, detMax:0, fps:0, dps:0, avg:0, max:0, cam:'', err:'', ws:false, vcam:null };
 
@@ -270,9 +272,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
       /* 5. Le calque ne couvre la cam que si ton visage est vu ET que l'image est bien en 16:9
             (sinon : cam normale, jamais d'image parasite ni déformée à l'antenne) */
-      const okRatio = ratioOK(W, H);
+      const okRatio = RAW || ratioOK(W, H);
       if (!okRatio) ST.err = 'image ' + W + '×' + H + ' au lieu de 16:9 → calque masqué';
-      const want = !!(okRatio && fx.t0 && !fx.ending && fx.seen && t - fx.seen < C.FACE_HOLD * 1000);
+      const want = RAW ? !!(fx.t0 && !fx.ending)
+                       : !!(okRatio && fx.t0 && !fx.ending && fx.seen && t - fx.seen < C.FACE_HOLD * 1000);
       if (want !== cv.classList.contains('on')) cv.classList.toggle('on', want);
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
     }
@@ -296,6 +299,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (!md || !md.getUserMedia) throw new Error('pas d\'accès caméra (--enable-media-stream ?)');
     const list = async () => (await md.enumerateDevices()).filter(d => d.kind === 'videoinput');
     let cams = await list(), hit = cams.find(d => CAM_RE.test(d.label));
+    ST.devs = cams.map(d => d.label || '?').join(' | ');
     if (hit) return hit.deviceId;
     if (!cams.some(d => d.label)) {                  // noms cachés : on les débloque par le micro (ne touche jamais à l'Elgato)
       try { const s = await md.getUserMedia({ audio:true }); s.getTracks().forEach(tr => tr.stop()); } catch (_) {}
@@ -349,7 +353,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     for (let i = 0; i < 3 && fx.on; i++) {
       const s = await md.getUserMedia({ video:cons });
       const st = s.getVideoTracks()[0].getSettings();
-      if (ratioOK(st.width, st.height)) return s;
+      if (RAW || ratioOK(st.width, st.height)) return s;
       got = st.width + '×' + st.height; log('format reçu', got, '→ nouvel essai');
       s.getTracks().forEach(tr => tr.stop());
       await sleep(800);
@@ -372,6 +376,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const tr = s.getVideoTracks()[0];
       if (!fx.on) { tr.stop(); return; }
       fx.track = tr; ST.cam = tr.label;
+      try { const c = tr.getCapabilities(); ST.caps = (c.width && c.width.max) + '×' + (c.height && c.height.max); } catch (_) {}
       tr.addEventListener('ended', () => { ST.err = 'caméra virtuelle coupée'; fxEnd(true); });
       vid.srcObject = s;
       await vid.play();
@@ -467,7 +472,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
                              + (fx.face > .5 ? 'vu' : 'perdu') + (fx.useRaf ? ' · mode secours' : '') : '—'),
       'État   : ' + (fx.on ? fx.key + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
                   + (fxQ.length ? ' · file ' + fxQ.length : ''),
-      ST.err ? 'Erreur : ' + ST.err : ''
+      ST.err ? 'Erreur : ' + ST.err : '',
+      RAW ? 'BRUT   : vidéo ' + vid.videoWidth + '×' + vid.videoHeight + ' · capacités ' + (ST.caps || '?')
+            + '\nAppareils : ' + (ST.devs || '?') : ''
     ].filter(Boolean).join('\n');
   };
   setInterval(() => {
