@@ -1584,7 +1584,7 @@ body.live #go { display:none; }
   const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
                     [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
   const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
-                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 473, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
+                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
     (f.pts || []).forEach(q => need.add(q[0]));
@@ -2396,21 +2396,32 @@ body.live #go { display:none; }
           }
         }
       }
-      /* 3. yeux rouges qui brillent (dans le blanc de l'œil) */
-      [[EYE_RING[0], EYE_R], [EYE_RING[1], EYE_L]].forEach(([ring, eye]) => {
+      /* 3. iris rouges : on colore TON iris (il suit ton regard, garde pupille et reflets) + légère lueur */
+      EYE_RING.forEach(ring => {
         const pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i]));
         if (pts.some(q => !q)) return;
-        const o = [0, 0], R = .055 * fw;                        // calé au centre de l'œil (pas sur l'iris, qui suit le regard)
-        pts.forEach(q => { o[0] += q[0] / pts.length; o[1] += q[1] / pts.length; });
+        const e0 = pts[0];
+        let best = null, bd = 1e9;                                // quel iris (468… ou 473…) est dans cet œil
+        for (const c of [468, 473]) { const q = fx.sm[c]; if (q) { const d = Math.hypot(q[0] - e0[0], q[1] - e0[1]); if (d < bd) { bd = d; best = c; } } }
+        if (best == null) return;
+        const o = warpPos(fx.sm[best]);
+        let r = 0, k = 0;
+        for (let i = best + 1; i <= best + 4; i++) { const q = fx.sm[i]; if (q) { const w = warpPos(q); r += Math.hypot(w[0] - o[0], w[1] - o[1]); k++; } }
+        r = k ? r / k : .05 * fw;
+        r = Math.max(.035 * fw, Math.min(.08 * fw, r)) * 1.08;
         g.save(); g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.clip();
-        const rg = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R);
-        rg.addColorStop(0, 'rgba(255,235,190,1)'); rg.addColorStop(.2, 'rgba(255,150,50,1)'); rg.addColorStop(.5, 'rgba(255,30,15,1)');
-        rg.addColorStop(.85, 'rgba(160,0,0,.9)'); rg.addColorStop(1, 'rgba(110,0,0,0)');
-        g.globalAlpha = a * (.85 + .15 * beat); g.fillStyle = rg; g.fillRect(o[0] - R, o[1] - R, 2 * R, 2 * R);
+        g.globalCompositeOperation = 'color';                    // teinte rouge sur l'iris (garde les ombres et reflets)
+        g.globalAlpha = a; g.fillStyle = 'rgb(255,0,0)';
+        g.beginPath(); g.arc(o[0], o[1], r, 0, 6.283); g.fill();
+        g.globalCompositeOperation = 'screen';                   // l'iris s'illumine de l'intérieur
+        const rg = g.createRadialGradient(o[0], o[1], r * .25, o[0], o[1], r);
+        rg.addColorStop(0, 'rgba(255,60,25,.35)'); rg.addColorStop(.7, 'rgba(255,25,10,.75)'); rg.addColorStop(1, 'rgba(200,0,0,0)');
+        g.globalAlpha = a * (.75 + .25 * beat); g.fillStyle = rg; g.fillRect(o[0] - r, o[1] - r, 2 * r, 2 * r);
         g.restore();
-        const hg = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R * 1.9);   // halo
-        hg.addColorStop(0, 'rgba(255,30,10,.45)'); hg.addColorStop(1, 'rgba(255,0,0,0)');
-        g.globalAlpha = a * (.4 + .2 * beat); g.fillStyle = hg; g.fillRect(o[0] - R * 1.9, o[1] - R * 1.9, R * 3.8, R * 3.8);
+        const hg = g.createRadialGradient(o[0], o[1], r * .6, o[0], o[1], r * 2.4);   // petite lueur autour
+        hg.addColorStop(0, 'rgba(255,30,10,.3)'); hg.addColorStop(1, 'rgba(255,0,0,0)');
+        g.save(); g.globalCompositeOperation = 'screen'; g.globalAlpha = a * (.5 + .3 * beat); g.fillStyle = hg;
+        g.fillRect(o[0] - r * 2.4, o[1] - r * 2.4, r * 4.8, r * 4.8); g.restore();
       });
       /* 4. veine de colère 💢 sur le front, qui palpite */
       const fh = fx.sm[297];
