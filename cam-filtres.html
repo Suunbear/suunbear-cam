@@ -41,7 +41,7 @@
 
    FILTRES visage (points de chaîne) : SAMMI → HTTP Request GET
    https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere
+   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
           (sans accents dans l'URL)
    Calculés par le tel, visibles sur le tel ET sur OBS, 1 min 30 chacun.
    ============================================================ */
@@ -67,7 +67,7 @@ const CONFIG = {
   FILTERS          : true,  // filtres déclenchés par SAMMI (event "filtre"). false = ignorés
   FILTER_DURATION  : 90,    // secondes par filtre (fondus compris) · 90 = 1 min 30
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
-  FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1 },   // réglage fin, filtre par filtre (×)
+  FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // réglage fin, filtre par filtre (×)
   FILTER_FADE      : 0.5,   // durée du fondu d'apparition / disparition (s)
   PAAT_BRAS        : "tatoue",   // Paatrice (filtre « derrière toi ») : "tatoue" (musclé + ton soleil) · "muscle" · "poilu" · "nouille" · "simple"
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
@@ -679,7 +679,7 @@ body.live #go { display:none; }
   <div id="sStat">…</div>
   <label>🎭 Tester un filtre</label>
   <div class="row fxrow" id="sFx">
-    <button data-fx="content">😁</button><button data-fx="zinzin">🤪</button><button data-fx="mini">🤏</button><button data-fx="chad">🗿</button>
+    <button data-fx="content">😁</button><button data-fx="zinzin">🤪</button><button data-fx="mini">🤏</button><button data-fx="chad">🗿</button><button data-fx="fache">😠</button>
   </div>
   <div class="row fxrow" id="sFx2">
     <button data-fx="pleure">😢</button><button data-fx="chat">🐱</button><button data-fx="derriere">👀</button><button data-fx="exagere">🤯</button>
@@ -1412,7 +1412,7 @@ body.live #go { display:none; }
 
      Déclenchement (HTTP Request GET depuis SAMMI) :
      https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-     noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere
+     noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
      ============================================================ */
   const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';   // version figée (empreinte dans l'importmap)
   const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -1457,6 +1457,18 @@ body.live #go { display:none; }
       [152, -.04,   0, .20]                             // menton qui se plisse
     ]},
     chad: { name:'🗿 Chad', pts:[                        // mâchoire de gigachad + air sûr de lui
+      [152,  .20,    0, .30],                           // menton allongé (sans tirer la lèvre du bas)
+      [176,  .12, -.10, .24], [400,  .12, -.10, .24],   // menton large et carré
+      [136,  .08, -.10, .22], [365,  .08, -.10, .22],   // mâchoire élargie, anguleuse
+      [172,  .02, -.09, .22], [397,  .02, -.09, .22],
+      [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
+      [105, -.20,    0, .24], [70, -.12, 0, .20], [107, -.07, 0, .16],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
+      [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
+      [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
+      [145, -.02,    0, .07], [374, -.02,  0, .07],
+      [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
+    ]},
+    chad1: { name:'🗿 Chad', pts:[                       // ancienne version (nom SAMMI « chad1 ») si la nouvelle plaît moins
       [152,  .22,    0, .38],                           // menton allongé
       [148,  .17, -.06, .24], [377,  .17, -.06, .24],   // menton large et carré
       [176,  .14, -.09, .22], [400,  .14, -.09, .22],
@@ -1469,6 +1481,16 @@ body.live #go { display:none; }
       [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
+    ]},
+    fache: { name:'😠 Fâché', pts:[                      // sourcils en V, yeux plissés, moue boudeuse
+      [107,  .15,  .08, .20], [336,  .15,  .08, .20],   // bouts intérieurs des sourcils : très bas et serrés
+      [105,  .06,  .02, .16], [334,  .06,  .02, .16],
+      [70,  -.05,    0, .16], [300, -.05,    0, .16],   // bouts extérieurs qui remontent → V
+      [159,  .05,    0, .10], [386,  .05,    0, .10],   // paupières qui tombent : regard noir
+      [145, -.03,    0, .08], [374, -.03,    0, .08],
+      [61,   .13,  .03, .18], [291,  .13,  .03, .18],   // coins de la bouche vers le bas
+      [17,  -.06,    0, .16],                           // lèvre du bas qui remonte (boude)
+      [152, -.05,    0, .24]                            // menton qui se crispe
     ]},
     /* 🤯 Exagéré : tête gonflée + TES expressions exagérées en direct (bouche ouverte → énorme, sourire → jusqu'aux oreilles…) */
     exagere: { name:'🤯 Exagéré', dyn:true, bulge:[
@@ -1492,11 +1514,9 @@ body.live #go { display:none; }
     // visage gonflé par les bords (le centre — nez, bouche — ne bouge pas) ; encore plus si tu gonfles les joues
     add(132, .02, -.12 - .1 * cp, .34); add(361, .02, -.12 - .1 * cp, .34);
     add(58, .05, -.12 - .1 * cp, .32); add(288, .05, -.12 - .1 * cp, .32);
-    // bouche ouverte → toute la mâchoire descend, la bouche s'étire vers le bas (le gros effet de la vidéo)
-    add(152, .62 * j, 0, .5); add(148, .55 * j, .02 * j, .36); add(377, .55 * j, .02 * j, .36);
-    add(176, .45 * j, .03 * j, .32); add(400, .45 * j, .03 * j, .32);
-    add(17, .5 * j, 0, .3); add(14, .36 * j, 0, .22); add(84, .42 * j, 0, .24); add(314, .42 * j, 0, .24);
-    add(13, -.07 * j, 0, .14); add(61, .14 * j, .08 * j, .2); add(291, .14 * j, .08 * j, .2);
+    // bouche ouverte → la bouche devient énorme (loupe qui suit l'ouverture) et le menton s'allonge.
+    // Pas de points sur les lèvres : additionnés, ils repliaient l'image (lèvre du haut « en miroir »).
+    add(152, .34 * j, 0, .52); add(148, .24 * j, .03 * j, .4); add(377, .24 * j, .03 * j, .4);
     // sourire → jusqu'aux oreilles, joues qui montent, yeux plissés
     add(61, -.22 * sm, -.15 * sm, .26); add(291, -.22 * sm, -.15 * sm, .26);
     add(50, -.1 * sm, 0, .2); add(280, -.1 * sm, 0, .2); add(145, -.045 * sm, 0, .09); add(374, -.045 * sm, 0, .09);
@@ -1512,7 +1532,8 @@ body.live #go { display:none; }
     add(1, -.08 * sn, 0, .16);                               // nez qui se retrousse
     const pts = [];
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
-    return { pts, bulge:FX.exagere.bulge };
+    const bulge = j > .03 ? FX.exagere.bulge.concat([[[13, 14], .78 + .12 * j, .5 + .3 * j, .62 * Math.min(1, j * 1.15)]]) : FX.exagere.bulge;
+    return { pts, bulge };
   };
 
   /* points à suivre pour chaque filtre (déformations + loupes + autocollants) */
@@ -1626,6 +1647,8 @@ body.live #go { display:none; }
         if (bsc) for (const c of bsc) fx.bs[c.categoryName] = (fx.bs[c.categoryName] || 0) * .45 + c.score * .55;   // lissé
         if (p) {
           fx.seen = now;
+          if (window.__fx && window.__lmOpen) p = lmOpen(p, window.__lmOpen, W, H);   // tests seulement
+          if (window.__fx) fx.rawP = p;
           FX[fx.key].need.forEach(i => sm(p, i, W, H));
         }
         if (FX[fx.key].seg && seg) try { segStep(v, W, H); } catch (e) { if (window.__fx) console.error('SEG ' + e.message); }
@@ -1673,6 +1696,15 @@ body.live #go { display:none; }
         }
       }
 
+      if (n && pose && (F.dyn || window.__fx) && !(window.__fx && window.__noFG)) {   // garde-fou anti-« miroir » (filtre qui suit tes expressions)
+        const g = F.dyn ? foldGuard(n, nb, pose) : (fx.fgm = foldGuard(n, nb, pose), 1);   // filtres fixes : mesuré en test seulement
+        fx.fg = g < fx.fg ? g : fx.fg + (g - fx.fg) * Math.min(1, dt * 3);   // baisse tout de suite, remonte en douceur
+        if (fx.fg < .999) for (let i = 0; i < n; i++) {
+          const bx = bufC[i * 2] - bufD[i * 2], by = bufC[i * 2 + 1] - bufD[i * 2 + 1];
+          bufD[i * 2] *= fx.fg; bufD[i * 2 + 1] *= fx.fg;
+          bufC[i * 2] = bx + bufD[i * 2]; bufC[i * 2 + 1] = by + bufD[i * 2 + 1];
+        }
+      }
       fx.n = n; fx.nb = nb; fx.k = k;
 
       /* 4. Dessin */
@@ -1702,6 +1734,68 @@ body.live #go { display:none; }
       if (t - fx.rafT >= 1000 / FPS - 4) { fx.rafT = t; fxFrame(); } else fxSched();
     });
     else fx.rvfc = fx.vid.requestVideoFrameCallback(() => { fx.got = true; fxFrame(); });
+  };
+  /* Garde-fou anti-« miroir » : quand plusieurs déformations s'additionnent (ex. bouche grande ouverte),
+     l'image peut se replier sur elle-même (une lèvre en double, à l'envers). On mesure ce repli sur
+     tout le visage et on atténue les déformations juste assez pour qu'il n'arrive jamais. */
+  const FG_MIN = .1;
+  const foldGuard = (n, nb, P) => {
+    const { fw, rx, ry, dx, dy, mx, my } = P, h = .01 * fw;
+    const B = (x, y) => {                                    // même calcul que le shader (loupes)
+      for (let i = 0; i < nb; i++) {
+        const cx = bufBC[i * 4], cy = bufBC[i * 4 + 1], ax = bufBD[i * 4], ay = bufBD[i * 4 + 1];
+        const qx = x - cx, qy = y - cy, u = (qx * ax + qy * ay) / bufBC[i * 4 + 2], w = (-qx * ay + qy * ax) / bufBC[i * 4 + 3];
+        const t2 = u * u + w * w;
+        if (t2 < 1) { const f = 1 - t2, m = 1 - bufBD[i * 4 + 2] * f * f; x = cx + qx * m; y = cy + qy * m; }
+      }
+      return [x, y];
+    };
+    const S = [];
+    for (let i = 0; i < n; i++) {                             // là où chaque point tire le plus fort…
+      const ox = bufD[i * 2], oy = bufD[i * 2 + 1], L = Math.hypot(ox, oy) || 1, r = bufR[i];
+      for (const t of [0, .35, .7, 1.05]) S.push(bufC[i * 2] - ox / L * r * t, bufC[i * 2 + 1] - oy / L * r * t);
+    }
+    for (let a = -1.3; a <= 1.31; a += .26) for (let b = -1.2; b <= 2.21; b += .26) S.push(mx + (rx * a + dx * b) * fw, my + (ry * a + dy * b) * fw);   // … et tout le visage
+    const JB = new Float32Array(S.length * 2);
+    for (let j = 0; j < S.length; j += 2) {                  // loupes : dérivées une fois pour toutes
+      const x = S[j], y = S[j + 1], a = B(x - h, y), b = B(x + h, y), c = B(x, y - h), d = B(x, y + h);
+      JB[j * 2] = (b[0] - a[0]) / (2 * h); JB[j * 2 + 1] = (d[0] - c[0]) / (2 * h);
+      JB[j * 2 + 2] = (b[1] - a[1]) / (2 * h); JB[j * 2 + 3] = (d[1] - c[1]) / (2 * h);
+    }
+    const worst = sc => {                                    // repli le plus fort si on garde sc × les déformations
+      let mn = 9;
+      for (let j = 0; j < S.length; j += 2) {
+        const px = S[j], py = S[j + 1];
+        let a = JB[j * 2], b = JB[j * 2 + 1], c = JB[j * 2 + 2], d = JB[j * 2 + 3];
+        const d0 = a * d - b * c;
+        for (let i = 0; i < n; i++) {
+          const ox = bufD[i * 2] * sc, oy = bufD[i * 2 + 1] * sc;
+          const qx = px - (bufC[i * 2] - bufD[i * 2] + ox), qy = py - (bufC[i * 2 + 1] - bufD[i * 2 + 1] + oy), r2 = bufR[i] * bufR[i];
+          const e = (qx * qx + qy * qy) / r2; if (e > 9) continue;
+          const kk = -2 * Math.exp(-e) / r2;
+          a -= ox * kk * qx; b -= ox * kk * qy; c -= oy * kk * qx; d -= oy * kk * qy;
+        }
+        const q = (a * d - b * c) / Math.max(.02, d0);
+        if (q < mn) { mn = q; if (window.__fx && sc === 1) window.__fgw = { j:j / 2, x:(px - mx) / fw, y:(py - my) / fw, q:+q.toFixed(3), a:+a.toFixed(2), b:+b.toFixed(2), c:+c.toFixed(2), d:+d.toFixed(2) }; }
+      }
+      return mn;
+    };
+    if (worst(1) >= FG_MIN) return 1;
+    let lo = 0, hi = 1;
+    for (let it = 0; it < 6; it++) { const m = (lo + hi) / 2; if (worst(m) >= FG_MIN) lo = m; else hi = m; }
+    return lo;
+  };
+  const LIP_UP = new Set([0, 37, 267, 39, 269, 40, 270, 13, 82, 312, 81, 311, 80, 310, 78, 308, 191, 415, 185, 409]);
+  const LIP_LO = new Set([14, 87, 178, 88, 95, 317, 402, 318, 324, 17, 84, 314, 181, 405, 91, 321, 146, 375, 152, 148, 377, 176, 400, 149, 378, 199, 175, 200, 18, 83, 313, 201, 421]);
+  const lmOpen = (p, A, W, H) => {                           // tests : bouche ouverte simulée sur une photo fixe
+    const e1 = p[33], e2 = p[263], u = p[13];
+    const ex = (e2.x - e1.x) * W, ey = (e2.y - e1.y) * H, fw = Math.hypot(ex, ey), dx = -ey / fw, dy = ex / fw;
+    return p.map((q, i) => {
+      if (LIP_UP.has(i)) return q;
+      const yf = ((q.x - u.x) * W * dx + (q.y - u.y) * H * dy) / fw;
+      const w = (i === 61 || i === 291) ? .5 : LIP_LO.has(i) ? 1 : Math.max(0, Math.min(1, yf / .45));
+      return { x:q.x + dx * A * fw * w / W, y:q.y + dy * A * fw * w / H, z:q.z };
+    });
   };
   const sm = (p, i, W, H) => {                               // lissage : évite que la déformation tremble
     const q = p[i]; if (!q) return;
@@ -2189,30 +2283,12 @@ body.live #go { display:none; }
       g.restore();
     },
 
-    /* 😢 larmes qui coulent sur les joues + yeux mouillés */
+    /* 😢 larmes (seulement des gouttes) qui naissent SOUS les yeux et coulent sur les joues */
     pleure: (g, P, a, el, dt) => {
       const S = sprites();
       const { fw, rx, ry, dx, dy } = P, roll = Math.atan2(ry, rx);
       const eyes = [[-1, fx.sm[145], fx.sm[133], fx.sm[33]], [1, fx.sm[374], fx.sm[362], fx.sm[263]]];
-      g.save(); g.lineCap = 'round';
-      for (const [sd, lo, inn, out] of eyes) {               // paupières du bas qui brillent
-        if (!lo || !inn || !out) continue;
-        g.globalAlpha = a * (.45 + .15 * Math.sin(el * 4 + sd));
-        g.strokeStyle = 'rgba(170,215,255,1)'; g.lineWidth = Math.max(3, .04 * fw);
-        g.beginPath(); g.moveTo(inn[0], inn[1]); g.quadraticCurveTo(lo[0] + dx * .02 * fw, lo[1] + dy * .02 * fw, out[0], out[1]); g.stroke();
-      }
-      const grow = Math.min(1, el / 1.2);                     // ruisseau de larmes sur chaque joue (s'allonge au début)
-      for (const [sd, lo, , out] of eyes) {
-        if (!lo || !out) continue;
-        const ox = lo[0] + (out[0] - lo[0]) * .35, oy = lo[1] + (out[1] - lo[1]) * .35, len = .95 * grow;
-        const pt = d => { const w = .025 * Math.sin(d * 9 + el * 3 + sd); return [ox + (dx * d + rx * sd * (.08 * d * d + w)) * fw, oy + (dy * d + ry * sd * (.08 * d * d + w)) * fw]; };
-        for (const [lw, col, al] of [[.075, 'rgba(120,185,255,1)', .45], [.028, 'rgba(235,248,255,1)', .6]]) {
-          g.globalAlpha = a * al; g.strokeStyle = col; g.lineWidth = Math.max(2, lw * fw);
-          g.beginPath(); let p = pt(0); g.moveTo(p[0], p[1]);
-          for (let d = .05; d <= len; d += .05) { p = pt(d); g.lineTo(p[0], p[1]); }
-          g.stroke();
-        }
-      }
+      g.save();
       const L = fx.parts;
       for (const [sd, lo, , out] of eyes) {                  // une nouvelle larme de temps en temps, par œil
         if (!lo || !out) continue;
@@ -2225,16 +2301,12 @@ body.live #go { display:none; }
         t.age += dt;
         if (t.age > t.hold) { t.sp = Math.min(.55, t.sp + dt * .8); t.d += t.sp * dt; }   // gonfle au bord de l'œil, puis coule
         if (t.d > 1.5) { L.splice(i, 1); continue; }
-        const ox = lo[0] + (out[0] - lo[0]) * t.f, oy = lo[1] + (out[1] - lo[1]) * t.f;
+        const ox = lo[0] + (out[0] - lo[0]) * t.f + dx * .07 * fw, oy = lo[1] + (out[1] - lo[1]) * t.f + dy * .07 * fw;   // juste sous la paupière
         const side = t.sd * t.dr * t.d;                      // s'écarte un peu vers l'extérieur en descendant
         const px = ox + (dx * t.d + rx * side) * fw, py = oy + (dy * t.d + ry * side) * fw;
         const al = a * Math.min(1, t.age / .25, (1.5 - t.d) / .3);
-        if (t.d > .02) {                                     // traînée mouillée
-          g.globalAlpha = al * .5; g.strokeStyle = 'rgba(175,220,255,1)'; g.lineWidth = Math.max(3, .045 * fw);
-          g.beginPath(); g.moveTo(ox, oy); g.quadraticCurveTo(ox + dx * t.d * .5 * fw, oy + dy * t.d * .5 * fw, px, py); g.stroke();
-        }
         const grow = Math.min(1, t.age / Math.max(.1, t.hold)), w = .19 * fw * t.sz * (.5 + .5 * grow), h = w * S.tear.height / S.tear.width;
-        g.save(); g.globalAlpha = al; g.translate(px, py); g.rotate(roll); g.drawImage(S.tear, -w / 2, -h * .72, w, h); g.restore();
+        g.save(); g.globalAlpha = al; g.translate(px, py); g.rotate(roll); g.drawImage(S.tear, -w / 2, -h * .12, w, h); g.restore();   // la pointe au départ, la goutte en dessous
       }
       g.restore();
     },
@@ -2312,7 +2384,7 @@ body.live #go { display:none; }
      sans prévenir OBS d'une « vidéo coupée », et le clone garde la caméra vivante. */
   const fxStart = async key => {
     if (fx.on || hungUp) return false;
-    fx.on = true; fx.key = key; fx.t0 = 0; fx.face = 0; fx.seen = 0; fx.miss = 0; fx.sm = {}; fx.last = 0; fx.parts = []; fx.bs = {};
+    fx.on = true; fx.key = key; fx.fg = 1; fx.t0 = 0; fx.face = 0; fx.seen = 0; fx.miss = 0; fx.sm = {}; fx.last = 0; fx.parts = []; fx.bs = {};
     fx.guy = null; fx.mask = false; segPrev = null; segImg = null;
     document.body.classList.add('fxing');
     fxBanPaint(); clearInterval(fx.ban); fx.ban = setInterval(fxBanPaint, 250);
@@ -2394,7 +2466,7 @@ body.live #go { display:none; }
   if (frag.has('debug') || query.has('debug')) { window.__fx = fx; window.__fxc = { segMask, perCv, segIn }; }                      // &debug dans l'adresse : état du filtre lisible (tests)
   const fxNext = () => { if (!fx.on && fxQ.length) fxStart(fxQ.shift()); };
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', idee:'pleure', yeux:'mini', bouche:'derriere' };   // anciens noms → leur remplaçant (triste, mechant, choque, degoute : retirés)
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere' };   // anciens noms → leur remplaçant (triste, mechant, choque, degoute : retirés)
   /* --- Demande de filtre (SAMMI ou bouton test) : lancé tout de suite, ou mis en file --- */
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
