@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>Cam bureau filtres</title>
+<!-- Empreinte du moteur des filtres (MediaPipe) : même fichier que camtel.html -->
+<script type="importmap">{"integrity":{"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/vision_bundle.mjs":"sha384-v3GXk0Hasw+L0V/A+IZbJSuL8ib7zdTjbdUDM8EkikjcUne7z2LSPh8RNuxiZUU2"}}</script>
+<script>
+/* ============================================================
+   CAM BUREAU — calque « filtres visage » pour OBS
+   PROTOTYPE (piste A) : un seul filtre, Zinzin, pour mesurer la charge.
+
+   La vraie source caméra (ZV-1F → HD60 S) reste intacte. Cette page est
+   une SOURCE NAVIGATEUR posée juste au-dessus :
+   - au repos : transparente, caméra fermée, rien ne calcule ;
+   - pendant un filtre : lit « OBS Virtual Camera » (Type de sortie :
+     Source → la cam), déforme l'image et l'affiche par-dessus.
+   Sécurités : pas de visage vu, plus d'image, erreur → le calque
+   s'efface et la cam normale reste à l'antenne.
+
+   URL de la source navigateur (1920×1080, FPS personnalisé 60) :
+   https://suunbear.github.io/suunbear-cam/cambureau.html#chat=TA_SESSION
+   Options de test à ajouter après le # :
+     &stats  = panneau de mesures (VISIBLE À L'ANTENNE : tests hors live)
+     &test   = lance Zinzin 5 s après le chargement (Actualiser la source = relancer)
+     &dur=30 = durée du filtre en secondes
+
+   SAMMI → HTTP Request GET (la cam tel ignore cet événement) :
+   https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"zinzin"}}
+
+   OBS doit être lancé avec l'option --enable-media-stream.
+   Caméra virtuelle allumée SEULEMENT pendant les filtres (VCAM_AUTO) :
+   source navigateur → Autorisations de la page : « Accès complet à OBS ».
+   ============================================================ */
+const CONFIG = {
+  VCAM_AUTO        : true,  // la page allume la caméra virtuelle au 1er filtre et l'éteint après.
+                            // false = tu la gères toi-même (allumée tout le live)
+  VCAM_WARMUP      : 0.4,   // s d'attente après l'allumage, avant de lire l'image
+  VCAM_STOP_DELAY  : 10,    // s après le dernier filtre avant d'éteindre (évite on/off en rafale)
+  CAM_LABEL        : 'OBS Virtual Camera',  // nom de la caméra lue (la sortie « Source » d'OBS)
+  WIDTH            : 1920,
+  HEIGHT           : 1080,
+  VIDEO_FPS        : 60,    // images/s lues et affichées. 30 = moitié moins lourd (mettre aussi la source à 30)
+  DETECT_FPS       : 30,    // suivis du visage par seconde ; entre deux, le mouvement est prédit
+  PREDICT          : true,  // prédiction entre deux suivis (fluide à 60 i/s)
+  SMOOTH           : 0.55,  // lissage du suivi (comme la cam tel)
+  FACE_HOLD        : 1.5,   // s sans visage avant que le calque s'efface (la cam normale revient)
+
+  FILTERS          : true,
+  FILTER_DURATION  : 90,    // secondes par filtre (1 min 30)
+  FILTER_STRENGTH  : 1,
+  FILTER_LEVELS    : { zinzin:1 },
+  FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
+  OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
+  FILTER_QUEUE_MAX : 10,
+  FILTER_PRELOAD   : true   // moteur prêt au chargement → 1er filtre immédiat (au repos : aucun calcul)
+};
+</script>
+<style>
+html, body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; }
+#fx  { position:fixed; inset:0; width:100%; height:100%; display:block; opacity:0; pointer-events:none; }
+#fx.on { opacity:1; }
+#src { position:fixed; left:0; top:0; width:2px; height:2px; opacity:.01; pointer-events:none; }  /* source du moteur, invisible */
+#hud { position:fixed; left:14px; top:14px; z-index:5; display:none; padding:9px 12px; border-radius:8px;
+       background:rgba(0,0,0,.75); color:#eee; font:600 16px/1.45 Consolas, ui-monospace, monospace; white-space:pre; }
+#hud.on { display:block; }
+</style>
+</head>
+<body>
+<video id="src" muted playsinline autoplay disablepictureinpicture></video>
+<canvas id="fx"></canvas>
+<div id="hud"></div>
+
+<script>
+(() => {
+  const C = CONFIG;
+  const frag  = new URLSearchParams(location.hash.slice(1)), query = new URLSearchParams(location.search);
+  const has   = k => frag.has(k) || query.has(k);
+  const get   = k => (frag.get(k) || query.get(k) || '').trim();
+  const SESSION = get('chat');
+  if (+get('dur') > 0) C.FILTER_DURATION = +get('dur');
+
+  const $ = s => document.querySelector(s);
+  const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
+  cv.style.transition = 'opacity ' + C.OVERLAY_FADE + 's linear';
+  const log = (...a) => console.log('[cambureau]', ...a);
+  const ST = { frames:0, dets:0, detMs:0, detMax:0, fps:0, dps:0, avg:0, max:0, cam:'', err:'', ws:false, vcam:null };
+
+  /* ---------- Filtres (définitions reprises de camtel.html) ----------
+     loupes : [points (centre = moyenne), largeur, hauteur, force] en fractions de l'écart entre les yeux */
+  const EYE_R = [33, 133, 159, 145], EYE_L = [263, 362, 386, 374];
+  const MOUTH = [61, 291, 13, 14], NOSE = [1, 98, 327];
+  const FX = {
+    zinzin: { name:'🤪 Zinzin', bulge:[
+      [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72],   // gros yeux…
+      [MOUTH, .92, .55, .70],                           // … et grande bouche
+      [NOSE,  .28, .24, -.30]
+    ]}
+  };
+  Object.values(FX).forEach(f => {
+    const need = new Set([33, 263]);
+    (f.pts || []).forEach(q => need.add(q[0]));
+    (f.bulge || []).forEach(b => b[0].forEach(i => need.add(i)));
+    f.need = [...need];
+  });
+
+  /* ---------- Moteur de suivi (chargé une fois, puis au repos) ---------- */
+  const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';
+  const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+  let lm = null, lmP = null, lmState = 'off', lmGpu = null, lmTs = 0;
+  const lmTime = () => (lmTs = Math.max(lmTs + 1, performance.now()));
+  const ensureLM = () => lmP || (lmP = (async () => {
+    lmState = 'load';
+    const V = await import(MP_BASE + '/vision_bundle.mjs');
+    const files = await V.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+    const make = delegate => V.FaceLandmarker.createFromOptions(files, {
+      baseOptions:{ modelAssetPath:MP_MODEL, delegate }, runningMode:'VIDEO', numFaces:1,
+      outputFaceBlendshapes:false                    // (Exagéré en aura besoin plus tard)
+    });
+    try { lm = await make('GPU'); lmGpu = true; }
+    catch (_) { lm = await make('CPU'); lmGpu = false; }
+    try {                                            // échauffement : le 1er filtre démarre sans à-coup
+      const w = document.createElement('canvas'); w.width = w.height = 64;
+      w.getContext('2d').fillRect(0, 0, 64, 64);
+      lm.detectForVideo(w, lmTime());
+    } catch (_) {}
+    lmState = 'ok';
+    return lm;
+  })().catch(e => { lmP = null; lmState = 'err'; ST.err = 'moteur : ' + (e.message || e); throw e; }));
+
+  /* ---------- Déformation WebGL, dessinée DIRECTEMENT sur le calque (pas de copie en plus) ---------- */
+  const FX_N = 32, FX_B = 8;
+  const VS = 'attribute vec2 a;varying vec2 v;'
+           + 'void main(){v=vec2((a.x+1.)*.5,(1.-a.y)*.5);gl_Position=vec4(a,0.,1.);}';
+  const FS = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n'
+           + 'uniform sampler2D t;uniform vec2 res;uniform int n;uniform int nb;'
+           + 'uniform vec2 c[' + FX_N + '];uniform vec2 dd[' + FX_N + '];uniform float r[' + FX_N + '];'
+           + 'uniform vec4 bc[' + FX_B + '];uniform vec4 bd[' + FX_B + '];varying vec2 v;'
+           + 'void main(){vec2 p=v*res;vec2 s=p;'
+           + 'for(int i=0;i<' + FX_B + ';i++){if(i>=nb)break;vec2 d=s-bc[i].xy;vec2 ax=bd[i].xy;vec2 ay=vec2(-ax.y,ax.x);'
+           + 'float u=dot(d,ax)/bc[i].z;float w=dot(d,ay)/bc[i].w;float t2=u*u+w*w;'
+           + 'if(t2<1.){float f=1.-t2;s=bc[i].xy+d*(1.-bd[i].z*f*f);}}'
+           + 'vec2 o=vec2(0.);'
+           + 'for(int i=0;i<' + FX_N + ';i++){if(i>=n)break;vec2 q=p-c[i];o+=dd[i]*exp(-dot(q,q)/(r[i]*r[i]));}'
+           + 'gl_FragColor=texture2D(t,clamp((s-o)/res,0.,1.));}';
+  let glp = null;
+  cv.addEventListener('webglcontextlost', e => { e.preventDefault(); glp = null; if (fx.on) fxEnd(true); });
+  const glInit = () => {
+    if (glp) return glp;
+    const gl = cv.getContext('webgl', { alpha:false, antialias:false, depth:false, stencil:false,
+                                        premultipliedAlpha:false, preserveDrawingBuffer:false, powerPreference:'high-performance' });
+    if (!gl || gl.isContextLost()) throw new Error('WebGL indisponible (accélération matérielle des sources navigateur ?)');
+    const sh = (type, src) => {
+      const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    };
+    const pr = gl.createProgram();
+    gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    gl.useProgram(pr);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const a = gl.getAttribLocation(pr, 'a');
+    gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+    gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+    [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE));
+    [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER].forEach(k => gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR));
+    const u = k => gl.getUniformLocation(pr, k);
+    glp = { gl, res:u('res'), n:u('n'), c:u('c'), d:u('dd'), r:u('r'), nb:u('nb'), bc:u('bc'), bd:u('bd') };
+    gl.uniform1i(u('t'), 0);
+    return glp;
+  };
+
+  /* ---------- État du filtre ---------- */
+  const fx = { on:false, ending:false, key:'', t0:0, face:0, seen:0, miss:0, sm:{}, last:0, now:0, tDet:0,
+               lastFrame:0, track:null, rvfc:0, raf:0, useRaf:false, got:false, drawn:null };
+  const fxQ = [];
+  const bufC = new Float32Array(FX_N * 2), bufD = new Float32Array(FX_N * 2), bufR = new Float32Array(FX_N);
+  const bufBC = new Float32Array(FX_B * 4), bufBD = new Float32Array(FX_B * 4);
+
+  /* lissage + vitesse de chaque point (pour prédire entre deux suivis) */
+  const sm = (p, i, W, H, t) => {
+    const q = p[i]; if (!q) return;
+    const x = q.x * W, y = q.y * H, o = fx.sm[i];
+    if (!o) { fx.sm[i] = [x, y, 0, 0]; return; }
+    const nx = o[0] + (x - o[0]) * C.SMOOTH, ny = o[1] + (y - o[1]) * C.SMOOTH, gap = t - fx.tDet;
+    if (fx.tDet && gap > 0 && gap < 120) { o[2] = o[2] * .5 + (nx - o[0]) / gap * .5; o[3] = o[3] * .5 + (ny - o[1]) / gap * .5; }
+    else { o[2] = 0; o[3] = 0; }
+    o[0] = nx; o[1] = ny;
+  };
+  const at = i => {                                  // position du point à l'instant de l'image affichée
+    const o = fx.sm[i]; if (!o) return null;
+    if (!C.PREDICT) return o;
+    const a = Math.min(Math.max(0, fx.now - fx.tDet), 50);
+    return [o[0] + o[2] * a, o[1] + o[3] * a];
+  };
+
+  const frame = () => {
+    if (!fx.on) return;
+    const W = vid.videoWidth, H = vid.videoHeight, t = performance.now();
+    const dt = Math.min(0.1, (t - (fx.last || t)) / 1000);
+    fx.last = fx.now = t; ST.frames++;
+    if (!fx.useRaf) fx.lastFrame = t;
+    else {                                           // secours : on vérifie que l'image avance vraiment
+      const q = vid.getVideoPlaybackQuality ? vid.getVideoPlaybackQuality().totalVideoFrames : -1;
+      if (q !== fx.q) { fx.q = q; fx.lastFrame = t; }
+    }
+    if (W && H && glp) {
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const F = FX[fx.key];
+
+      /* 1. Suivi du visage, DETECT_FPS fois par seconde (le reste est prédit) */
+      if (lm && t - fx.tDet >= 1000 / C.DETECT_FPS - 4) {
+        const t0 = performance.now(); let p = null;
+        try { const res = lm.detectForVideo(vid, lmTime()); p = res && res.faceLandmarks && res.faceLandmarks[0]; } catch (_) {}
+        const ms = performance.now() - t0;
+        ST.dets++; ST.detMs += ms; if (ms > ST.detMax) ST.detMax = ms;
+        fx.miss = p ? 0 : fx.miss + 1;
+        if (p) { fx.seen = t; F.need.forEach(i => sm(p, i, W, H, t)); }
+        fx.tDet = t;
+      }
+      const faceOn = fx.seen && fx.miss < 3;
+      fx.face = Math.max(0, Math.min(1, fx.face + (faceOn ? 1 : -1) * dt / 0.25));
+
+      /* 2. Intensité : montée, maintien, descente */
+      const el = fx.t0 ? (t - fx.t0) / 1000 : 0, fd = Math.max(0.1, C.FILTER_FADE), D = Math.max(3, C.FILTER_DURATION);
+      const amt = fx.t0 ? Math.max(0, Math.min(1, el / fd, (D - el) / fd)) : 0;
+      if (fx.t0 && el >= D && !fx.ending) fxEnd();
+      const lvl = (C.FILTER_LEVELS && C.FILTER_LEVELS[fx.key] != null) ? C.FILTER_LEVELS[fx.key] : 1;
+      const k = (C.FILTER_STRENGTH == null ? 1 : C.FILTER_STRENGTH) * lvl * amt * fx.face;
+
+      /* 3. Loupes et points, dans le repère du visage (suit l'inclinaison de la tête) */
+      let n = 0, nb = 0;
+      const e1 = at(33), e2 = at(263);
+      if (k > 0.001 && e1 && e2) {
+        const ex = e2[0] - e1[0], ey = e2[1] - e1[1], fw = Math.hypot(ex, ey) || 1;
+        const rx = ex / fw, ry = ey / fw, dx = -ry, dy = rx, mx = (e1[0] + e2[0]) / 2, my = (e1[1] + e2[1]) / 2;
+        for (const [ids, bw, bh, bs] of (F.bulge || [])) {
+          if (nb >= FX_B) break;
+          let cx = 0, cy = 0, m = 0;
+          for (const i of ids) { const q = at(i); if (q) { cx += q[0]; cy += q[1]; m++; } }
+          if (!m) continue;
+          bufBC[nb * 4] = cx / m; bufBC[nb * 4 + 1] = cy / m; bufBC[nb * 4 + 2] = bw * fw; bufBC[nb * 4 + 3] = bh * fw;
+          bufBD[nb * 4] = rx; bufBD[nb * 4 + 1] = ry; bufBD[nb * 4 + 2] = Math.max(-0.9, Math.min(0.9, bs * k));
+          nb++;
+        }
+        for (const [i, kd, ki, kr] of (F.pts || [])) {
+          const p = at(i); if (!p || n >= FX_N) continue;
+          const sd = Math.sign((p[0] - mx) * rx + (p[1] - my) * ry);
+          let ox = (dx * kd - rx * sd * ki) * fw * k, oy = (dy * kd - ry * sd * ki) * fw * k;
+          const rad = kr * fw, L = Math.hypot(ox, oy), mxL = rad * 0.75;
+          if (L > mxL) { ox *= mxL / L; oy *= mxL / L; }
+          bufC[n * 2] = p[0] + ox; bufC[n * 2 + 1] = p[1] + oy;
+          bufD[n * 2] = ox;        bufD[n * 2 + 1] = oy;
+          bufR[n] = rad; n++;
+        }
+      }
+
+      /* 4. Dessin */
+      const gl = glp.gl;
+      gl.viewport(0, 0, W, H);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vid);
+      gl.uniform2f(glp.res, W, H); gl.uniform1i(glp.n, n); gl.uniform1i(glp.nb, nb);
+      gl.uniform2fv(glp.c, bufC); gl.uniform2fv(glp.d, bufD); gl.uniform1fv(glp.r, bufR);
+      gl.uniform4fv(glp.bc, bufBC); gl.uniform4fv(glp.bd, bufBD);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+      /* 5. Le calque ne couvre la cam que si ton visage est vu (sinon : cam normale, et jamais d'image parasite) */
+      const want = !!(fx.t0 && !fx.ending && fx.seen && t - fx.seen < C.FACE_HOLD * 1000);
+      if (want !== cv.classList.contains('on')) cv.classList.toggle('on', want);
+      if (fx.drawn) { fx.drawn(); fx.drawn = null; }
+    }
+    sched();
+  };
+  /* une image dessinée par image caméra ; secours au rythme de la source navigateur */
+  const sched = () => {
+    if (!fx.on) return;
+    if (fx.useRaf) fx.raf = requestAnimationFrame(frame);
+    else fx.rvfc = vid.requestVideoFrameCallback(() => { fx.got = true; frame(); });
+  };
+
+  /* ---------- Caméra virtuelle ---------- */
+  const CAM_RE = new RegExp(C.CAM_LABEL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+  const camMsg = e => !e ? 'erreur'
+    : e.name === 'NotAllowedError'      ? 'accès refusé (OBS lancé sans --enable-media-stream ?)'
+    : e.name === 'NotReadableError'     ? 'caméra virtuelle occupée ou pas démarrée'
+    : e.name === 'OverconstrainedError' ? 'caméra virtuelle introuvable'
+    : (e.message || e.name);
+  const findCam = async () => {
+    if (!md || !md.getUserMedia) throw new Error('pas d\'accès caméra (--enable-media-stream ?)');
+    const list = async () => (await md.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    let cams = await list(), hit = cams.find(d => CAM_RE.test(d.label));
+    if (hit) return hit.deviceId;
+    if (!cams.some(d => d.label)) {                  // noms cachés : on les débloque par le micro (ne touche jamais à l'Elgato)
+      try { const s = await md.getUserMedia({ audio:true }); s.getTracks().forEach(tr => tr.stop()); } catch (_) {}
+      cams = await list(); hit = cams.find(d => CAM_RE.test(d.label));
+      if (hit) return hit.deviceId;
+    }
+    throw new Error(cams.some(d => d.label)
+      ? 'caméra virtuelle introuvable. Vues : ' + cams.map(d => d.label || '?').join(', ')
+      : 'noms des caméras cachés (--enable-media-stream ?)');
+  };
+
+  /* ---------- Caméra virtuelle allumée seulement pendant les filtres ----------
+     Fonctions intégrées d'OBS (window.obsstudio), présentes seulement si la source
+     navigateur a « Accès complet à OBS ». On n'éteint que ce que la page a allumé. */
+  const OBS = window.obsstudio, VKEY = 'cambureau.vcam';
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const vcamCan = () => !!(C.VCAM_AUTO && OBS && OBS.startVirtualcam && OBS.stopVirtualcam && OBS.getStatus);
+  const vcamStatus = () => new Promise(r => {
+    if (!OBS || !OBS.getStatus) return r(null);
+    setTimeout(() => r(null), 1000);
+    try { OBS.getStatus(s => r(!!(s && s.virtualcam))); } catch (_) { r(null); }
+  });
+  let vcamOurs = false, vcamStopT = 0;
+  const flag = on => { try { on ? localStorage.setItem(VKEY, '1') : localStorage.removeItem(VKEY); } catch (_) {} };
+  const vcamOn = async () => {
+    clearTimeout(vcamStopT);
+    if (!vcamCan() || await vcamStatus()) return;    // pas d'accès, ou déjà allumée
+    OBS.startVirtualcam(); vcamOurs = true; flag(true);
+    for (let i = 0; i < 25 && !(await vcamStatus()); i++) await sleep(120);   // ≈ 0,3 à 1 s
+    if (!(await vcamStatus())) throw new Error('la caméra virtuelle ne démarre pas');
+    await sleep(C.VCAM_WARMUP * 1000);
+  };
+  const vcamOff = now => {
+    clearTimeout(vcamStopT);
+    if (!vcamOurs) return;
+    const off = () => { if (fx.on || fxQ.length) return; try { OBS.stopVirtualcam(); } catch (_) {} vcamOurs = false; flag(false); };
+    if (now) off(); else vcamStopT = setTimeout(off, C.VCAM_STOP_DELAY * 1000);
+  };
+  addEventListener('beforeunload', () => { if (vcamOurs) { try { OBS.stopVirtualcam(); } catch (_) {} flag(false); } });
+  try {                                              // la page s'était fermée en plein filtre → on éteint ce qu'elle avait allumé
+    if (vcamCan() && localStorage.getItem(VKEY) === '1') { OBS.stopVirtualcam(); flag(false); }
+  } catch (_) {}
+
+  /* ---------- Démarrage / fin ---------- */
+  const fxStart = async key => {
+    if (fx.on) return;
+    Object.assign(fx, { on:true, ending:false, key, t0:0, face:0, seen:0, miss:0, sm:{}, last:0, tDet:0,
+                        lastFrame:performance.now(), useRaf:false, got:false, q:-1 });
+    ST.err = '';
+    try {
+      await ensureLM();
+      glInit();
+      await vcamOn();
+      const id = await findCam();
+      const s = await md.getUserMedia({ video:{ deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
+                                               frameRate:{ ideal:C.VIDEO_FPS, max:C.VIDEO_FPS } } });
+      const tr = s.getVideoTracks()[0];
+      if (!fx.on) { tr.stop(); return; }
+      fx.track = tr; ST.cam = tr.label;
+      tr.addEventListener('ended', () => { ST.err = 'caméra virtuelle coupée'; fxEnd(true); });
+      vid.srcObject = s;
+      await vid.play();
+      const first = new Promise((r, j) => { fx.drawn = r; setTimeout(() => j(new Error('pas d\'image de la caméra virtuelle')), 4000); });
+      sched();
+      setTimeout(() => {                             // images jamais signalées → mode secours
+        if (fx.on && !fx.got) { try { vid.cancelVideoFrameCallback(fx.rvfc); } catch (_) {} fx.useRaf = true; sched(); }
+      }, 700);
+      await first;
+      if (!fx.on) return;
+      fx.t0 = performance.now();                     // le compte à rebours part maintenant
+      log('filtre', key, 'lancé ·', tr.label, JSON.stringify(tr.getSettings()));
+    } catch (e) {
+      if (fx.on) { ST.err = camMsg(e); log('échec :', ST.err); await fxEnd(true); }
+    }
+  };
+  const fxEnd = async failed => {
+    if (!fx.on || fx.ending) return;
+    fx.ending = true;
+    const shown = cv.classList.contains('on');
+    cv.classList.remove('on');                       // la cam normale réapparaît
+    if (shown) await new Promise(r => setTimeout(r, C.OVERLAY_FADE * 1000 + 80));
+    fxCleanup();
+    if (fxQ.length) setTimeout(fxNext, failed ? 1500 : 300);
+    else vcamOff();                                  // plus rien en attente → caméra virtuelle éteinte après VCAM_STOP_DELAY
+  };
+  const fxCleanup = () => {
+    fx.on = false; fx.ending = false; fx.t0 = 0; fx.drawn = null;
+    cancelAnimationFrame(fx.raf);
+    try { vid.cancelVideoFrameCallback(fx.rvfc); } catch (_) {}
+    vid.srcObject = null;
+    if (fx.track) fx.track.stop();                   // caméra fermée : plus rien ne calcule
+    fx.track = null;
+  };
+  const fxNext = () => { if (!fx.on && fxQ.length) fxStart(fxQ.shift()); };
+
+  /* garde-fou : plus d'image depuis 1 s → le calque s'efface (jamais d'image figée à l'antenne) */
+  setInterval(() => {
+    if (fx.on && fx.t0 && !fx.ending && performance.now() - fx.lastFrame > 1000) {
+      ST.err = 'plus d\'image de la caméra virtuelle → calque retiré'; fxEnd(true);
+    }
+  }, 250);
+
+  const fxRequest = d => {
+    const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
+    const key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    if (!FX[key]) { log('filtre inconnu (prototype : zinzin seulement) :', key); return; }
+    if (fx.on) { if (fxQ.length < C.FILTER_QUEUE_MAX) fxQ.push(key); return; }
+    fxStart(key);
+  };
+
+  /* ---------- Déclencheur : Social Stream Ninja, canal 1 (comme la cam tel) ---------- */
+  const handle = d => {
+    if (!d || typeof d !== 'object') return;
+    if (d.content) d = d.content;
+    if (String(d.event || '').toLowerCase() === 'filtre_bureau' && C.FILTERS) fxRequest(d);
+  };
+  if (SESSION) {
+    let ws = null, retry = null;
+    const connect = () => {
+      clearTimeout(retry);
+      try {
+        ws = new WebSocket('wss://io.socialstream.ninja/join/' + encodeURIComponent(SESSION) + '/1');
+        ws.onopen  = () => { ST.ws = true; };
+        ws.onmessage = ev => {
+          let d;
+          try { d = JSON.parse(ev.data); } catch (_) { return; }
+          if (d && d.action && d.value !== undefined) d = d.value;
+          if (typeof d === 'string') { try { d = JSON.parse(d); } catch (_) {} }
+          if (d && d.overlayNinja) d = d.overlayNinja;
+          if (d && typeof d === 'object' && (d.event || d.content)) handle(d);
+        };
+        ws.onclose = () => { ST.ws = false; retry = setTimeout(connect, 3000); };
+        ws.onerror = () => { try { ws.close(); } catch (_) {} };
+      } catch (_) { retry = setTimeout(connect, 3000); }
+    };
+    connect();
+  }
+
+  /* ---------- Panneau de mesures (&stats) ---------- */
+  const f1 = x => x.toFixed(1).replace('.', ',');
+  const hudPaint = () => {
+    const s = fx.track && fx.track.readyState === 'live' ? fx.track.getSettings() : null;
+    const el = fx.t0 ? Math.floor((performance.now() - fx.t0) / 1000) : 0;
+    hud.textContent = [
+      'CAM BUREAU · prototype',
+      'Moteur : ' + ({ ok:'prêt ✅ ' + (lmGpu ? 'GPU' : 'CPU ⚠️'), load:'préparation…', err:'erreur ⚠️', off:'en attente' }[lmState]),
+      'SSN    : ' + (!SESSION ? 'pas de #chat= ⚠️' : ST.ws ? 'connecté ✅' : 'connexion…'),
+      'Cam virtuelle : ' + (ST.vcam == null ? 'état inconnu' : ST.vcam ? 'allumée' : 'éteinte')
+                  + (!C.VCAM_AUTO ? ' (gérée à la main)' : vcamCan() ? ' (auto ✅)' : ' (auto impossible : « Accès complet à OBS » ?) ⚠️'),
+      'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + s.width + '×' + s.height + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
+      'Calque : ' + (fx.on ? ST.fps + ' i/s · suivi ' + ST.dps + '/s · ' + f1(ST.avg) + ' ms (max ' + f1(ST.max) + ') · visage '
+                             + (fx.face > .5 ? 'vu' : 'perdu') + (fx.useRaf ? ' · mode secours' : '') : '—'),
+      'État   : ' + (fx.on ? fx.key + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
+                  + (fxQ.length ? ' · file ' + fxQ.length : ''),
+      ST.err ? 'Erreur : ' + ST.err : ''
+    ].filter(Boolean).join('\n');
+  };
+  setInterval(() => {
+    ST.fps = ST.frames; ST.dps = ST.dets; ST.avg = ST.dets ? ST.detMs / ST.dets : 0; ST.max = ST.detMax;
+    ST.frames = 0; ST.dets = 0; ST.detMs = 0; ST.detMax = 0;
+    if (hud.classList.contains('on')) { vcamStatus().then(v => { ST.vcam = v; }); hudPaint(); }
+  }, 1000);
+  if (has('stats')) { hud.classList.add('on'); hudPaint(); }
+
+  /* ---------- Lancement ---------- */
+  if (C.FILTERS && C.FILTER_PRELOAD) setTimeout(() => ensureLM().catch(() => {}), 1500);
+  if (has('test')) setTimeout(() => fxRequest({ meta:{ nom:get('test') || 'zinzin' } }), 5000);
+})();
+</script>
+</body>
+</html>
