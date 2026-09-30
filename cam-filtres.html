@@ -373,7 +373,15 @@ body.live #feed.gest.hidden     { pointer-events:none; }
   align-items:flex-start;
   gap:8px;
 }
+/* Sous ⋯ : bascule caméra avant / arrière (en direct) */
+#bFlip {
+  position:fixed;
+  top:calc(env(safe-area-inset-top, 0px) + 62px);
+  right:10px;
+  z-index:10;
+}
 /* Avant verrouillage : voyant PC + ⚙️ seulement. */
+body:not(.live) #bFlip,
 body:not(.live) #bMic,
 body:not(.live) #bSnd,
 body:not(.live) #bChat,
@@ -654,8 +662,12 @@ body.live #go { display:none; }
 </div>
 
 <div id="menu">
+  <button id="mReload">⟳ &nbsp;Actualiser</button>
+  <hr>
   <button id="mEnd" class="danger">⏻ &nbsp;Raccrocher</button>
 </div>
+
+<button class="btn" id="bFlip" aria-label="Caméra avant / arrière">🔄</button>
 
 <div id="sheet">
   <label for="sCam">📷 Caméra</label>
@@ -1289,6 +1301,11 @@ body.live #go { display:none; }
     toast('Débit : ' + pref.rate + ' kbps');
   });
   $('#sOk').addEventListener('click', () => sheetOpen(false));
+  $('#bFlip').addEventListener('click', e => { e.stopPropagation(); $('#sFlip').click(); });     // raccourci sous ⋯
+  $('#mReload').addEventListener('click', () => {                                               // ⋯ → Actualiser
+    menu.classList.remove('open');
+    if (confirm('Actualiser la page ?\nOBS perd l\'image quelques secondes.')) location.reload();
+  });
   document.querySelectorAll('#sFx button, #sFx2 button').forEach(b =>                            // tests sans SAMMI
     b.addEventListener('click', () => fxRequest({ meta:{ nom:b.dataset.fx } })));
 
@@ -1423,6 +1440,7 @@ body.live #go { display:none; }
   /* Déformations : [point du visage, vers le bas, vers le centre, rayon]
      En fractions de l'écart entre les yeux : ça suit la distance au tel.
      « vers le bas » négatif = vers le haut. Indices = carte MediaPipe Face Mesh. */
+  const fumeOn = el => el > 1.4 && (el - 1.4) % 3 < .9;   // Fâché : jets de vapeur (et tremblement) toutes les 3 s
   const EYE_R = [33, 133, 159, 145], EYE_L = [263, 362, 386, 374];   // centres des yeux
   const MOUTH = [61, 291, 13, 14], NOSE = [1, 98, 327];
   const FX = {
@@ -1498,19 +1516,23 @@ body.live #go { display:none; }
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ]},
-    fache: { name:'😠 Fâché', stk:'fache', inv:true, bulge:[   // gros yeux rouges en feu + sourcils en V + bouche crispée
-      [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72]    // yeux énormes, comme Zinzin (les iris rouges et les flammes sont dessinés par-dessus)
-    ], pts:[
-      [107,  .11,  .07, .18], [336,  .11,  .07, .18],   // bouts intérieurs des sourcils : bas et serrés
-      [105,  .04,  .02, .15], [334,  .04,  .02, .15],
-      [70,  -.07,    0, .16], [300, -.07,    0, .16],   // bouts extérieurs qui remontent → V
+    fache: { name:'😠 Fâché', stk:'fache', pts:[      // la colère qui bout : regard noir rouge, visage qui rougit, vapeur…
+      [107,  .15,  .09, .20], [336,  .15,  .09, .20],   // bouts intérieurs des sourcils : très bas et serrés
+      [105,  .06,  .03, .16], [334,  .06,  .03, .16],
+      [70,  -.06,    0, .16], [300, -.06,    0, .16],   // bouts extérieurs qui remontent → V
+      [157,  .06,    0, .09], [384,  .06,    0, .09],   // yeux en fente, en biais : regard noir
+      [160,  .03,    0, .08], [387,  .03,    0, .08],
+      [145, -.04,    0, .09], [374, -.04,    0, .09],
       // bouche de colère (lèvres serrées et pincées, coins tirés vers le bas en arc, menton qui remonte)
       [61,   .15,  .02, .12], [291,  .15,  .02, .12],
       [40,   .05,    0, .09], [270,  .05,    0, .09], [91,  .06, 0, .09], [321, .06, 0, .09],
       [0,    .025,   0, .08], [17,  -.045,   0, .10],
       [152, -.06,    0, .20],
       [98,     0, -.03, .07], [327,    0, -.03, .07]    // narines qui se gonflent
-    ]},
+    ], anim:el => {                                     // ça tremble de rage quand la vapeur sort
+      if (!fumeOn(el)) return [];
+      return [[1, .011 * Math.sin(el * 91), .011 * Math.sin(el * 67 + 1), 1.5]];
+    }},
     /* 🤯 Exagéré : tête gonflée + TES expressions exagérées en direct (bouche ouverte → énorme, sourire → jusqu'aux oreilles…) */
     exagere: { name:'🤯 Exagéré', dyn:true, bulge:[
       [[1, 4, 6], 1.3, 1.6, .14]                          // tête un peu gonflée (une seule loupe : pas de plis)
@@ -1557,10 +1579,12 @@ body.live #go { display:none; }
   };
 
   /* points à suivre pour chaque filtre (déformations + loupes + autocollants) */
+  const FACE_OVAL = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377,
+                     152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];   // tour du visage
   const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
                     [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
   const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
-                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 473].concat(EYE_RING[0], EYE_RING[1]) };
+                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 473, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
     (f.pts || []).forEach(q => need.add(q[0]));
@@ -2293,6 +2317,7 @@ body.live #go { display:none; }
     for (let k = 0; k < 14; k++) { const s = warpSrc(x, y); x += (p[0] - s[0]) * .6; y += (p[1] - s[1]) * .6; }
     return [x, y];
   };
+  let flushCv = null, puffSpr = null;                        // Fâché : calque de rougeur, bouffée de vapeur
   const irisOf = eye => {                                    // centre de l'iris de cet œil (468 / 473)
     const c = fx.sm[eye[0]]; if (!c) return null;
     let best = null, bd = 1e9;
@@ -2328,50 +2353,104 @@ body.live #go { display:none; }
       g.restore();
     },
 
-    /* 😠 regard qui brûle : gros yeux aux iris rouges + petites flammes qui dansent (C.FACHE_ROUGE) */
-    fache: (g, P, a, el) => {
-      if (C.FACHE_ROUGE === false || window.__facheRouge === false) return;
+    /* 😠 la colère qui bout : le visage rougit du menton au front, rides du lion, veine 💢 qui palpite,
+       yeux rouges, et de la vapeur qui sort des oreilles (avec tremblement) toutes les 3 s */
+    fache: (g, P, a, el, dt, v, W, H) => {
       const { fw, rx, ry, dx, dy } = P, roll = Math.atan2(ry, rx);
+      const beat = .5 + .5 * Math.sin(el * 7.2);             // le pouls qui cogne
+      const at = (p, u, w) => [p[0] + (rx * u + dx * w) * fw, p[1] + (ry * u + dy * w) * fw];
       g.save();
-      [[EYE_RING[0], EYE_R, -1], [EYE_RING[1], EYE_L, 1]].forEach(([ring, eye, sd]) => {
-        const ir = irisOf(eye); if (!ir) return;
-        const o = warpPos(ir), o2 = warpPos([ir[0] + rx * .04 * fw, ir[1] + ry * .04 * fw]);
-        const m = Math.max(.8, Math.min(2.4, Math.hypot(o2[0] - o[0], o2[1] - o[1]) / (.04 * fw)));   // grossissement de l'œil
-        const at = (u, v) => [o[0] + (rx * u + dx * v) * fw * m, o[1] + (ry * u + dy * v) * fw * m];
-        const pulse = .88 + .12 * Math.sin(el * 3.1 + sd);
-        const pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i])); if (pts.some(q => !q)) return;
-        const R = .05 * fw * m;                                 // rayon de l'iris (grossi comme l'œil)
-        g.save();                                                // dans l'œil : iris rouge vif
-        g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.clip();
-        let gr = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R);
-        gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(.18, 'rgba(255,170,60,1)'); gr.addColorStop(.45, 'rgba(255,40,20,1)');
-        gr.addColorStop(.85, 'rgba(170,0,0,.9)'); gr.addColorStop(1, 'rgba(120,0,0,0)');
-        g.globalAlpha = a * .92 * pulse; g.fillStyle = gr; g.fillRect(o[0] - R, o[1] - R, 2 * R, 2 * R);
-        g.restore();
-        gr = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R * 2.1);   // lueur rouge autour
-        gr.addColorStop(0, 'rgba(255,40,20,.5)'); gr.addColorStop(1, 'rgba(255,0,0,0)');
-        g.globalAlpha = a * .5 * pulse; g.fillStyle = gr; g.fillRect(o[0] - R * 2.1, o[1] - R * 2.1, R * 4.2, R * 4.2);
-        // petites flammes légères qui montent du haut de l'œil (translucides, elles vacillent)
-        g.globalCompositeOperation = 'screen';
-        [[-.055, .34, 0], [0, .46, 2.1], [.055, .36, 4.3]].forEach(([u, h0, ph]) => {
-          const f = .75 + .17 * Math.sin(el * 9 + ph) + .1 * Math.sin(el * 14.3 + ph * 1.7);
-          const b = at(u, -.02), h = h0 * fw * f;
-          g.save(); g.translate(b[0], b[1]); g.rotate(roll + .1 * Math.sin(el * 4 + ph) + u * 4);
-          const sw = Math.sin(el * 7 + ph) * .02 * fw * m;
-          [[.05, 1, 'rgba(255,50,15,.8)', 'rgba(210,0,0,.55)'], [.024, .62, 'rgba(255,215,120,.95)', 'rgba(255,110,30,.7)']].forEach(([wk, hk, c0, c1]) => {
-            const w = wk * fw * m, hh = h * hk;                 // flamme rouge + cœur jaune
-            g.beginPath(); g.moveTo(-w / 2, 0);
-            g.bezierCurveTo(-w / 2, -hh * .4, sw * hk - w * .1, -hh * .75, sw * hk, -hh);
-            g.bezierCurveTo(sw * hk + w * .1, -hh * .75, w / 2, -hh * .4, w / 2, 0);
-            g.quadraticCurveTo(0, w * .35, -w / 2, 0); g.closePath();
-            const lg = g.createLinearGradient(0, 0, 0, -hh);
-            lg.addColorStop(0, c0); lg.addColorStop(.55, c1); lg.addColorStop(1, 'rgba(180,0,0,0)');
-            g.globalAlpha = a * .85; g.fillStyle = lg; g.fill();
-          });
-          g.restore();
-        });
+      /* 1. le visage rougit, du menton jusqu'au front (en ~2 s), puis pulse */
+      const oval = FACE_OVAL.map(i => fx.sm[i] && warpPos(fx.sm[i]));
+      if (!oval.some(q => !q)) {
+        const S = 8, fc = flushCv || (flushCv = document.createElement('canvas'));
+        const w = Math.ceil(W / S), h = Math.ceil(H / S);
+        if (fc.width !== w || fc.height !== h) { fc.width = w; fc.height = h; }
+        const c = fc.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, w, h);
+        const bot = at(oval[18], 0, .05), top = at(oval[0], 0, -.05), lvl = Math.min(1, el / 2.2);
+        const gr = c.createLinearGradient(bot[0] / S, bot[1] / S, top[0] / S, top[1] / S);
+        const prof = t => t < .55 ? 1 : 1 - (t - .55) / .45 * .75;          // plus rouge en bas (joues, menton), s'estompe vers le front
+        const col = k => 'rgba(255,55,35,' + Math.max(0, k).toFixed(3) + ')';
+        for (let t = 0; t <= 1.001; t += .1) {
+          const fill = lvl >= 1 ? 1 : Math.max(0, Math.min(1, (lvl - t) / .15));   // le rouge monte comme un thermomètre
+          gr.addColorStop(Math.min(1, t), col(prof(t) * fill));
+        }
+        try { c.filter = 'blur(2.2px)'; } catch (_) {}
+        c.fillStyle = gr; c.beginPath(); oval.forEach((q, i) => i ? c.lineTo(q[0] / S, q[1] / S) : c.moveTo(q[0] / S, q[1] / S)); c.closePath(); c.fill();
+        try { c.filter = 'none'; } catch (_) {}
+        g.globalCompositeOperation = 'multiply'; g.globalAlpha = a * (.36 + .1 * beat);
+        g.drawImage(fc, 0, 0, W, H);
         g.globalCompositeOperation = 'source-over';
+      }
+      /* 2. rides du lion entre les sourcils */
+      const b1 = fx.sm[107], b2 = fx.sm[336], gl = fx.sm[9];
+      if (b1 && b2 && gl) {
+        const p1 = warpPos(b1), p2 = warpPos(b2), mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2];
+        g.lineCap = 'round';
+        for (const sd of [-1, 1]) {
+          const base = at(mid, sd * .035, .01), tip = at(mid, sd * .05, -.11), ctl = at(mid, sd * .028, -.05);
+          for (const [lw, st, off] of [[.015, 'rgba(95,25,15,.38)', 0], [.01, 'rgba(255,225,205,.22)', .016]]) {
+            g.globalAlpha = a; g.strokeStyle = st; g.lineWidth = Math.max(1.5, lw * fw);
+            const o = [rx * off * fw * sd, ry * off * fw * sd];
+            g.beginPath(); g.moveTo(base[0] + o[0], base[1] + o[1]); g.quadraticCurveTo(ctl[0] + o[0], ctl[1] + o[1], tip[0] + o[0], tip[1] + o[1]); g.stroke();
+          }
+        }
+      }
+      /* 3. yeux rouges qui brillent (dans le blanc de l'œil) */
+      [[EYE_RING[0], EYE_R], [EYE_RING[1], EYE_L]].forEach(([ring, eye]) => {
+        const ir = irisOf(eye); if (!ir) return;
+        const o = warpPos(ir), R = .055 * fw, pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i]));
+        if (pts.some(q => !q)) return;
+        g.save(); g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.clip();
+        const rg = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R);
+        rg.addColorStop(0, 'rgba(255,235,190,1)'); rg.addColorStop(.2, 'rgba(255,150,50,1)'); rg.addColorStop(.5, 'rgba(255,30,15,1)');
+        rg.addColorStop(.85, 'rgba(160,0,0,.9)'); rg.addColorStop(1, 'rgba(110,0,0,0)');
+        g.globalAlpha = a * (.85 + .15 * beat); g.fillStyle = rg; g.fillRect(o[0] - R, o[1] - R, 2 * R, 2 * R);
+        g.restore();
+        const hg = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R * 1.9);   // halo
+        hg.addColorStop(0, 'rgba(255,30,10,.45)'); hg.addColorStop(1, 'rgba(255,0,0,0)');
+        g.globalAlpha = a * (.4 + .2 * beat); g.fillStyle = hg; g.fillRect(o[0] - R * 1.9, o[1] - R * 1.9, R * 3.8, R * 3.8);
       });
+      /* 4. veine de colère 💢 sur le front, qui palpite */
+      const fh = fx.sm[297];
+      if (fh) {
+        const c0 = at(warpPos(fh), -.04, .05), sz = .19 * fw * backOut((el - .6) / .4) * (1 + .14 * beat);
+        if (sz > 1) {
+          g.save(); g.translate(c0[0], c0[1]); g.rotate(roll + .35); g.scale(sz, sz); g.lineCap = 'round';
+          for (const [lw, st] of [[.2, 'rgba(110,0,10,.9)'], [.12, '#ff2a2a']]) {
+            g.lineWidth = lw; g.strokeStyle = st; g.globalAlpha = a;
+            for (let k = 0; k < 4; k++) {
+              g.save(); g.rotate(k * Math.PI / 2);
+              g.beginPath(); g.moveTo(.16, .58); g.quadraticCurveTo(.2, .2, .58, .16); g.stroke();
+              g.restore();
+            }
+          }
+          g.restore();
+        }
+      }
+      /* 5. vapeur qui sort des oreilles (par jets) */
+      const L = fx.parts, spr = puffSpr || (puffSpr = mk(64, 64, c => {
+        const rg = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+        rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(.45, 'rgba(246,246,248,.85)'); rg.addColorStop(.75, 'rgba(185,188,196,.45)'); rg.addColorStop(1, 'rgba(170,172,180,0)');
+        c.fillStyle = rg; c.fillRect(0, 0, 64, 64);
+      }));
+      if (fumeOn(el) && a > .5) for (const [sd, id] of [[-1, 234], [1, 454]]) {
+        const e = fx.sm[id]; if (!e || L.length > 110) continue;
+        const n = Math.floor(dt * 45 + Math.random());        // ≈ 45 bouffées / s / oreille : un vrai jet
+        for (let k = 0; k < n; k++) {
+          const q = at(warpPos(e), sd * .1, -.02), sp = rnd(1.2, 2) * fw, j = Math.random() * dt;   // étalé dans l'image
+          L.push({ x:q[0], y:q[1], vx:(rx * sd * rnd(.25, .6) - dx * rnd(.7, 1.1)) * sp, vy:(ry * sd * rnd(.25, .6) - dy * rnd(.7, 1.1)) * sp,
+                   s0:.12 * fw, s1:rnd(.42, .62) * fw, age:j, life:rnd(.8, 1.3) });
+        }
+      }
+      for (let i = L.length - 1; i >= 0; i--) {
+        const p = L[i]; p.age += dt;
+        if (p.age > p.life) { L.splice(i, 1); continue; }
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 1.2; p.vy *= 1 - dt * 1.2;   // ralentit en montant
+        const k = p.age / p.life, sz = p.s0 + (p.s1 - p.s0) * Math.sqrt(k);
+        g.globalAlpha = a * .95 * (1 - k * k) * Math.min(1, p.age / .08);
+        g.drawImage(spr, p.x - sz / 2, p.y - sz / 2, sz, sz);
+      }
       g.restore();
     },
 
