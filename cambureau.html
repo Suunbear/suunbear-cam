@@ -34,8 +34,8 @@
    source navigateur → Autorisations de la page : « Accès complet à OBS ».
    ============================================================ */
 const CONFIG = {
-  VCAM_AUTO        : true,  // la page allume la caméra virtuelle au 1er filtre et l'éteint après.
-                            // false = tu la gères toi-même (allumée tout le live)
+  VCAM_AUTO        : false, // true = la page allume/éteint la caméra virtuelle (« Accès complet à OBS » requis).
+                            // false = c'est SAMMI qui l'allume avant le filtre et l'éteint après
   VCAM_WARMUP      : 0.4,   // s d'attente après l'allumage, avant de lire l'image
   VCAM_STOP_DELAY  : 10,    // s après le dernier filtre avant d'éteindre (évite on/off en rafale)
   CAM_LABEL        : 'OBS Virtual Camera',  // nom de la caméra lue (la sortie « Source » d'OBS)
@@ -268,8 +268,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       gl.uniform4fv(glp.bc, bufBC); gl.uniform4fv(glp.bd, bufBD);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
-      /* 5. Le calque ne couvre la cam que si ton visage est vu (sinon : cam normale, et jamais d'image parasite) */
-      const want = !!(fx.t0 && !fx.ending && fx.seen && t - fx.seen < C.FACE_HOLD * 1000);
+      /* 5. Le calque ne couvre la cam que si ton visage est vu ET que l'image est bien en 16:9
+            (sinon : cam normale, jamais d'image parasite ni déformée à l'antenne) */
+      const okRatio = ratioOK(W, H);
+      if (!okRatio) ST.err = 'image ' + W + '×' + H + ' au lieu de 16:9 → calque masqué';
+      const want = !!(okRatio && fx.t0 && !fx.ending && fx.seen && t - fx.seen < C.FACE_HOLD * 1000);
       if (want !== cv.classList.contains('on')) cv.classList.toggle('on', want);
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
     }
@@ -336,6 +339,24 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (vcamCan() && localStorage.getItem(VKEY) === '1') { OBS.stopVirtualcam(); flag(false); }
   } catch (_) {}
 
+  /* Ouvre la caméra virtuelle dans son format d'origine (sans recadrage du navigateur) et vérifie
+     qu'elle est bien en 16:9 : sinon nouvel essai (juste après l'allumage, le format peut être provisoire). */
+  const ratioOK = (w, h) => w && h && Math.abs(w / h - C.WIDTH / C.HEIGHT) < 0.02;
+  const openCam = async id => {
+    const cons = { deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
+                   aspectRatio:{ ideal:C.WIDTH / C.HEIGHT }, frameRate:{ ideal:C.VIDEO_FPS }, resizeMode:{ ideal:'none' } };
+    let got = '';
+    for (let i = 0; i < 3 && fx.on; i++) {
+      const s = await md.getUserMedia({ video:cons });
+      const st = s.getVideoTracks()[0].getSettings();
+      if (ratioOK(st.width, st.height)) return s;
+      got = st.width + '×' + st.height; log('format reçu', got, '→ nouvel essai');
+      s.getTracks().forEach(tr => tr.stop());
+      await sleep(800);
+    }
+    throw new Error('image reçue en ' + (got || '?') + ' au lieu de 16:9 → calque pas affiché');
+  };
+
   /* ---------- Démarrage / fin ---------- */
   const fxStart = async key => {
     if (fx.on) return;
@@ -347,8 +368,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       glInit();
       await vcamOn();
       const id = await findCam();
-      const s = await md.getUserMedia({ video:{ deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
-                                               frameRate:{ ideal:C.VIDEO_FPS, max:C.VIDEO_FPS } } });
+      const s = await openCam(id);
       const tr = s.getVideoTracks()[0];
       if (!fx.on) { tr.stop(); return; }
       fx.track = tr; ST.cam = tr.label;
