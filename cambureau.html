@@ -343,23 +343,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (vcamCan() && localStorage.getItem(VKEY) === '1') { OBS.stopVirtualcam(); flag(false); }
   } catch (_) {}
 
-  /* Ouvre la caméra virtuelle dans son format d'origine (sans recadrage du navigateur) et vérifie
-     qu'elle est bien en 16:9 : sinon nouvel essai (juste après l'allumage, le format peut être provisoire). */
+  /* Ouvre la caméra virtuelle dans son format d'origine (sans recadrage du navigateur).
+     ⚠️ Le navigateur annonce la caméra virtuelle d'OBS « à l'envers » (1080×1920) alors que les images
+     arrivent bien en 1920×1080 : on ne se fie donc qu'à la taille réelle des images (vérifiée à chaque image). */
   const ratioOK = (w, h) => w && h && Math.abs(w / h - C.WIDTH / C.HEIGHT) < 0.02;
-  const openCam = async id => {
-    const cons = { deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
-                   aspectRatio:{ ideal:C.WIDTH / C.HEIGHT }, frameRate:{ ideal:C.VIDEO_FPS }, resizeMode:{ ideal:'none' } };
-    let got = '';
-    for (let i = 0; i < 3 && fx.on; i++) {
-      const s = await md.getUserMedia({ video:cons });
-      const st = s.getVideoTracks()[0].getSettings();
-      if (RAW || ratioOK(st.width, st.height)) return s;
-      got = st.width + '×' + st.height; log('format reçu', got, '→ nouvel essai');
-      s.getTracks().forEach(tr => tr.stop());
-      await sleep(800);
-    }
-    throw new Error('image reçue en ' + (got || '?') + ' au lieu de 16:9 → calque pas affiché');
-  };
+  const openCam = id => md.getUserMedia({ video:{ deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
+                                                  frameRate:{ ideal:C.VIDEO_FPS }, resizeMode:{ ideal:'none' } } });
 
   /* ---------- Démarrage / fin ---------- */
   const fxStart = async key => {
@@ -467,7 +456,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       'SSN    : ' + (!SESSION ? 'pas de #chat= ⚠️' : ST.ws ? 'connecté ✅' : 'connexion…'),
       'Cam virtuelle : ' + (ST.vcam == null ? 'état inconnu' : ST.vcam ? 'allumée' : 'éteinte')
                   + (!C.VCAM_AUTO ? ' (gérée à la main)' : vcamCan() ? ' (auto ✅)' : ' (auto impossible : « Accès complet à OBS » ?) ⚠️'),
-      'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + s.width + '×' + s.height + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
+      'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + (vid.videoWidth || s.width) + '×' + (vid.videoHeight || s.height) + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
       'Calque : ' + (fx.on ? ST.fps + ' i/s · suivi ' + ST.dps + '/s · ' + f1(ST.avg) + ' ms (max ' + f1(ST.max) + ') · visage '
                              + (fx.face > .5 ? 'vu' : 'perdu') + (fx.useRaf ? ' · mode secours' : '') : '—'),
       'État   : ' + (fx.on ? fx.key + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
