@@ -42,6 +42,7 @@
    FILTRES visage (points de chaîne) : SAMMI → HTTP Request GET
    https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
    noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
+          (anciennes versions : content1 · chad1)
           (sans accents dans l'URL)
    Calculés par le tel, visibles sur le tel ET sur OBS, 1 min 30 chacun.
    ============================================================ */
@@ -68,6 +69,7 @@ const CONFIG = {
   FILTER_DURATION  : 90,    // secondes par filtre (fondus compris) · 90 = 1 min 30
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
   FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // réglage fin, filtre par filtre (×)
+  FACHE_ROUGE      : true,   // Fâché : yeux rouges qui brillent (false = seulement les yeux plissés)
   FILTER_FADE      : 0.5,   // durée du fondu d'apparition / disparition (s)
   PAAT_BRAS        : "tatoue",   // Paatrice (filtre « derrière toi ») : "tatoue" (musclé + ton soleil) · "muscle" · "poilu" · "nouille" · "simple"
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
@@ -1413,6 +1415,7 @@ body.live #go { display:none; }
      Déclenchement (HTTP Request GET depuis SAMMI) :
      https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
      noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
+            (anciennes versions : content1 · chad1)
      ============================================================ */
   const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';   // version figée (empreinte dans l'importmap)
   const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
@@ -1423,7 +1426,16 @@ body.live #go { display:none; }
   const EYE_R = [33, 133, 159, 145], EYE_L = [263, 362, 386, 374];   // centres des yeux
   const MOUTH = [61, 291, 13, 14], NOSE = [1, 98, 327];
   const FX = {
-    content: { name:'😁 Abusément content', bulge:[
+    content: { name:'😁 Abusément content', stk:'content', bulge:[   // + paillettes dans les yeux
+      [EYE_R, .52, .47, .68], [EYE_L, .52, .47, .68]    // yeux globuleux
+    ], pts:[
+      [61, -.20, -.10, .30], [291, -.20, -.10, .30],    // sourire jusqu'aux oreilles : coins très haut et large
+      [40, -.06,   0, .13], [270, -.06,   0, .13],      // lèvre du haut : les côtés remontent
+      [91, -.08,   0, .13], [321, -.08,   0, .13],      // lèvre du bas : bouche en U
+      [17,  .03,   0, .12],                             // bas du U
+      [50, -.07,   0, .18], [280, -.07,   0, .18]       // pommettes remontées
+    ]},
+    content1: { name:'😁 Abusément content', bulge:[   // ancienne version sans paillettes (nom SAMMI « content1 »)
       [EYE_R, .52, .47, .68], [EYE_L, .52, .47, .68]    // yeux globuleux
     ], pts:[
       [61, -.20, -.10, .30], [291, -.20, -.10, .30],    // sourire jusqu'aux oreilles : coins très haut et large
@@ -1451,16 +1463,20 @@ body.live #go { display:none; }
       [70,   .06,   0, .16], [300,  .06,   0, .16],     // bouts des sourcils qui tombent
       [159,  .04,   0, .08], [386,  .04,   0, .08],     // paupières lourdes
       [33,   .04,   0, .12], [263,  .04,   0, .12],     // yeux tombants
-      [61,   .17, .03, .28], [291,  .17, .03, .28],     // bouche qui tombe
-      [17,  -.05,   0, .12], [14,  -.035,  0, .09],     // lèvre du bas qui boude
-      [84,  -.03,   0, .09], [314, -.03,   0, .09],
+      [61,   .13,   0, .15], [291,  .13,   0, .15],     // bouche en arc triste : les coins tombent…
+      [40,   .035,  0, .09], [270,  .035,  0, .09],     // … et toute la lèvre suit la courbe (épaisseur naturelle)
+      [91,   .045,  0, .09], [321,  .045,  0, .09],
+      [17,  -.03,   0, .10],                            // lèvre du bas qui boude un peu
       [152, -.04,   0, .20]                             // menton qui se plisse
-    ]},
+    ], anim:el => {                                     // la lèvre du bas tremble par moments (sanglots)
+      const q = .014 * Math.max(0, Math.sin(el * 1.6)) * Math.sin(el * 44);
+      return [[17, q, 0, .09], [14, q * .7, 0, .07]];
+    }},
     chad: { name:'🗿 Chad', pts:[                        // mâchoire de gigachad + air sûr de lui
-      [152,  .20,    0, .30],                           // menton allongé (sans tirer la lèvre du bas)
-      [176,  .12, -.10, .24], [400,  .12, -.10, .24],   // menton large et carré
-      [136,  .08, -.10, .22], [365,  .08, -.10, .22],   // mâchoire élargie, anguleuse
-      [172,  .02, -.09, .22], [397,  .02, -.09, .22],
+      [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
+      [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
+      [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
+      [172,  .02, -.10, .22], [397,  .02, -.10, .22],
       [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
       [105, -.20,    0, .24], [70, -.12, 0, .20], [107, -.07, 0, .16],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
       [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
@@ -1482,15 +1498,18 @@ body.live #go { display:none; }
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ]},
-    fache: { name:'😠 Fâché', pts:[                      // sourcils en V, yeux plissés, moue boudeuse
-      [107,  .15,  .08, .20], [336,  .15,  .08, .20],   // bouts intérieurs des sourcils : très bas et serrés
-      [105,  .06,  .02, .16], [334,  .06,  .02, .16],
-      [70,  -.05,    0, .16], [300, -.05,    0, .16],   // bouts extérieurs qui remontent → V
-      [159,  .05,    0, .10], [386,  .05,    0, .10],   // paupières qui tombent : regard noir
-      [145, -.03,    0, .08], [374, -.03,    0, .08],
-      [61,   .13,  .03, .18], [291,  .13,  .03, .18],   // coins de la bouche vers le bas
-      [17,  -.06,    0, .16],                           // lèvre du bas qui remonte (boude)
-      [152, -.05,    0, .24]                            // menton qui se crispe
+    fache: { name:'😠 Fâché', stk:'fache', inv:true, bulge:[   // gros yeux rouges en feu + sourcils en V + bouche crispée
+      [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72]    // yeux énormes, comme Zinzin (les iris rouges et les flammes sont dessinés par-dessus)
+    ], pts:[
+      [107,  .11,  .07, .18], [336,  .11,  .07, .18],   // bouts intérieurs des sourcils : bas et serrés
+      [105,  .04,  .02, .15], [334,  .04,  .02, .15],
+      [70,  -.07,    0, .16], [300, -.07,    0, .16],   // bouts extérieurs qui remontent → V
+      // bouche de colère (lèvres serrées et pincées, coins tirés vers le bas en arc, menton qui remonte)
+      [61,   .15,  .02, .12], [291,  .15,  .02, .12],
+      [40,   .05,    0, .09], [270,  .05,    0, .09], [91,  .06, 0, .09], [321, .06, 0, .09],
+      [0,    .025,   0, .08], [17,  -.045,   0, .10],
+      [152, -.06,    0, .20],
+      [98,     0, -.03, .07], [327,    0, -.03, .07]    // narines qui se gonflent
     ]},
     /* 🤯 Exagéré : tête gonflée + TES expressions exagérées en direct (bouche ouverte → énorme, sourire → jusqu'aux oreilles…) */
     exagere: { name:'🤯 Exagéré', dyn:true, bulge:[
@@ -1516,7 +1535,7 @@ body.live #go { display:none; }
     add(58, .05, -.12 - .1 * cp, .32); add(288, .05, -.12 - .1 * cp, .32);
     // bouche ouverte → la bouche devient énorme (loupe qui suit l'ouverture) et le menton s'allonge.
     // Pas de points sur les lèvres : additionnés, ils repliaient l'image (lèvre du haut « en miroir »).
-    add(152, .34 * j, 0, .52); add(148, .24 * j, .03 * j, .4); add(377, .24 * j, .03 * j, .4);
+    add(152, .44 * j, 0, .6); add(148, .3 * j, .03 * j, .44); add(377, .3 * j, .03 * j, .44);
     // sourire → jusqu'aux oreilles, joues qui montent, yeux plissés
     add(61, -.22 * sm, -.15 * sm, .26); add(291, -.22 * sm, -.15 * sm, .26);
     add(50, -.1 * sm, 0, .2); add(280, -.1 * sm, 0, .2); add(145, -.045 * sm, 0, .09); add(374, -.045 * sm, 0, .09);
@@ -1526,24 +1545,28 @@ body.live #go { display:none; }
     add(107, -.2 * bu + .16 * bd, .06 * bd, .18); add(336, -.2 * bu + .16 * bd, .06 * bd, .18);
     add(105, -.15 * bu - .1 * bo + .08 * bd, 0, .17); add(334, -.15 * bu - .1 * bo + .08 * bd, 0, .17);
     add(70, -.16 * bo + .05 * bd, 0, .17); add(300, -.16 * bo + .05 * bd, 0, .17);
-    // yeux écarquillés / plissés
-    add(159, -.1 * ew + .06 * sq, 0, .11); add(386, -.1 * ew + .06 * sq, 0, .11);
-    add(145, .06 * ew - .045 * sq, 0, .1); add(374, .06 * ew - .045 * sq, 0, .1);
+    // yeux écarquillés / plissés : gérés par les loupes des yeux (plus bas)
     add(1, -.08 * sn, 0, .16);                               // nez qui se retrousse
     const pts = [];
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
-    const bulge = j > .03 ? FX.exagere.bulge.concat([[[13, 14], .78 + .12 * j, .5 + .3 * j, .62 * Math.min(1, j * 1.15)]]) : FX.exagere.bulge;
+    const bulge = FX.exagere.bulge.slice();
+    if (j > .03) bulge.push([[13, 14], .95 + .2 * j, .6 + .42 * j, .86 * Math.min(1, j * 1.15)]);   // bouche ouverte → énorme
+    const eb = Math.max(-.65, Math.min(.78, .12 + .6 * ew + .25 * bu - .6 * sq));   // yeux : écarquillés → énormes, plissés → minuscules
+    if (Math.abs(eb) > .03) bulge.push([EYE_R, .5, .45, eb], [EYE_L, .5, .45, eb]);
     return { pts, bulge };
   };
 
   /* points à suivre pour chaque filtre (déformations + loupes + autocollants) */
-  const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454] };
+  const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
+                    [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
+  const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
+                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 473].concat(EYE_RING[0], EYE_RING[1]) };
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
     (f.pts || []).forEach(q => need.add(q[0]));
     (f.bulge || []).forEach(b => b[0].forEach(i => need.add(i)));
     (STK_PTS[f.stk] || []).forEach(i => need.add(i));
-    if (f.dyn) EXA_IDS.concat([205, 187, 425, 411, 4, 6], MOUTH).forEach(i => need.add(i));
+    if (f.dyn) EXA_IDS.concat([205, 187, 425, 411, 4, 6], MOUTH, EYE_R, EYE_L).forEach(i => need.add(i));
     f.need = [...need];
   });
 
@@ -1684,8 +1707,9 @@ body.live #go { display:none; }
           bufBD[nb * 4 + 2] = Math.max(-0.9, Math.min(0.9, bs * k));   // au-delà de 0,9 l'image se retournerait
           nb++;
         }
-        if (k > 0.001) for (const [i, kd, ki, kr] of ((DY ? DY.pts : F.pts) || [])) {
-          const p = fx.sm[i]; if (!p || n >= FX_N) continue;
+        if (k > 0.001) for (const [i, kd, ki, kr] of ((DY ? DY.pts : (window.__fx && window.__ptsOverride) || (F.anim ? F.pts.concat(F.anim(el)) : F.pts)) || [])) {
+          let p = fx.sm[i]; if (!p || n >= FX_N) continue;
+          if ((F.inv || F.dyn) && nb) p = bulgeInv(p, nb);          // le point suit le trait là où la loupe l'a déplacé
           const sd = Math.sign((p[0] - mx) * rx + (p[1] - my) * ry);   // côté du visage → sens « vers le centre »
           let ox = (dx * kd - rx * sd * ki) * fw * k, oy = (dy * kd - ry * sd * ki) * fw * k;
           const rad = kr * fw, L = Math.hypot(ox, oy), mxL = rad * 0.75;   // au-delà l'image se replierait
@@ -2237,7 +2261,120 @@ body.live #go { display:none; }
     return perCv;
   };
 
+  /* Où un point du visage se retrouve APRÈS déformation (loupes + points) : pour poser un dessin pile dessus */
+  const bulgeSrc = (x, y, nb) => {                          // loupes seules : image affichée → image caméra
+    for (let i = 0; i < nb; i++) {
+      const cx = bufBC[i * 4], cy = bufBC[i * 4 + 1], ax = bufBD[i * 4], ay = bufBD[i * 4 + 1];
+      const qx = x - cx, qy = y - cy, u = (qx * ax + qy * ay) / bufBC[i * 4 + 2], w = (-qx * ay + qy * ax) / bufBC[i * 4 + 3], t2 = u * u + w * w;
+      if (t2 < 1) { const f = 1 - t2, m = 1 - bufBD[i * 4 + 2] * f * f; x = cx + qx * m; y = cy + qy * m; }
+    }
+    return [x, y];
+  };
+  const bulgeInv = (p, nb) => {
+    let x = p[0], y = p[1];
+    for (let k = 0; k < 12; k++) { const s = bulgeSrc(x, y, nb); x += (p[0] - s[0]) * .6; y += (p[1] - s[1]) * .6; }
+    return [x, y];
+  };
+  const warpSrc = (x, y) => {                                // même calcul que le shader : image affichée → image caméra
+    let sx = x, sy = y, ox = 0, oy = 0;
+    for (let i = 0; i < fx.nb; i++) {
+      const cx = bufBC[i * 4], cy = bufBC[i * 4 + 1], ax = bufBD[i * 4], ay = bufBD[i * 4 + 1];
+      const qx = sx - cx, qy = sy - cy, u = (qx * ax + qy * ay) / bufBC[i * 4 + 2], w = (-qx * ay + qy * ax) / bufBC[i * 4 + 3], t2 = u * u + w * w;
+      if (t2 < 1) { const f = 1 - t2, m = 1 - bufBD[i * 4 + 2] * f * f; sx = cx + qx * m; sy = cy + qy * m; }
+    }
+    for (let i = 0; i < fx.n; i++) {
+      const qx = x - bufC[i * 2], qy = y - bufC[i * 2 + 1], G = Math.exp(-(qx * qx + qy * qy) / (bufR[i] * bufR[i]));
+      ox += bufD[i * 2] * G; oy += bufD[i * 2 + 1] * G;
+    }
+    return [sx - ox, sy - oy];
+  };
+  const warpPos = p => {                                     // l'inverse, par petits pas
+    let x = p[0], y = p[1];
+    for (let k = 0; k < 14; k++) { const s = warpSrc(x, y); x += (p[0] - s[0]) * .6; y += (p[1] - s[1]) * .6; }
+    return [x, y];
+  };
+  const irisOf = eye => {                                    // centre de l'iris de cet œil (468 / 473)
+    const c = fx.sm[eye[0]]; if (!c) return null;
+    let best = null, bd = 1e9;
+    for (const i of [468, 473]) { const q = fx.sm[i]; if (q) { const d = Math.hypot(q[0] - c[0], q[1] - c[1]); if (d < bd) { bd = d; best = q; } } }
+    return best;
+  };
+
   const STK = {
+    /* 😁 paillettes dans les yeux (façon dessin animé) : grosse étoile + reflets qui scintillent */
+    content: (g, P, a, el) => {
+      const { fw, rx, ry, dx, dy } = P, roll = Math.atan2(ry, rx);
+      g.save();
+      [[EYE_R, -1], [EYE_L, 1]].forEach(([eye, sd]) => {
+        const ir = irisOf(eye); if (!ir) return;
+        const o = warpPos(ir), o2 = warpPos([ir[0] + rx * .05 * fw, ir[1] + ry * .05 * fw]);
+        const m = Math.max(.6, Math.min(3, Math.hypot(o2[0] - o[0], o2[1] - o[1]) / (.05 * fw)));   // grossissement de l'œil
+        const at = (u, v) => [o[0] + (rx * u + dx * v) * fw * m, o[1] + (ry * u + dy * v) * fw * m];
+        const tw = t => .5 + .5 * Math.sin(el * 5.2 + t + sd);
+        g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = .03 * fw * m;
+        // grosse étoile (reflet principal), qui palpite et tourne un peu
+        let p = at(-.017, -.015), r = .052 * fw * m * (.85 + .2 * tw(0));
+        g.globalAlpha = a * .95; g.fillStyle = '#fff';
+        g.save(); g.translate(p[0], p[1]); g.rotate(roll + .25 * Math.sin(el * 1.7 + sd)); star4(g, 0, 0, r); g.restore();
+        // reflet rond en bas
+        p = at(.022, .02); g.globalAlpha = a * .85;
+        g.beginPath(); g.arc(p[0], p[1], .014 * fw * m, 0, 6.283); g.fill();
+        // petites paillettes dorées / roses qui s'allument à tour de rôle
+        [[.03, -.03, '#fff6c2', 1.3], [-.038, .018, '#ffd1ea', 2.6], [.006, .038, '#ffffff', 4]].forEach(([u, v, col, ph]) => {
+          const k = tw(ph); if (k < .15) return;
+          const q = at(u, v); g.globalAlpha = a * k; g.fillStyle = col; star4(g, q[0], q[1], .024 * fw * m * (.6 + .5 * k));
+        });
+      });
+      g.restore();
+    },
+
+    /* 😠 regard qui brûle : gros yeux aux iris rouges + petites flammes qui dansent (C.FACHE_ROUGE) */
+    fache: (g, P, a, el) => {
+      if (C.FACHE_ROUGE === false || window.__facheRouge === false) return;
+      const { fw, rx, ry, dx, dy } = P, roll = Math.atan2(ry, rx);
+      g.save();
+      [[EYE_RING[0], EYE_R, -1], [EYE_RING[1], EYE_L, 1]].forEach(([ring, eye, sd]) => {
+        const ir = irisOf(eye); if (!ir) return;
+        const o = warpPos(ir), o2 = warpPos([ir[0] + rx * .04 * fw, ir[1] + ry * .04 * fw]);
+        const m = Math.max(.8, Math.min(2.4, Math.hypot(o2[0] - o[0], o2[1] - o[1]) / (.04 * fw)));   // grossissement de l'œil
+        const at = (u, v) => [o[0] + (rx * u + dx * v) * fw * m, o[1] + (ry * u + dy * v) * fw * m];
+        const pulse = .88 + .12 * Math.sin(el * 3.1 + sd);
+        const pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i])); if (pts.some(q => !q)) return;
+        const R = .05 * fw * m;                                 // rayon de l'iris (grossi comme l'œil)
+        g.save();                                                // dans l'œil : iris rouge vif
+        g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.clip();
+        let gr = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R);
+        gr.addColorStop(0, 'rgba(255,240,200,1)'); gr.addColorStop(.18, 'rgba(255,170,60,1)'); gr.addColorStop(.45, 'rgba(255,40,20,1)');
+        gr.addColorStop(.85, 'rgba(170,0,0,.9)'); gr.addColorStop(1, 'rgba(120,0,0,0)');
+        g.globalAlpha = a * .92 * pulse; g.fillStyle = gr; g.fillRect(o[0] - R, o[1] - R, 2 * R, 2 * R);
+        g.restore();
+        gr = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R * 2.1);   // lueur rouge autour
+        gr.addColorStop(0, 'rgba(255,40,20,.5)'); gr.addColorStop(1, 'rgba(255,0,0,0)');
+        g.globalAlpha = a * .5 * pulse; g.fillStyle = gr; g.fillRect(o[0] - R * 2.1, o[1] - R * 2.1, R * 4.2, R * 4.2);
+        // petites flammes légères qui montent du haut de l'œil (translucides, elles vacillent)
+        g.globalCompositeOperation = 'screen';
+        [[-.055, .34, 0], [0, .46, 2.1], [.055, .36, 4.3]].forEach(([u, h0, ph]) => {
+          const f = .75 + .17 * Math.sin(el * 9 + ph) + .1 * Math.sin(el * 14.3 + ph * 1.7);
+          const b = at(u, -.02), h = h0 * fw * f;
+          g.save(); g.translate(b[0], b[1]); g.rotate(roll + .1 * Math.sin(el * 4 + ph) + u * 4);
+          const sw = Math.sin(el * 7 + ph) * .02 * fw * m;
+          [[.05, 1, 'rgba(255,50,15,.8)', 'rgba(210,0,0,.55)'], [.024, .62, 'rgba(255,215,120,.95)', 'rgba(255,110,30,.7)']].forEach(([wk, hk, c0, c1]) => {
+            const w = wk * fw * m, hh = h * hk;                 // flamme rouge + cœur jaune
+            g.beginPath(); g.moveTo(-w / 2, 0);
+            g.bezierCurveTo(-w / 2, -hh * .4, sw * hk - w * .1, -hh * .75, sw * hk, -hh);
+            g.bezierCurveTo(sw * hk + w * .1, -hh * .75, w / 2, -hh * .4, w / 2, 0);
+            g.quadraticCurveTo(0, w * .35, -w / 2, 0); g.closePath();
+            const lg = g.createLinearGradient(0, 0, 0, -hh);
+            lg.addColorStop(0, c0); lg.addColorStop(.55, c1); lg.addColorStop(1, 'rgba(180,0,0,0)');
+            g.globalAlpha = a * .85; g.fillStyle = lg; g.fill();
+          });
+          g.restore();
+        });
+        g.globalCompositeOperation = 'source-over';
+      });
+      g.restore();
+    },
+
     /* 🐱 oreilles + truffe + moustaches + cœurs qui flottent */
     chat: (g, P, a, el, dt) => {
       const S = sprites(), top = fx.sm[10], nose = fx.sm[1];
