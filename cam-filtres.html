@@ -41,7 +41,7 @@
 
    FILTRES visage (points de chaîne) : SAMMI → HTTP Request GET
    https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
+   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (ou fache)
           (anciennes versions : content1 · chad1)
           (sans accents dans l'URL)
    Calculés par le tel, visibles sur le tel ET sur OBS, 1 min 30 chacun.
@@ -69,7 +69,7 @@ const CONFIG = {
   FILTER_DURATION  : 90,    // secondes par filtre (fondus compris) · 90 = 1 min 30
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
   FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // réglage fin, filtre par filtre (×)
-  FACHE_ROUGE      : true,   // Fâché : yeux rouges qui brillent (false = seulement les yeux plissés)
+  FACHE_ROUGE      : true,   // Colère : yeux rouges qui brillent (false = seulement les yeux plissés)
   FILTER_FADE      : 0.5,   // durée du fondu d'apparition / disparition (s)
   PAAT_BRAS        : "tatoue",   // Paatrice (filtre « derrière toi ») : "tatoue" (musclé + ton soleil) · "muscle" · "poilu" · "nouille" · "simple"
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
@@ -1431,7 +1431,7 @@ body.live #go { display:none; }
 
      Déclenchement (HTTP Request GET depuis SAMMI) :
      https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-     noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · fache
+     noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (ou fache)
             (anciennes versions : content1 · chad1)
      ============================================================ */
   const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';   // version figée (empreinte dans l'importmap)
@@ -1516,7 +1516,7 @@ body.live #go { display:none; }
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ]},
-    fache: { name:'😠 Fâché', stk:'fache', pts:[      // la colère qui bout : regard noir rouge, visage qui rougit, vapeur…
+    fache: { name:'😠 Colère', stk:'fache', pts:[      // la colère qui bout : regard noir rouge, visage qui rougit, vapeur…
       [107,  .15,  .09, .20], [336,  .15,  .09, .20],   // bouts intérieurs des sourcils : très bas et serrés
       [105,  .06,  .03, .16], [334,  .06,  .03, .16],
       [70,  -.06,    0, .16], [300, -.06,    0, .16],   // bouts extérieurs qui remontent → V
@@ -2398,9 +2398,10 @@ body.live #go { display:none; }
       }
       /* 3. yeux rouges qui brillent (dans le blanc de l'œil) */
       [[EYE_RING[0], EYE_R], [EYE_RING[1], EYE_L]].forEach(([ring, eye]) => {
-        const ir = irisOf(eye); if (!ir) return;
-        const o = warpPos(ir), R = .055 * fw, pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i]));
+        const pts = ring.map(i => fx.sm[i] && warpPos(fx.sm[i]));
         if (pts.some(q => !q)) return;
+        const o = [0, 0], R = .055 * fw;                        // calé au centre de l'œil (pas sur l'iris, qui suit le regard)
+        pts.forEach(q => { o[0] += q[0] / pts.length; o[1] += q[1] / pts.length; });
         g.save(); g.beginPath(); pts.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.clip();
         const rg = g.createRadialGradient(o[0], o[1], 0, o[0], o[1], R);
         rg.addColorStop(0, 'rgba(255,235,190,1)'); rg.addColorStop(.2, 'rgba(255,150,50,1)'); rg.addColorStop(.5, 'rgba(255,30,15,1)');
