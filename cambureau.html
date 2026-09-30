@@ -25,6 +25,8 @@
      &stats  = panneau de mesures (VISIBLE À L'ANTENNE : tests hors live)
      &test   = lance Zinzin 5 s après le chargement (Actualiser la source = relancer)
      &dur=30 = durée du filtre en secondes
+     &fps=30 · &det=20 · &scale=0.667 = réglages de charge sans renvoyer le fichier
+     &brut   = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI → HTTP Request GET (la cam tel ignore cet événement) :
    https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"zinzin"}}
@@ -41,8 +43,9 @@ const CONFIG = {
   CAM_LABEL        : 'OBS Virtual Camera',  // nom de la caméra lue (la sortie « Source » d'OBS)
   WIDTH            : 1920,
   HEIGHT           : 1080,
-  VIDEO_FPS        : 30,    // images/s lues et affichées. 30 = moitié moins lourd (mettre aussi la source à 30)
+  VIDEO_FPS        : 30,    // images/s lues et affichées (mesuré : 30 = ~+17 pts GPU, 60 = ~+30). Source navigateur au même FPS
   DETECT_FPS       : 30,    // suivis du visage par seconde ; entre deux, le mouvement est prédit
+  RENDER_SCALE     : 1,     // taille de calcul du calque : 1 = 1080p · 0.667 = 720p (moins de GPU, image un peu plus douce)
   PREDICT          : true,  // prédiction entre deux suivis (fluide à 60 i/s)
   SMOOTH           : 0.55,  // lissage du suivi (comme la cam tel)
   FACE_HOLD        : 1.5,   // s sans visage avant que le calque s'efface (la cam normale revient)
@@ -81,6 +84,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const SESSION = get('chat');
   const RAW = has('brut');                          // diagnostic : image affichée telle qu'elle arrive (proportions réelles)
   if (+get('dur') > 0) C.FILTER_DURATION = +get('dur');
+  if (+get('fps') > 0)   C.VIDEO_FPS    = +get('fps');                   // tests sans renvoyer le fichier : &fps=30
+  if (+get('det') > 0)   C.DETECT_FPS   = +get('det');                   // &det=20
+  if (+get('scale') > 0) C.RENDER_SCALE = Math.min(1, +get('scale'));    // &scale=0.667 (calque calculé en 720p)
 
   const $ = s => document.querySelector(s);
   const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
@@ -211,7 +217,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (q !== fx.q) { fx.q = q; fx.lastFrame = t; }
     }
     if (W && H && glp) {
-      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+      const RS = Math.min(1, C.RENDER_SCALE || 1), cw = Math.round(W * RS), ch = Math.round(H * RS);   // taille de calcul du calque
+      if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
       const F = FX[fx.key];
 
       /* 1. Suivi du visage, DETECT_FPS fois par seconde (le reste est prédit) */
@@ -221,7 +228,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
         const ms = performance.now() - t0;
         ST.dets++; ST.detMs += ms; if (ms > ST.detMax) ST.detMax = ms;
         fx.miss = p ? 0 : fx.miss + 1;
-        if (p) { fx.seen = t; F.need.forEach(i => sm(p, i, W, H, t)); }
+        if (p) { fx.seen = t; F.need.forEach(i => sm(p, i, cw, ch, t)); }
         fx.tDet = t;
       }
       const faceOn = fx.seen && fx.miss < 3;
@@ -263,9 +270,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
       /* 4. Dessin */
       const gl = glp.gl;
-      gl.viewport(0, 0, W, H);
+      gl.viewport(0, 0, cw, ch);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vid);
-      gl.uniform2f(glp.res, W, H); gl.uniform1i(glp.n, n); gl.uniform1i(glp.nb, nb);
+      gl.uniform2f(glp.res, cw, ch); gl.uniform1i(glp.n, n); gl.uniform1i(glp.nb, nb);
       gl.uniform2fv(glp.c, bufC); gl.uniform2fv(glp.d, bufD); gl.uniform1fv(glp.r, bufR);
       gl.uniform4fv(glp.bc, bufBC); gl.uniform4fv(glp.bd, bufBD);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -457,7 +464,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       'Cam virtuelle : ' + (ST.vcam == null ? 'état inconnu' : ST.vcam ? 'allumée' : 'éteinte')
                   + (!C.VCAM_AUTO ? ' (gérée à la main)' : vcamCan() ? ' (auto ✅)' : ' (auto impossible : « Accès complet à OBS » ?) ⚠️'),
       'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + (vid.videoWidth || s.width) + '×' + (vid.videoHeight || s.height) + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
-      'Calque : ' + (fx.on ? ST.fps + ' i/s · suivi ' + ST.dps + '/s · ' + f1(ST.avg) + ' ms (max ' + f1(ST.max) + ') · visage '
+      'Calque : ' + (fx.on ? ST.fps + ' i/s · calcul ' + cv.width + '×' + cv.height + ' · suivi ' + ST.dps + '/s · ' + f1(ST.avg) + ' ms (max ' + f1(ST.max) + ') · visage '
                              + (fx.face > .5 ? 'vu' : 'perdu') + (fx.useRaf ? ' · mode secours' : '') : '—'),
       'État   : ' + (fx.on ? fx.key + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
                   + (fxQ.length ? ' · file ' + fxQ.length : ''),
