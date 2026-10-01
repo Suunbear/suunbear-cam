@@ -29,8 +29,9 @@
      &test=zinzin  = lance ce filtre 5 s après le chargement (Actualiser la source = relancer)
      &dur=30       = durée du filtre en secondes
      &fps=30 · &det=30 · &scale=0.667 = réglages de charge sans renvoyer le fichier
-     &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0
-                   = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode
+     &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
+                   = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
+                     angle de tête/corps qui le fait changer de côté, sans suivi du corps
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI, un bouton par filtre :
@@ -82,8 +83,12 @@ const CONFIG = {
   PAAT_AVANTBRAS   : 1.6,   // avant-bras musclé façon Popeye · 1 = comme la cam tel
   PAAT_BRAS        : "tatoue",   // "tatoue" (muscle + soleil sur l'épaule) · "muscle" · "poilu" · "nouille" · "simple"
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
-  PAAT_AUTO        : 7,     // s entre deux changements de côté tout seul (± 20 %)
-  PAAT_TOURNE      : 0.2,   // tu tournes la tête vers lui de ça (0 → 1 = profil) → il passe de l'autre côté
+  PAAT_AUTO        : 7,     // s entre deux changements de côté tout seul (± 20 %) — jamais vers là où tu regardes
+  PAAT_CORPS       : true,  // suivi du corps (MediaPipe « pose » léger, ~6 Mo, 15 fois/s pendant Paatrice seulement) :
+                            // il sait où tu regardes (tête, puis épaules) même de profil, et suit ta tête de profil
+  PAAT_REGARD      : 40,    // degrés : ta tête (ou ton corps) tournée au-delà vers un côté → il passe de l'autre côté, dans ton dos
+                            // (tête et corps opposés : la tête gagne)
+  PAAT_TOURNE      : 0.2,   // sans suivi du corps : tu tournes la tête vers lui de ça (0 → 1 = profil) → il change de côté
   PAAT_LACET       : 1.3,   // tête tournée : décalage du centre de ta tête (mains et Paatrice suivent ta vraie tête)
   PAAT_BLABLA      : 6,     // s de silence max avant qu'il reparle
   PAAT_STAND_1     : 14,    // s avant le 1er Stand (+ 0 à 6 s au hasard) · nom SAMMI « stand » = Stand dès le début
@@ -130,6 +135,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   if (+get('taille') > 0) C.PAAT_TAILLE = +get('taille');                // Paatrice : &taille=1.2 (plus grand)
   if (has('detour'))     C.PAAT_DETOURAGE = get('detour') !== '0';       // Paatrice : &detour=1 (derrière toi, détouré)
   if (has('calque'))     C.PAAT_CALQUE = get('calque') !== '0';          // Paatrice : &calque=0 (ancienne méthode, pour comparer)
+  if (has('corps'))      C.PAAT_CORPS = get('corps') !== '0';            // Paatrice : &corps=0 (sans suivi du corps)
+  if (+get('regard') > 0) C.PAAT_REGARD = +get('regard');                // Paatrice : &regard=30 (réagit plus tôt quand tu tournes)
   if (get('marge') !== '') C.PAAT_MARGE = +get('marge') || 0;            // Paatrice : &marge=2 (gommage plus large autour de toi)
   if (get('haut') !== '') C.PAAT_HAUT = +get('haut');                    // Paatrice : &haut=-1.8 (sa tête plus haut)
   if (+get('mains') > 0) C.PAAT_MAINS = +get('mains');                   // Paatrice : &mains=1.2 (mains plus grandes)
@@ -326,6 +333,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     } catch (_) {}
     lmState = 'ok';
     if (C.PAAT_DETOURAGE) ensureSeg().catch(() => {});     // détourage (0,25 Mo) prêt d'avance aussi, s'il sert
+    if (C.PAAT_CORPS) ensureBody().catch(() => {});        // suivi du corps (Paatrice) prêt d'avance
     return lm;
   })().catch(e => { lmP = null; lmState = 'err'; ST.err = 'moteur : ' + (e.message || e); throw e; }));
 
@@ -435,6 +443,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
         if (p) { fx.seen = t; F.need.forEach(i => sm(p, i, cw, ch, t)); }
         fx.tDet = t;
         if (F.seg && seg && C.PAAT_DETOURAGE) try { segStep(v, cw, ch); } catch (e) { log('SEG ' + e.message); }
+        if (F.keep && bodyLm && C.PAAT_CORPS && (fx.nPose = (fx.nPose || 0) + 1) % 2 === 0) try { bodyStep(v, cw, ch); } catch (e) { log('POSE ' + e.message); }
         const ms = performance.now() - t0;
         ST.dets++; ST.detMs += ms; if (ms > ST.detMax) ST.detMax = ms;
       }
@@ -444,7 +453,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       let absent = false;
       if (F.keep) {
         const bodyOK = (seg && C.PAAT_DETOURAGE) ? !!(fx.body && fx.body.cov > C.PAAT_BODY_MIN) : !!(fx.seen && t - fx.seen < C.PAAT_HOLD * 1000);
-        if (faceOn) { fx.lastPresent = t; fx.refBody = fx.body && fx.body.cov ? { x:fx.body.x, y:fx.body.y } : null; }
+        if (faceOn) {
+          fx.lastPresent = t; fx.refBody = fx.body && fx.body.cov ? { x:fx.body.x, y:fx.body.y } : null;
+          fx.refHead = fx.ori && t - fx.ori.t < 200 ? { x:fx.ori.hx, y:fx.ori.hy } : null;   // ta tête vue par le suivi du corps, au même moment
+        }
         else if (fx.seen && bodyOK) fx.lastPresent = t;
         absent = !!(fx.t0 && t - fx.t0 > 600 && (!fx.lastPresent || t - fx.lastPresent > C.PAAT_ABSENT * 1000));
         fx.pstate = absent ? 'absent' : faceOn ? 'ok' : 'profil';
@@ -496,8 +508,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
           bufC[i * 2] = bx + bufD[i * 2]; bufC[i * 2 + 1] = by + bufD[i * 2 + 1];
         }
       }
-      if (pose && F.keep && !faceOn && fx.body && fx.body.cov && fx.refBody) {   // de profil : il suit ta silhouette
-        pose.mx += fx.body.x - fx.refBody.x; pose.my += fx.body.y - fx.refBody.y;
+      if (pose && F.keep && !faceOn) {               // de profil, de dos : il suit ta tête (suivi du corps), sinon ta silhouette
+        if (fx.refHead && fx.ori && t - fx.ori.t < 300) { pose.mx += fx.ori.hx - fx.refHead.x; pose.my += fx.ori.hy - fx.refHead.y; }
+        else if (fx.body && fx.body.cov && fx.refBody) { pose.mx += fx.body.x - fx.refBody.x; pose.my += fx.body.y - fx.refBody.y; }
       }
       fx.n = n; fx.nb = nb; fx.k = k;
 
@@ -1052,6 +1065,38 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     return perCv;
   };
 
+  /* --- Suivi du corps (MediaPipe « pose », version légère) : où tu regardes (oreilles, épaules), même de profil --- */
+  const POSE_MODELS = ['https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+                       'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'];
+  let bodyLm = null, bodyP = null;
+  const ensureBody = () => bodyP || (bodyP = (async () => {
+    const V = await import(MP_BASE + '/vision_bundle.mjs');
+    const files = await V.FilesetResolver.forVisionTasks(MP_BASE + '/wasm');
+    const make = (url, delegate) => V.PoseLandmarker.createFromOptions(files, { baseOptions:{ modelAssetPath:url, delegate }, runningMode:'VIDEO', numPoses:1 });
+    let err;
+    for (const url of POSE_MODELS) {                         // lien de secours si le premier ne répond pas
+      try { return (bodyLm = await make(url, 'GPU')); } catch (e) { err = e; }
+      try { return (bodyLm = await make(url, 'CPU')); } catch (e) { err = e; }
+    }
+    throw err;
+  })().catch(e => { bodyP = null; throw e; }));
+  /* angles (degrés, 0 = de face · + = tourné vers la droite de l'image) de ta tête (oreilles) et de ton corps (épaules) */
+  const bodyStep = (v, W, H) => {
+    const r = bodyLm.detectForVideo(v, lmTime());
+    const w = r && r.worldLandmarks && r.worldLandmarks[0], p = r && r.landmarks && r.landmarks[0];
+    if (!w || !p) { fx.ori = null; return; }
+    const ang = (a, b) => {
+      if (Math.min(p[a].visibility == null ? 1 : p[a].visibility, p[b].visibility == null ? 1 : p[b].visibility) < .3) return null;
+      const d = Math.atan2(w[a].z - w[b].z, w[a].x - w[b].x) * 57.2958;
+      return Math.abs(d) > 125 ? null : d;                   // de dos : on ne sait pas
+    };
+    const o = fx.ori || (fx.ori = { head:null, body:null }), h = ang(7, 8), b = ang(11, 12);
+    o.head = h == null ? null : o.head == null ? h : o.head + (h - o.head) * .5;   // lissé
+    o.body = b == null ? null : o.body == null ? b : o.body + (b - o.body) * .5;
+    o.hx = (p[7].x + p[8].x) / 2 * W; o.hy = (p[7].y + p[8].y) / 2 * H;            // ta tête (milieu des oreilles)
+    o.t = performance.now();
+  };
+
   /* Où un point du visage se retrouve APRÈS déformation (loupes + points) : pour poser un dessin pile dessus */
   const bulgeSrc = (x, y, nb) => {                          // loupes seules : image affichée → image caméra
     for (let i = 0; i < nb; i++) {
@@ -1353,7 +1398,21 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const fits = s => { const p = G(s * (COTE + .6), HAUT); return p[0] > R * .85 && p[0] < W - R * .85; };   // ce côté a assez de place ? (sa tête + l'écart pour ta main)
     /* tu tournes la tête vers lui → il passe de l'autre côté. On regarde le MOUVEMENT de ta tête
        (par rapport à ta position habituelle) : à la cam bureau tu es souvent tourné vers l'écran. */
-    const dy0 = gy.yawF - gy.yawB, turn = dy0 < -C.PAAT_TOURNE ? 1 : dy0 > C.PAAT_TOURNE ? -1 : 0;   // 1 = il doit être côté « droite du repère »
+    /* Suivi du corps : tête (oreilles) d'abord, sinon épaules — même de profil. Tête et corps opposés : la tête gagne.
+       Tu regardes vers la droite → il passe à gauche (dans ton dos). Sans suivi du corps : le mouvement de ton visage. */
+    const O = fx.ori && fx.now - fx.ori.t < 500 ? fx.ori : null;
+    let gaze = 0;                                          // +1 = tu regardes vers la droite de l'image · -1 = la gauche · 0 = de face
+    if (O) {
+      const TH = C.PAAT_REGARD, g0 = gy.gaze || 0;
+      const dir = a => a == null ? 0 : (a * g0 > 0 && Math.abs(a) > TH * .75) ? g0 : a > TH ? 1 : a < -TH ? -1 : 0;   // un peu d'hystérésis
+      const hs = dir(O.head), bs = dir(O.body);
+      gaze = hs || (O.head != null && Math.abs(O.head) > TH * .5 && Math.sign(O.head) === -bs ? 0 : bs);
+    } else {
+      const dy0 = gy.yawF - gy.yawB;
+      gaze = dy0 > C.PAAT_TOURNE ? 1 : dy0 < -C.PAAT_TOURNE ? -1 : 0;
+    }
+    gy.gaze = gaze;
+    const turn = -gaze * Math.sign(rx || 1);               // côté où il doit être, dans le repère de ton visage
     if (!gy.side) {
       gy.side = gy.to = mx < W / 2 ? 1 : -1;               // du côté où il y a de la place
       if (!fits(gy.side) && fits(-gy.side)) gy.side = gy.to = -gy.side;
@@ -1362,13 +1421,13 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (!gy.sw) {
       gy.auto += dt;
       if (!fits(gy.side) && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }        // il sortirait de l'image → autre côté
-      else if (sk === 0 && el > 2.5 && gy.auto > 1.5 && turn && turn !== gy.side && fits(turn)) {   // tu as tourné la tête vers lui
+      else if (sk === 0 && el > 2.5 && gy.auto > .8 && turn && turn !== gy.side && fits(turn)) {    // tu regardes de son côté
         if (gy.want !== turn) { gy.want = turn; gy.wantT = 0; }
         gy.wantT += dt;
         if (gy.wantT > .2) { gy.to = turn; gy.sw = 1; gy.want = 0; gy.why = 'tourne'; }
       } else {
         gy.want = 0;
-        if (gy.st < 0 && el > 2.5 && gy.auto > gy.autoT && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }   // farceur : il te tourne autour
+        if (gy.st < 0 && el > 2.5 && gy.auto > gy.autoT && fits(-gy.side) && !(turn && turn === gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }   // farceur : il te tourne autour (jamais vers là où tu regardes)
       }
     }
     if (gy.sw === 1) {                                     // changement net : il rétrécit vite…
@@ -1787,13 +1846,14 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const fxStart = async key => {
     if (fx.on) return;
     Object.assign(fx, { on:true, ending:false, key, t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, parts:[], guy:null,
-                        pup:null, body:null, refBody:null, lastPresent:0, pstate:'',
+                        pup:null, body:null, refBody:null, lastPresent:0, pstate:'', ori:null, refHead:null, nPose:0,
                         mask:false, last:0, tDet:0, lastFrame:performance.now(), useRaf:false, got:false, q:-1 });
     segPrev = null; segImg = null;
     ST.err = '';
     try {
       await ensureLM();
       if (FX[key].seg && C.PAAT_DETOURAGE) await ensureSeg().catch(() => {});
+      if (FX[key].keep && C.PAAT_CORPS) await ensureBody().catch(e => log('suivi du corps indisponible : ' + (e.message || e)));
       glInit();
       if (FX[key].stk) sprites();                    // dessins préparés AVANT le compte à rebours
       await vcamOn();
@@ -1831,7 +1891,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   };
   const fxCleanup = () => {
     fx.on = false; fx.ending = false; fx.t0 = 0; fx.drawn = null; fx.parts = []; fx.guy = null; fx.mask = false;
-    fx.pup = null; fx.body = null; fx.refBody = null; fx.lastPresent = 0;
+    fx.pup = null; fx.body = null; fx.refBody = null; fx.lastPresent = 0; fx.ori = null; fx.refHead = null;
     if (actx) actx.clearRect(0, 0, fxa.width, fxa.height);
     cancelAnimationFrame(fx.raf);
     try { vid.cancelVideoFrameCallback(fx.rvfc); } catch (_) {}
@@ -1905,7 +1965,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
                   + (fxQ.length ? ' · file ' + fxQ.length : ''),
       fx.on && FX[fx.key].keep ? 'Paatrice : ' + ({ ok:'à côté de toi', profil:'dans ton dos (visage perdu)', absent:'marionnette (tu n\'es pas à l\'image)' }[fx.pstate] || '…')
                   + (fx.body ? ' · silhouette ' + Math.round((fx.body.cov || 0) * 100) + ' %' : '')
-                  + (fx.guy && fx.guy.st >= 0 ? ' · STAND' : '') + (C.PAAT_CALQUE ? ' · calque transparent' : ' · ancienne méthode') : '',
+                  + (fx.guy && fx.guy.st >= 0 ? ' · STAND' : '') + (C.PAAT_CALQUE ? ' · calque transparent' : ' · ancienne méthode')
+                  + '\nRegard   : ' + (!C.PAAT_CORPS ? 'suivi du corps coupé' : !bodyLm ? 'suivi du corps pas prêt ⚠️'
+                     : fx.ori ? 'tête ' + (fx.ori.head == null ? '?' : Math.round(fx.ori.head) + '°') + ' · corps ' + (fx.ori.body == null ? '?' : Math.round(fx.ori.body) + '°')
+                       + ' → ' + (fx.guy && fx.guy.gaze ? (fx.guy.gaze > 0 ? 'tu regardes à droite' : 'tu regardes à gauche') : 'de face') : 'personne') : '',
       ST.err ? 'Erreur : ' + ST.err : '',
       RAW ? 'BRUT   : vidéo ' + vid.videoWidth + '×' + vid.videoHeight + ' · capacités ' + (ST.caps || '?')
             + '\nAppareils : ' + (ST.devs || '?') : ''
