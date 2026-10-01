@@ -29,7 +29,8 @@
      &test=zinzin  = lance ce filtre 5 s après le chargement (Actualiser la source = relancer)
      &dur=30       = durée du filtre en secondes
      &fps=30 · &det=30 · &scale=0.667 = réglages de charge sans renvoyer le fichier
-     &cote=3 · &taille=1 · &detour=1 = Paatrice (« derriere ») : écart, taille, détourage, sans renvoyer le fichier
+     &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0
+                   = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI, un bouton par filtre :
@@ -38,7 +39,8 @@
      4. attendre 95000 ms · 5. arrêter la caméra virtuelle
    noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (sans accents)
           (anciennes versions : content1 · chad1)
-          Paatrice, 3 variantes cam bureau : derriere (sort de ton dos) · derriere2 (farceur) · stand (façon Stand de manga)
+          Paatrice cam bureau = le farceur : derriere (Stand de temps en temps) · stand (pareil, Stand dès le début)
+          (anciens noms acceptés : derriere2 · farceur · bouche · jojo)
    La cam tel écoute "filtre", la cam bureau "filtre_bureau" : chacune ignore l'autre.
 
    OBS doit être lancé avec l'option --enable-media-stream.
@@ -64,17 +66,33 @@ const CONFIG = {
   FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // filtre par filtre (chat = Kawai, fache = Colère)
   FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
-  PAAT_BRAS        : "tatoue",   // Paatrice (« derrière toi ») : "tatoue" · "muscle" · "poilu" · "nouille" · "simple"
+  /* --- Paatrice (nom SAMMI « derriere ») : le farceur, gag Stand de temps en temps --- */
+  PAAT_CALQUE      : true,  // true = dessiné seul sur un calque transparent, gommé là où tu es : la vraie cam reste dessous
+                            //        en direct (pas de fantôme, moins de GPU) · false = ancienne méthode (image entière recopiée)
+  PAAT_DETOURAGE   : true,  // true = il passe DERRIÈRE toi (détourage) · false = à côté, sans détourage
+  PAAT_MARGE       : 1.5,   // gommage un peu plus large que toi (cache le retard du détourage quand tu bouges vite) · 0 = pile
+  PAAT_TAILLE      : 1.5,   // taille de Paatrice (1 = comme la cam tel) : tu es plus loin de la cam bureau
+  PAAT_COTE        : 3.1,   // sa tête : écart sur le côté, en « largeurs d'yeux » (tes yeux, d'un coin à l'autre)
+  PAAT_HAUT        : -1.6,  // … et hauteur (négatif = au-dessus de tes yeux)
+  PAAT_DOS_X       : 1.2,   // point de ton dos d'où il « sort » (épaule) : écart sur le côté…
+  PAAT_DOS_Y       : 2.4,   // … et hauteur sous tes yeux
+  PAAT_MAINS       : 1.0,   // taille de ses mains
+  PAAT_MAINS_X     : 2.05,  // ses deux mains : écart de chaque côté de ton visage (jamais devant)
+  PAAT_MAINS_Y     : 1.15,  // … hauteur du poignet (le doigt monte jusqu'à tes yeux)
+  PAAT_AVANTBRAS   : 1.6,   // avant-bras musclé façon Popeye · 1 = comme la cam tel
+  PAAT_BRAS        : "tatoue",   // "tatoue" (muscle + soleil sur l'épaule) · "muscle" · "poilu" · "nouille" · "simple"
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
-  PAAT_COTE        : 3,     // écart de Paatrice sur le côté, en « largeurs d'yeux » (cam tel : 1.3 = très caché derrière toi)
-  PAAT_DETOURAGE   : true,  // true = il passe DERRIÈRE toi (détourage, ~+5 pts GPU) · false = à côté, sans détourage
-  PAAT_DOS_X       : 1.1,   // point de ton dos d'où il « sort » (épaule) : écart sur le côté…
-  PAAT_DOS_Y       : 2.4,   // … et hauteur sous tes yeux (largeurs d'yeux)
-  PAAT_AVANTBRAS   : 1.35,  // avant-bras plus musclé (il s'allonge vers toi) · 1 = comme la cam tel
+  PAAT_AUTO        : 7,     // s entre deux changements de côté tout seul (± 20 %)
+  PAAT_TOURNE      : 0.2,   // tu tournes la tête vers lui de ça (0 → 1 = profil) → il passe de l'autre côté
+  PAAT_LACET       : 1.3,   // tête tournée : décalage du centre de ta tête (mains et Paatrice suivent ta vraie tête)
+  PAAT_BLABLA      : 6,     // s de silence max avant qu'il reparle
+  PAAT_STAND_1     : 14,    // s avant le 1er Stand (+ 0 à 6 s au hasard) · nom SAMMI « stand » = Stand dès le début
+  PAAT_STAND_ECART : 30,    // s entre deux Stands (± 25 %)
+  PAAT_STAND_DUREE : 6,     // durée d'un Stand (rafale « PAA PAA PAA » au milieu)
+  PAAT_MARIONNETTE : 1,     // taille de la marionnette (tu n'es pas à l'image)
   PAAT_ABSENT      : 1.5,   // s sans toi à l'image → il passe au milieu de l'écran, en marionnette
   PAAT_BODY_MIN    : 0.04,  // part de l'image où le détourage te voit encore (de profil, de dos) → tu es « là »
   PAAT_HOLD        : 8,     // sans détourage seulement : s pendant lesquels tu es « là » après avoir perdu ton visage
-  PAAT_TAILLE      : 1,     // taille de Paatrice (1 = comme la cam tel · 1.2 = plus grand)
   FILTER_QUEUE_MAX : 10,
   FILTER_PRELOAD   : true   // moteur prêt au chargement → 1er filtre immédiat (au repos : aucun calcul)
 };
@@ -83,7 +101,7 @@ const CONFIG = {
 html, body { margin:0; width:100%; height:100%; overflow:hidden; background:transparent; }
 #fx, #fxa { position:fixed; inset:0; width:100%; height:100%; display:block; opacity:0; pointer-events:none; }
 #fx.on, #fxa.on { opacity:1; }
-#fxa { z-index:2; transition:opacity .25s linear; }   /* Paatrice seul (marionnette), fond transparent : la vraie cam reste dessous */
+#fxa { z-index:2; transition:opacity .25s linear; }   /* Paatrice seul (farceur et marionnette), fond transparent : la vraie cam reste dessous */
 #src { position:fixed; left:0; top:0; width:2px; height:2px; opacity:.01; pointer-events:none; }  /* source du moteur, invisible */
 #hud { position:fixed; left:14px; top:14px; z-index:5; display:none; padding:9px 12px; border-radius:8px;
        background:rgba(0,0,0,.75); color:#eee; font:600 16px/1.45 Consolas, ui-monospace, monospace; white-space:pre; }
@@ -111,6 +129,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   if (+get('cote') > 0)  C.PAAT_COTE    = +get('cote');                  // Paatrice : &cote=2.2 (plus sur le côté)
   if (+get('taille') > 0) C.PAAT_TAILLE = +get('taille');                // Paatrice : &taille=1.2 (plus grand)
   if (has('detour'))     C.PAAT_DETOURAGE = get('detour') !== '0';       // Paatrice : &detour=1 (derrière toi, détouré)
+  if (has('calque'))     C.PAAT_CALQUE = get('calque') !== '0';          // Paatrice : &calque=0 (ancienne méthode, pour comparer)
+  if (get('marge') !== '') C.PAAT_MARGE = +get('marge') || 0;            // Paatrice : &marge=2 (gommage plus large autour de toi)
+  if (get('haut') !== '') C.PAAT_HAUT = +get('haut');                    // Paatrice : &haut=-1.8 (sa tête plus haut)
+  if (+get('mains') > 0) C.PAAT_MAINS = +get('mains');                   // Paatrice : &mains=1.2 (mains plus grandes)
 
   const $ = s => document.querySelector(s);
   const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
@@ -154,9 +176,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
     /* --- Façon Snapchat / TikTok : loupes [points (centre = moyenne), largeur, hauteur, force]
        force > 0 = grossit (0.75 ≈ ×4 au centre) · force < 0 = rapetisse --- */
-    derriere: { name:'👀 Derrière toi', stk:'derriere', seg:true },   // Paatrice surgit derrière toi (détourage)
-    derriere2: { name:'👀 Paatrice farceur', stk:'derriere2', seg:true },   // cam bureau : il te tourne autour, bulles, double doigt
-    stand: { name:'👻 Stand Paatrice', stk:'stand', seg:true },             // cam bureau : façon « Stand » de manga
+    derriere: { name:'👀 Paatrice farceur', stk:'derriere', seg:true },   // cam bureau : LE Paatrice (farceur, Stand de temps en temps)
+    stand: { name:'👻 Paatrice farceur (Stand)', stk:'derriere', seg:true, standFirst:true },   // pareil, mais il commence par le Stand
     mini: { name:'🤏 Mini', bulge:[                     // l'inverse de Zinzin
       [EYE_R, .48, .38, -.86], [EYE_L, .48, .38, -.86], // yeux tout petits
       [MOUTH, .80, .42, -.86]                           // bouche toute petite
@@ -274,7 +295,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
                      152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];   // tour du visage
   const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
                     [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
-  const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454], derriere2:[10, 152, 1, 234, 454], stand:[10, 152, 1, 234, 454],
+  const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
                     content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
@@ -362,12 +383,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* ============================================================
      Calque bureau : état, suivi, dessin (propre à cette page)
      ============================================================ */
-  ['derriere', 'derriere2', 'stand'].forEach(k => { FX[k].keep = true; });   // Paatrice : présence (profil, absent → marionnette)
+  ['derriere', 'stand'].forEach(k => { FX[k].keep = true; });   // Paatrice : présence (profil, absent → marionnette)
   const fx = { on:false, ending:false, key:'', t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, n:0, nb:0, k:0,
                parts:[], guy:null, mask:false, last:0, now:0, tDet:0, lastFrame:0, track:null,
                rvfc:0, raf:0, useRaf:false, got:false, drawn:null, q:-1 };
   const fxQ = [];
-  const fxa = $('#fxa'); let actx = null;           // calque transparent : Paatrice marionnette (la vraie cam reste dessous)
+  const fxa = $('#fxa'); let actx = null;           // calque transparent : Paatrice seul (la vraie cam reste dessous, en direct)
   const fxaCtx = (w, h) => { if (fxa.width !== w || fxa.height !== h) { fxa.width = w; fxa.height = h; } return actx || (actx = fxa.getContext('2d')); };
   const bufC = new Float32Array(FX_N * 2), bufD = new Float32Array(FX_N * 2), bufR = new Float32Array(FX_N);
   const bufBC = new Float32Array(FX_B * 4), bufBD = new Float32Array(FX_B * 4);
@@ -480,12 +501,20 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       }
       fx.n = n; fx.nb = nb; fx.k = k;
 
-      /* 4. Dessin : déformation (WebGL) puis dessins animés par-dessus (2D) */
-      if (absent) {                                  // tu n'es pas à l'image : Paatrice marionnette, sur le calque transparent
+      /* 4. Dessin : déformation (WebGL) puis dessins animés par-dessus (2D).
+            Paatrice (PAAT_CALQUE) : dessiné seul sur le calque transparent, la vraie cam reste dessous en direct. */
+      const paatT = !!(F.keep && C.PAAT_CALQUE);
+      if (absent || paatT) {
         const ga = fxaCtx(cw, ch);
-        ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.clearRect(0, 0, cw, ch);
-        try { paatPuppet(ga, cw, ch, t, dt, amt, F.stk === 'stand' ? 'stand' : F.stk === 'derriere2' ? 'creatif' : 'reco'); } catch (e) { log('PUPPET ' + e.message); }
-        if (fx.guy) fx.guy.init = false;
+        ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.globalCompositeOperation = 'source-over'; ga.clearRect(0, 0, cw, ch);
+        if (absent) {                                // tu n'es pas à l'image : marionnette
+          try { paatPuppet(ga, cw, ch, t, dt, amt); } catch (e) { log('PUPPET ' + e.message); }
+          if (fx.guy) fx.guy.init = false;
+        } else {
+          fx.pup = null;
+          const maskOK = fx.mask || !(seg && C.PAAT_DETOURAGE);   // jamais dessiné avant le 1er détourage (il serait devant toi)
+          if (pose && amt > 0.01 && maskOK) try { paatScene(ga, pose, amt, el, dt, v, cw, ch, true); } catch (e) { log('PAAT ' + e.message); }
+        }
       } else {
       fx.pup = null;
       out2d.setTransform(1, 0, 0, 1, 0, 0);
@@ -509,10 +538,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const okRatio = RAW || ratioOK(W, H);
       if (!okRatio) ST.err = 'image ' + W + '×' + H + ' au lieu de 16:9 → calque masqué';
       const live = !!(fx.t0 && !fx.ending);
-      const want = !absent && (RAW ? live
+      const want = !absent && !paatT && (RAW ? live
                        : !!(okRatio && live && fx.seen && (F.keep ? fx.lastPresent : t - fx.seen < C.FACE_HOLD * 1000)));
+      const wantA = live && (absent || (paatT && (RAW || !!(okRatio && fx.seen && fx.lastPresent))));   // calque transparent
       if (want !== fxCv.classList.contains('on')) fxCv.classList.toggle('on', want);
-      if ((live && absent) !== fxa.classList.contains('on')) fxa.classList.toggle('on', live && absent);   // marionnette
+      if (wantA !== fxa.classList.contains('on')) fxa.classList.toggle('on', wantA);
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
     }
     sched();
@@ -766,8 +796,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* bras tendu vers toi, de son épaule extérieure jusqu'au poignet — coordonnées écran.
      type : 'muscle' · 'tatoue' (muscle + soleil) · 'poilu' (muscle + poils) · 'nouille' · 'simple' */
   const ARM_RED = '#c73529', ARM_DARK = '#9c2419';
-  const paatArm = (g, S0, W0, k, down, type, el, armHair) => {
-    type = type || 'muscle';
+  const paatArm = (g, S0, W0, k, down, type, el, armHair, o) => {
+    type = type || 'muscle'; o = o || {};   // o : { elbow:[x, y] coude imposé · tat:false = sans tatouage · tatZ = taille du tatouage }
     if (type === 'simple' || type === 'nouille') {
       const L = Math.hypot(W0[0] - S0[0], W0[1] - S0[1]) || 1, ux = (W0[0] - S0[0]) / L, uy = (W0[1] - S0[1]) / L;
       const pts = [];
@@ -787,7 +817,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
        Formes rondes superposées ; un seul contour par groupe (on trace le contour de tout, puis on remplit par-dessus). */
     const DL = Math.hypot(down[0], down[1]) || 1, dvx = down[0] / DL, dvy = down[1] / DL, fwA = k * 512 / 2.2;
     const ox = S0[0] - W0[0], oy = S0[1] - W0[1], oL = Math.hypot(ox, oy) || 1;          // « vers l'extérieur »
-    const E = [S0[0] + dvx * 1.25 * fwA + ox / oL * .45 * fwA, S0[1] + dvy * 1.25 * fwA + oy / oL * .45 * fwA];   // coude bas et écarté du corps
+    const E = o.elbow || [S0[0] + dvx * 1.25 * fwA + ox / oL * .45 * fwA, S0[1] + dvy * 1.25 * fwA + oy / oL * .45 * fwA];   // coude bas et écarté du corps
     const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
     const capsule = (A, B, r0, r1) => {                      // cylindre arrondi qui s'affine de A vers B
       const a = Math.atan2(B[1] - A[1], B[0] - A[0]);
@@ -810,8 +840,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
                    oval([bic[0] - bnx * r(30), bic[1] - bny * r(30)], uL * .4, r(44), ua),    // triceps
                    oval([S0[0] - bnx * r(4), S0[1] - bny * r(4)], r(84), r(72), ua)];     // épaule (deltoïde)
     const fb = C.PAAT_AVANTBRAS || 1;                      // cam bureau : avant-bras plus musclé (il s'allonge vers toi)
-    const fore = [capsule(E, W0, r(50 * fb), r(34 * fb)),
-                  oval(lerp(E, W0, .3).map((v, i) => v + [fnx, fny][i] * r(22 * fb)), fL * .34, r(52 * fb), fa)];   // avant-bras « Popeye »
+    const fore = [capsule(E, W0, r(50 * fb), r(34 * Math.sqrt(fb))),                     // s'affine vers le poignet
+                  oval(lerp(E, W0, .3).map((v, i) => v + [fnx, fny][i] * r(22 * fb)), fL * .34, r(52 * fb), fa),    // avant-bras « Popeye »
+                  oval(lerp(E, W0, .16).map((v, i) => v - [fnx, fny][i] * r(12 * fb)), fL * .2, r(38 * fb), fa)];   // gros muscle sous le coude
     const group = (paths, light) => {
       g.save(); g.strokeStyle = P_INK; g.lineWidth = r(26); g.lineJoin = 'round';
       paths.forEach(p => g.stroke(p));                       // contour de tout le groupe…
@@ -828,7 +859,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const pt = (C, nx, ny, a, u, v) => [C[0] + Math.cos(a) * u + nx * v, C[1] + Math.sin(a) * u + ny * v];
     brush(g, [pt(bic, bnx, bny, ua, uL * .3, r(0)), pt(bic, bnx, bny, ua, uL * .4, r(40)), pt(bic, bnx, bny, ua, uL * .3, r(84))], ink(8), rnd);   // creux sous le biceps
     brush(g, [pt(S0, bnx, bny, ua, r(40), r(-30)), pt(S0, bnx, bny, ua, r(80), r(4))], ink(7), rnd);                                       // deltoïde
-    const tat = type === 'tatoue' ? pt(S0, bnx, bny, ua, r(6), -r(6)) : null, tatR = r(24);   // tatouage : au milieu de l'épaule (deltoïde)
+    const hasTat = type === 'tatoue' && o.tat !== false;
+    const tat = hasTat ? pt(S0, bnx, bny, ua, r(6), -r(6)) : null, tatR = r(24 * (o.tatZ || 1));   // tatouage : au milieu de l'épaule (deltoïde)
     let seed = 7919; const pr = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
     const curls = (n, at) => {                               // boucles au crayon, comme sur le torse
       g.save(); g.strokeStyle = P_INK; g.lineCap = 'round';
@@ -849,8 +881,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       curls(18, (u, v) => { const p = lerp(S0, E, .2 + u * .65), w = -r(12) - v * r(44); return [p[0] + bnx * w, p[1] + bny * w]; });   // extérieur du bras
       curls(7, (u, v) => { const p = lerp(S0, E, .3 + u * .45), w = r(20) + v * r(50); return [p[0] + bnx * w, p[1] + bny * w]; });   // biceps : clairsemé
     }
-    if (type === 'tatoue' && P_SUN.complete && P_SUN.naturalWidth) {   // tatouage : le soleil des Soleils, sur l'épaule
-      const z = r(124);
+    if (hasTat && P_SUN.complete && P_SUN.naturalWidth) {   // tatouage : le soleil des Soleils, sur l'épaule
+      const z = r(124 * (o.tatZ || 1));
       g.save(); g.translate(tat[0], tat[1]); g.rotate(ua - Math.PI / 2); g.globalAlpha = .96;
       g.drawImage(P_SUN, -z / 2, -z / 2, z, z); g.restore();
     }
@@ -860,6 +892,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       curls(8, (u, v) => { const p = lerp(E, W0, .1 + u * .6), w = -r(6) - v * r(30); return [p[0] + fnx * w, p[1] + fny * w]; });   // dessous : clairsemé
     }
     brush(g, [pt(E, fnx, fny, fa, fL * .15, r(10)), pt(E, fnx, fny, fa, fL * .38, r(22)), pt(E, fnx, fny, fa, fL * .55, r(18))], ink(6), rnd);   // muscle de l'avant-bras
+    if (fb > 1.2) brush(g, [pt(E, fnx, fny, fa, fL * .1, -r(14 * fb)), pt(E, fnx, fny, fa, fL * .26, -r(26 * fb)), pt(E, fnx, fny, fa, fL * .4, -r(20 * fb))], ink(5), rnd);   // … et dessous
     if (type === 'poilu') {                                  // poils sur le bras (toujours les mêmes : pas de scintillement)
       g.save(); g.strokeStyle = P_INK; g.lineCap = 'round';
       let seed = 1234; const pr = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -981,10 +1014,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     throw err;
   })().catch(e => { segP = null; throw e; }));
   const segIn = document.createElement('canvas'), segMask = document.createElement('canvas'), perCv = document.createElement('canvas');
+  const segMaskD = document.createElement('canvas');          // masque élargi de PAAT_MARGE (gommage de Paatrice : cache le retard du détourage)
   let segImg = null, segPrev = null;
   const segStep = (v, W, H) => {                             // masque basse définition (rapide), lissé dans le temps
     const sw = W < H ? Math.round(256 * W / H) : 256, sh = W < H ? 256 : Math.round(256 * H / W);
-    if (segIn.width !== sw || segIn.height !== sh) { segIn.width = segMask.width = sw; segIn.height = segMask.height = sh; segImg = null; }
+    if (segIn.width !== sw || segIn.height !== sh) { segIn.width = segMask.width = segMaskD.width = sw; segIn.height = segMask.height = segMaskD.height = sh; segImg = null; }
     segIn.getContext('2d').drawImage(v, 0, 0, sw, sh);
     seg.segmentForVideo(segIn, lmTime(), res => {
       const m = res && res.confidenceMasks && res.confidenceMasks[0]; if (!m) return;
@@ -998,6 +1032,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
         if (q > .5) { cnt++; sx += i % sw; sy += (i / sw) | 0; }
       }
       segMask.getContext('2d').putImageData(segImg, 0, 0);
+      if (C.PAAT_MARGE > 0) {                                // marge : le masque recopié décalé tout autour (≈ ×7,5 à l'écran)
+        const d = segMaskD.getContext('2d'), mg = C.PAAT_MARGE;
+        d.globalCompositeOperation = 'copy'; d.drawImage(segMask, 0, 0); d.globalCompositeOperation = 'source-over';
+        for (let j = 0; j < 8; j++) d.drawImage(segMask, Math.cos(j * .7854) * mg, Math.sin(j * .7854) * mg);
+      }
       fx.mask = true;
       // cam bureau : où est ta silhouette ? (sert quand le visage est perdu : de profil, de dos)
       fx.body = cnt ? { cov:cnt / n, x:(sx / cnt + .5) * W / sw, y:(sy / cnt + .5) * H / sh } : { cov:0 };
@@ -1054,18 +1093,20 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   };
 
   /* ============================================================
-     PAATRICE — version CAM BUREAU, 3 variantes (remplacent « derriere » de la cam tel)
-       derriere  (reco)    : il SORT DE TON DOS (penché, le bas du torse caché derrière toi),
-                             bien sur le côté, doigt d'honneur, avant-bras costaud
-       derriere2 (farceur) : pareil + il te tourne autour, bulles de BD, double doigt d'honneur
-       stand     (Stand)   : façon « Stand » de manga : grand, flotte au-dessus de ton épaule,
-                             aura violette, ゴゴゴ, carte « STAND », rafale de doigts d'honneur
-     Toutes : changement de côté net · jamais hors de l'image · reste dans ton dos de profil ·
-              tu n'es pas à l'image → marionnette au milieu de l'écran (paatPuppet)
+     PAATRICE — version CAM BUREAU : le FARCEUR (nom SAMMI « derriere »)
+       · il sort de ton dos et reste penché derrière ton épaule, plus grand que sur la cam tel ;
+       · deux bras en permanence : un doigt d'honneur de CHAQUE côté de ton visage, jamais devant
+         (le 2e bras passe derrière toi et ressort derrière ton autre épaule) ;
+       · il change de côté tout seul, et quand tu tournes la tête vers lui (il évite ton regard) ;
+       · bulles à côté de SA tête, au niveau de sa bouche ;
+       · de temps en temps, gag « Stand » quelques secondes : aura, ゴゴゴ, rafale « PAA PAA PAA » ;
+       · tu n'es pas à l'image → marionnette au milieu de l'écran (paatPuppet).
+     Calque transparent (PAAT_CALQUE) : Paatrice est dessiné seul, puis GOMMÉ là où le détourage te voit.
+     Toi, tu restes la vraie cam en direct, dessous : pas de fantôme, pas de retard sur toi.
      ============================================================ */
   const PAAT_FADES = {};
   /* Paatrice entier dans le repère de sa tête (0..512) : centre (hx, hy), rotation rot, échelle k.
-     stretch = torse allongé (pour qu'il rejoigne ton dos) · fade = bas du torse qui s'efface (Stand).
+     stretch = torse allongé (pour qu'il rejoigne ton dos) · fade = bas du torse qui s'efface ('soft' · 'stand').
      Renvoie la conversion repère de sa tête → écran. */
   const paatFigure = (g, S, hx, hy, rot, k, look, blink, stretch, fade) => {
     stretch = stretch || 1;
@@ -1091,29 +1132,107 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     };
   };
 
-  const BULLES = ["PSSST… T'AS VU ?", 'COUCOU LES SOLEILS !', "IL SAIT PAS QUE J'SUIS LÀ", 'CHUT…', 'TOUJOURS DERRIÈRE TOI !', 'BOUH !'];
-  const BULLES_ABS = ['IL EST OÙ ?!', "J'GARDE LA PLACE !", "IL M'A ABANDONNÉ…"];
-  /* bulle de BD au style de Paatrice (encre épaisse) : (x, y) = pointe de la queue, side = côté où part la bulle */
-  const bubble = (g, x, y, txt, s, side, alpha) => {
+  /* Répliques de Paatrice (bulles). ≤ 30 caractères, « \n » = 2e ligne. Tirées au hasard, sans répétition.
+     Son caractère : bruxellois, « bordel », nonante, vulgarité fun (jamais de mot discriminatoire),
+     absurde et internet, l'IA qui remplace l'humanité, le gouvernement belge, la secte du soleil en clin d'œil. */
+  const BULLES = {
+    arrivee: ['COUCOU LES SOLEILS !', 'SURPRISE, BORDEL !', "T'AS PAS FERMÉ\nÀ CLÉ, SUUN.", 'PAATRICE DANS LA PLACE !'],
+    dos:     ["IL SAIT PAS QUE J'SUIS LÀ", "PSSST… T'AS VU ?", 'TOUJOURS DERRIÈRE TOI !', 'CHUT… LE CHAT,\nVOUS AVEZ RIEN VU.',
+              'JE VIS ICI MAINTENANT.', 'NONANTE POUR CENT\nDE CHARISME.', 'LE SOLEIL VOIT TOUT, SUUN.', 'PLUS STABLE QUE\nLE FÉDÉRAL.',
+              'STABLE COMME UN\nWIFI DE GARE.', 'TA TÊTE CHARGE\nDEPUIS 2012.', 'UN POUR TOI,\nUN POUR LE CHAT.', 'MODE ZWANZE ACTIVÉ !',
+              "L'IA A PRIS\nTA PLACE, SUUN.", 'JE SUIS TON OMBRE,\nEN MIEUX.', 'ALLEZ, SOURIS\nUNE FOIS !'],
+    tourne:  ['RATÉ !', 'TROP LENT, SUUN !', "TU M'AURAS PAS !", 'HOP, PAR ICI !', 'PERDU, BORDEL !', 'ARRÊTE DE GIGOTER !',
+              'CACHE-CACHE\nNIVEAU EXPERT.', "J'SUIS PLUS RAPIDE\nQUE TOI."],
+    stand:   ['ZA PAATRICE !', 'STAND ACTIVÉ, BORDEL !', "TU M'AS INVOQUÉ,\nSUUN ?", 'TOUT LE MONDE\nÀ GENOUX.', 'MON STAND ?\nLE DOIGT.'],
+    absent:  ['IL EST OÙ ?!', "J'GARDE LA PLACE !", "IL M'A ABANDONNÉ…", 'LE STREAM EST À MOI,\nBORDEL !', 'LE CHAT, ON FAIT\nUNE FÊTE ?',
+              'IA AUX COMMANDES.\nENFIN.', 'PAS DE CHEF ?\nTRÈS BELGE.', "REVIENS, J'AI FROID\nAUX DOIGTS."]
+  };
+  const RUSH_TXT = 'PAA PAA PAA PAA !';
+  const BAG = {};
+  const pick = cat => {                                  // au hasard, sans répétition (sac mélangé, puis on recommence)
+    const L = BULLES[cat]; let b = BAG[cat];
+    if (!b || !b.length) {
+      b = BAG[cat] = L.map((_, i) => i).sort(() => Math.random() - .5);
+      if (b.length > 1 && b[0] === BAG[cat + '#']) b.push(b.shift());   // jamais deux fois la même d'affilée
+    }
+    const i = b.shift(); BAG[cat + '#'] = i; return L[i];
+  };
+
+  /* --- petites aides de placement (rectangles [x0, y0, x1, y1, poids]) --- */
+  const ovl = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  const rectOf = pts => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+  const HAND_AR = 262 / 320;                             // proportions de la main (avec son contour)
+  const handRect = h => { const [W0, hh] = h, hw = hh * HAND_AR; return [W0[0] - hw / 2, W0[1] - hh * .93, W0[0] + hw / 2, W0[1] + hh * .07, 2]; };
+  /* place une boîte w × h : candidats (coin haut gauche) par ordre de préférence → le meilleur dans l'image, hors des zones à éviter.
+     only = n° de candidat à évaluer seul. Renvoie [x, y, n°, score]. */
+  const placeBox = (w, h, cands, avoid, W, H, only) => {
+    const m = 8; let best = [0, 0, 0], bs = 1e9;
+    cands.forEach(([x0, y0], i) => {
+      if (only != null && i !== only) return;
+      const x = Math.max(m, Math.min(W - m - w, x0)), y = Math.max(m, Math.min(H - m - h, y0));
+      const r = [x, y, x + w, y + h]; let ov = 0;
+      for (const A of avoid) if (A) ov += ovl(r, A) * (A[4] || 1);
+      const sc = ov / (w * h) * 3 + Math.hypot(x - x0, y - y0) / Math.max(w, h) * .6 + i * .2;
+      if (sc < bs) { bs = sc; best = [x, y, i, sc]; }
+    });
+    return best;
+  };
+
+  /* bulle de BD au style de Paatrice (encre épaisse), 1 ou 2 lignes */
+  const bubbleSize = (g, txt, s) => {
+    g.font = Math.round(s) + 'px "Mouse Memoirs", Impact, sans-serif';
+    const lines = String(txt).split('\n');
+    return { lines, w:Math.max(...lines.map(l => g.measureText(l).width)) + s * .9, h:s * (.32 + lines.length) };
+  };
+  const bubbleDraw = (g, b, x, y, tip, s, alpha) => {    // (x, y) = coin haut gauche · tip = pointe de la queue
     if (!(alpha > .02)) return;
+    const { lines, w, h } = b, r = Math.min(h * .45, s * .62);
     g.save(); g.globalAlpha = alpha;
     g.font = Math.round(s) + 'px "Mouse Memoirs", Impact, sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    const pw = g.measureText(txt).width + s * .9, ph = s * 1.3, r = ph * .45;
-    let bx = side > 0 ? x + s * .2 : x - s * .2 - pw;
-    bx = Math.max(4, Math.min(g.canvas.width - pw - 4, bx));               // jamais hors de l'image
-    const by = Math.max(4, y - s * .9 - ph);
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
     const box = new Path2D();
-    box.moveTo(bx + r, by); box.arcTo(bx + pw, by, bx + pw, by + ph, r); box.arcTo(bx + pw, by + ph, bx, by + ph, r);
-    box.arcTo(bx, by + ph, bx, by, r); box.arcTo(bx, by, bx + pw, by, r); box.closePath();
-    const tx = Math.max(bx + r, Math.min(bx + pw - r, side > 0 ? bx + pw * .22 : bx + pw * .78));
-    const tail = new Path2D();
-    tail.moveTo(tx - s * .25, by + ph - 2); tail.lineTo(x, y); tail.lineTo(tx + s * .25, by + ph - 2); tail.closePath();
-    g.lineJoin = 'round'; g.strokeStyle = P_INK; g.lineWidth = s * .18;
-    g.stroke(box); g.stroke(tail);                          // contour à l'encre…
-    g.fillStyle = '#fbf6ee'; g.fill(box); g.fill(tail);     // … puis le blanc par-dessus : un seul contour extérieur
-    g.fillStyle = P_INK; g.fillText(txt, bx + pw / 2, by + ph / 2 + s * .04);
+    box.moveTo(x + r, y); box.arcTo(x + w, y, x + w, y + h, r); box.arcTo(x + w, y + h, x, y + h, r);
+    box.arcTo(x, y + h, x, y, r); box.arcTo(x, y, x + w, y, r); box.closePath();
+    const tail = new Path2D(), q = s * .26, inside = tip[0] > x && tip[0] < x + w && tip[1] > y && tip[1] < y + h;
+    if (!inside) {                                       // queue partie du bord le plus proche de la pointe
+      const cx = x + w / 2, cy = y + h / 2, ddx = tip[0] - cx, ddy = tip[1] - cy;
+      if (Math.abs(ddx) / w > Math.abs(ddy) / h) {
+        const bx = ddx > 0 ? x + w - 3 : x + 3, by = Math.max(y + r * .7, Math.min(y + h - r * .7, tip[1]));
+        tail.moveTo(bx, by - q); tail.lineTo(tip[0], tip[1]); tail.lineTo(bx, by + q);
+      } else {
+        const by = ddy > 0 ? y + h - 3 : y + 3, bx = Math.max(x + r, Math.min(x + w - r, tip[0]));
+        tail.moveTo(bx - q, by); tail.lineTo(tip[0], tip[1]); tail.lineTo(bx + q, by);
+      }
+      tail.closePath();
+    }
+    g.strokeStyle = P_INK; g.lineWidth = s * .18;
+    g.stroke(box); if (!inside) g.stroke(tail);          // contour à l'encre…
+    g.fillStyle = '#fbf6ee'; g.fill(box); if (!inside) g.fill(tail);   // … puis le blanc par-dessus : un seul contour extérieur
+    g.fillStyle = P_INK;
+    lines.forEach((l, i) => g.fillText(l, x + w / 2, y + s * (.66 + i) + s * .04));
     g.restore();
+  };
+  /* bulle de Paatrice à côté de SA tête, au niveau de sa bouche (jamais devant sa figure ni devant ton visage).
+     b = { txt, t0, dur, cand } · sd = côté extérieur (loin de toi) · L2G = repère de sa tête */
+  const paatSay = (g, b, el, L2G, hx, hy, R, sd, avoid, W, H, alpha) => {
+    const lt = el - b.t0, al = Math.min(1, lt / .15, (b.dur - lt) / .3) * alpha;
+    if (!(al > .02)) return null;
+    const s = R * .3, m = bubbleSize(g, b.txt, s), gap = R * .1;
+    const mo = L2G(256 + sd * 224, 362), mi = L2G(256 - sd * 224, 362);   // bord de sa tête, à hauteur de sa bouche (dehors · côté toi)
+    const cands = [
+      [sd > 0 ? mo[0] + gap : mo[0] - gap - m.w, mo[1] - m.h / 2],        // 1. côté extérieur, à hauteur de sa bouche
+      [hx - m.w / 2 + sd * R * .35, hy - R - gap - m.h],                  // 2. au-dessus de sa tête
+      [sd > 0 ? mi[0] - gap - m.w : mi[0] + gap, mi[1] - m.h / 2],        // 3. côté intérieur
+      [sd > 0 ? mo[0] + gap : mo[0] - gap - m.w, mo[1] + R * .3]          // 4. plus bas, côté extérieur
+    ];
+    const av = avoid.concat([[hx - R * .85, hy - R * .9, hx + R * .85, hy + R * .9, 4]]);   // sa figure : surtout pas dessus
+    const sc = cands.map((_, i) => placeBox(m.w, m.h, cands, av, W, H, i));   // [x, y, n°, score]
+    const bst = sc.reduce((p, q) => q[3] < p[3] ? q : p);
+    if (b.cand == null || bst[3] < sc[b.cand][3] - .15) b.cand = bst[2];      // elle ne saute pas d'une place à l'autre pour un rien
+    const [x, y] = sc[b.cand];
+    const tip = b.cand === 1 ? [hx + sd * R * .3, hy - R * .97] : b.cand === 2 ? mi : mo;
+    bubbleDraw(g, m, x, y, tip, s, al);
+    return [x, y, x + m.w, y + m.h, 2];
   };
 
   /* ゴゴゴ façon manga : des « ゴ » violets qui montent en palpitant de chaque côté de (cx, cy) */
@@ -1134,176 +1253,252 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     g.restore();
   };
 
-  /* rafale de doigts d'honneur façon « rush » de Stand, autour de (cx, cy) */
-  const rush = (g, cx, cy, s, el, sd, alpha) => {
-    let seed = (Math.floor(el * 24) * 7919) % 2147483647 || 1;   // positions qui changent 24 fois par seconde
+  /* rafale de doigts d'honneur façon « rush » de Stand, autour d'une de ses mains — jamais sur ton visage */
+  const rushAround = (g, h, el, face, fc, alpha) => {
+    const [W0, hh, rot, flip] = h;
+    let seed = (Math.floor(el * 24) * 7919 + (flip ? 4099 : 0)) % 2147483647 || 1;   // positions qui changent 24 fois par seconde
     const pr = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    g.save(); g.globalAlpha = alpha; g.lineCap = 'round';
-    for (let i = 0; i < 9; i++) {
-      const x = cx + (pr() - .5) * s * 3.2, y = cy + (pr() - .5) * s * 2.4, z = s * (.75 + pr() * .55), rr = -sd * (.25 + pr() * .5);
-      g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = Math.max(2, s * .035);
-      for (let j = 0; j < 3; j++) {                          // traits de vitesse
-        const oy = (j - 1) * z * .18;
-        g.beginPath(); g.moveTo(x - sd * z * 1.1, y + oy); g.lineTo(x - sd * z * .35, y + oy); g.stroke();
+    g.save(); g.lineCap = 'round';
+    for (let i = 0, n = 0; i < 16 && n < 5; i++) {
+      const an = pr() * 6.2832, d = hh * (.3 + pr() * .6), z = hh * (.7 + pr() * .35), rr = rot + (pr() - .5) * .6, al = alpha * (.5 + pr() * .45);
+      const x = W0[0] + Math.cos(an) * d, y = W0[1] + Math.sin(an) * d * .7;
+      if (ovl(handRect([[x, y], z]), face) > 0) continue;   // sur ton visage : on saute
+      n++;
+      const ox = Math.sign(x - fc[0]) || 1;              // traits de vitesse côté extérieur
+      g.globalAlpha = al * .8; g.strokeStyle = 'rgba(255,255,255,.75)'; g.lineWidth = Math.max(2, z * .035);
+      for (let j = 0; j < 3; j++) {
+        const yy = y - z * (.35 + j * .2);
+        g.beginPath(); g.moveTo(x + ox * z * .5, yy); g.lineTo(x + ox * z * 1.1, yy); g.stroke();
       }
-      paatHand(g, [x, y + z * .45], z, rr, sd > 0, alpha);
+      paatHand(g, [x, y], z, rr, flip, al);
     }
-    g.globalAlpha = alpha;
-    g.font = Math.round(s * .5) + 'px "Mouse Memoirs", Impact, sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-    const tx = Math.max(s * 2, Math.min(g.canvas.width - s * 2, cx)), ty = Math.max(s * .6, cy - s * 1.6), wob = Math.sin(el * 40) * s * .03;
-    g.lineWidth = s * .09; g.strokeStyle = '#14041c'; g.strokeText('PAA PAA PAA PAA !', tx + wob, ty);
-    g.fillStyle = '#ffd25a'; g.fillText('PAA PAA PAA PAA !', tx + wob, ty);
     g.restore();
   };
 
-  /* carte « STAND 「PAATRICE」 » (au début du filtre), centrée en (x, y), toujours dans l'image */
+  /* carte « STAND 「PAATRICE」 » : taille, puis dessin dans la boîte (x, y = coin haut gauche) */
+  const standCardSize = (g, s) => { g.font = Math.round(s) + 'px "Mouse Memoirs", Impact, sans-serif'; return { w:g.measureText('「PAATRICE」').width + s * .3, h:s * 1.75 }; };
   const standCard = (g, x, y, s, alpha) => {
     if (!(alpha > .02)) return;
+    const { w, h } = standCardSize(g, s), cx = x + w / 2, by = y + h - s * .22;
     g.save(); g.globalAlpha = alpha; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
     g.font = Math.round(s) + 'px "Mouse Memoirs", Impact, sans-serif';
-    const w = g.measureText('「PAATRICE」').width;
-    x = Math.max(w / 2 + 6, Math.min(g.canvas.width - w / 2 - 6, x)); y = Math.max(s * 1.4, y);
-    g.lineWidth = s * .16; g.strokeStyle = '#14041c'; g.strokeText('「PAATRICE」', x, y);
-    g.fillStyle = '#a45cff'; g.fillText('「PAATRICE」', x, y);
+    g.lineWidth = s * .16; g.strokeStyle = '#14041c'; g.strokeText('「PAATRICE」', cx, by);
+    g.fillStyle = '#a45cff'; g.fillText('「PAATRICE」', cx, by);
     g.font = Math.round(s * .45) + 'px "Mouse Memoirs", Impact, sans-serif';
-    g.lineWidth = s * .1; g.strokeText('STAND', x, y - s * .8); g.fillStyle = '#ffd25a'; g.fillText('STAND', x, y - s * .8);
+    g.lineWidth = s * .1; g.strokeText('STAND', cx, by - s * .8); g.fillStyle = '#ffd25a'; g.fillText('STAND', cx, by - s * .8);
     g.restore();
   };
 
-  /* La scène Paatrice quand tu es à l'image (mode : 'reco' · 'creatif' · 'stand') */
-  const paatScene = (g, P, a, el, dt, v, W, H, mode) => {
-    const S = sprites(), stand = mode === 'stand', farceur = mode === 'creatif';
+  /* coude d'un bras à deux segments (épaule → coude Lu, coude → poignet Lf), plié du côté « dn » ; trop loin = bras tendu */
+  const elbowIK = (S0, W0, Lu, Lf, dn) => {
+    const vx = W0[0] - S0[0], vy = W0[1] - S0[1], d = Math.hypot(vx, vy) || 1, ux = vx / d, uy = vy / d;
+    if (d >= Lu + Lf) return [S0[0] + vx * Lu / (Lu + Lf), S0[1] + vy * Lu / (Lu + Lf)];
+    const a = (Lu * Lu - Lf * Lf + d * d) / (2 * d), h = Math.sqrt(Math.max(0, Lu * Lu - a * a));
+    let nx = -uy, ny = ux; if (nx * dn[0] + ny * dn[1] < 0) { nx = -nx; ny = -ny; }
+    return [S0[0] + ux * a + nx * h, S0[1] + uy * a + ny * h];
+  };
+  /* La scène Paatrice quand tu es à l'image.
+     erase = true : calque transparent, on gomme là où tu es · false : image entière + toi détouré par-dessus (ancienne méthode) */
+  const PAAT_RATIO = 2;                                  // hauteur du visage (front → menton) ≈ 2 écarts d'yeux (mesuré sur la cam bureau)
+  const PAAT_FACE = [1.35, -2.1, 1.6];                   // ton visage, cheveux compris (écarts d'yeux) : ±1,35 de large, de -2,1 à +1,6 → interdit aux mains, bulles…
+  const paatScene = (g, P, a, el, dt, v, W, H, erase) => {
+    const S = sprites();
     const { fw, rx, ry, dx, dy, mx, my } = P, roll = Math.atan2(ry, rx);
-    const G = (u, w) => [mx + (rx * u + dx * w) * fw, my + (ry * u + dy * w) * fw];   // repère de TON visage
-    const gy = fx.guy || (fx.guy = { side:0, to:0, x:0, y:0, ang:0, look:0, init:false, want:0, wantT:0, sw:0, pop:1, auto:0, gag:0, lineT:-1.2 });   // farceur : 1re bulle 1,2 s après son arrivée
-    const TAI = C.PAAT_TAILLE * (stand ? 1.25 : 1), COTE = stand ? 1.5 : C.PAAT_COTE, HAUT = stand ? -1.5 : -.95;
-    const R = 1.1 * fw * TAI;                              // rayon de sa tête
-    const fits = s => { const p = G(s * COTE, HAUT); return p[0] > R * .6 && p[0] < W - R * .6; };   // ce côté tient dans l'image ?
-    /* De quel côté tu tournes la tête ? → il se met de l'autre côté (dans ton dos). Visage perdu : il ne change plus de côté. */
-    const Lc = fx.sm[234], Rc = fx.sm[454], Nz = fx.sm[1];
-    let turn = 0;
-    if (fx.miss < 3 && Lc && Rc && Nz) {
-      const w = (Rc[0] - Lc[0]) * rx + (Rc[1] - Lc[1]) * ry, yaw = w ? ((Nz[0] - Lc[0]) * rx + (Nz[1] - Lc[1]) * ry) / w : .5;
-      turn = yaw < .42 ? 1 : yaw > .58 ? -1 : 0;           // 1 = il doit passer du côté « droite du repère »
+    const gy = fx.guy || (fx.guy = { side:0, to:0, x:0, y:0, ang:0, look:0, init:false, want:0, wantT:0, sw:0, pop:1, auto:0, autoT:7, why:'dos',
+                                     U:0, ratio:0, yaw:.5, yawF:-1, yawB:-1, c0:0, st:-1, nextStand:null, bub:null, bubEnd:0, said0:false, rushSaid:false });
+    const kf = 1 - Math.exp(-dt * 6);                      // il suit tes mouvements avec un petit temps de retard
+    /* --- ton orientation (lacet : 0,5 = de face) et ta taille, stables même de profil --- */
+    const Lc = fx.sm[234], Rc = fx.sm[454], Nz = fx.sm[1], Tp = fx.sm[10], Ch = fx.sm[152];
+    const fresh = fx.miss < 3;
+    if (fresh && Lc && Rc && Nz) {
+      const w = (Rc[0] - Lc[0]) * rx + (Rc[1] - Lc[1]) * ry;
+      if (w > 1) gy.yaw = Math.max(-.2, Math.min(1.2, ((Nz[0] - Lc[0]) * rx + (Nz[1] - Lc[1]) * ry) / w));
+      if (gy.yawF < -.5) gy.yawF = gy.yawB = gy.yaw;
+      gy.yawF += (gy.yaw - gy.yawF) * (1 - Math.exp(-dt / .08));   // suit vite…
+      gy.yawB += (gy.yaw - gy.yawB) * (1 - Math.exp(-dt / 1.5));   // … ta position habituelle, lentement
     }
-    if (!gy.side) { gy.side = gy.to = turn || (mx < W / 2 ? 1 : -1); if (!fits(gy.side) && fits(-gy.side)) gy.side = gy.to = -gy.side; }
+    let U = fw;                                            // écart des yeux… qui rétrécit quand tu tournes la tête : corrigé par la hauteur du visage
+    if (Tp && Ch) {
+      const fh = Math.hypot(Ch[0] - Tp[0], Ch[1] - Tp[1]);
+      if (fresh && Math.abs(gy.yaw - .5) < .08) gy.ratio = gy.ratio ? gy.ratio + (fh / fw - gy.ratio) * .05 : fh / fw;
+      U = Math.max(fw, fh / Math.max(1.6, Math.min(2.4, gy.ratio || PAAT_RATIO)));
+    }
+    gy.U = gy.U ? gy.U + (U - gy.U) * (1 - Math.exp(-dt * 2.5)) : U;
+    U = gy.U;
+    const yawC = Math.max(0, Math.min(1, gy.yaw));
+    gy.c0 += ((.5 - yawC) * C.PAAT_LACET - gy.c0) * kf;  // tête tournée : le centre de ta tête n'est plus entre tes yeux
+    const G = (u, w) => [mx + (rx * (u + gy.c0) + dx * w) * U, my + (ry * (u + gy.c0) + dy * w) * U];   // repère de TON visage
+    const ta = Math.min(1, Math.abs(yawC - .5) * 2) * .45;   // tête tournée : ton nez et l'arrière de ta tête dépassent → on élargit
+    const MX = C.PAAT_MAINS_X + ta, PF = PAAT_FACE, fx0 = PF[0] + ta;
+    const face = rectOf([G(-fx0, PF[1]), G(fx0, PF[1]), G(-fx0, PF[2]), G(fx0, PF[2])]);
+    face[4] = 4;
+
+    /* --- gag Stand : de temps en temps, quelques secondes --- */
+    const D = Math.max(3, C.FILTER_DURATION), SD = C.PAAT_STAND_DUREE;
+    if (gy.nextStand == null) gy.nextStand = FX[fx.key].standFirst ? 2.2 : C.PAAT_STAND_1 + Math.random() * 6;
+    if (gy.st < 0 && !gy.sw && el > gy.nextStand && el < D - SD - 1.5) {
+      gy.st = el; gy.rushSaid = false; gy.nextStand = el + C.PAAT_STAND_ECART * (.75 + Math.random() * .5);
+      gy.bub = { txt:pick('stand'), t0:el, dur:2.2 };
+    }
+    const se = gy.st >= 0 ? el - gy.st : -1;
+    if (se > SD) gy.st = -1;
+    const sk = gy.st < 0 ? 0 : Math.max(0, Math.min(1, se / .35, (SD - se) / .5));   // 0 → 1 → 0
+    const rushing = gy.st >= 0 && se > 2 && se < SD - 1.2;
+    if (rushing && !gy.rushSaid) { gy.rushSaid = true; gy.bub = { txt:RUSH_TXT, t0:el, dur:SD - 1.2 - se }; }
+
+    /* --- de quel côté ? --- */
+    const TAI = C.PAAT_TAILLE * (1 + .15 * sk);
+    let R = 1.1 * U * TAI; const shrink = Math.min(1, H * .2 / R); R *= shrink;   // jamais énorme si tu es tout près
+    const COTE = C.PAAT_COTE, HAUT = C.PAAT_HAUT - .45 * sk;
+    const fits = s => { const p = G(s * (COTE + .6), HAUT); return p[0] > R * .85 && p[0] < W - R * .85; };   // ce côté a assez de place ? (sa tête + l'écart pour ta main)
+    /* tu tournes la tête vers lui → il passe de l'autre côté. On regarde le MOUVEMENT de ta tête
+       (par rapport à ta position habituelle) : à la cam bureau tu es souvent tourné vers l'écran. */
+    const dy0 = gy.yawF - gy.yawB, turn = dy0 < -C.PAAT_TOURNE ? 1 : dy0 > C.PAAT_TOURNE ? -1 : 0;   // 1 = il doit être côté « droite du repère »
+    if (!gy.side) {
+      gy.side = gy.to = mx < W / 2 ? 1 : -1;               // du côté où il y a de la place
+      if (!fits(gy.side) && fits(-gy.side)) gy.side = gy.to = -gy.side;
+      gy.autoT = C.PAAT_AUTO * (.8 + Math.random() * .4);
+    }
     if (!gy.sw) {
       gy.auto += dt;
-      if (!fits(gy.side) && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; }                 // il sortirait de l'image → autre côté
-      else if (farceur && gy.auto > 7 && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; }    // farceur : il te tourne autour
-      else if (turn && turn !== gy.side && fits(turn)) {                                     // tu as tourné la tête (sans trembler)
+      if (!fits(gy.side) && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }        // il sortirait de l'image → autre côté
+      else if (sk === 0 && el > 2.5 && gy.auto > 1.5 && turn && turn !== gy.side && fits(turn)) {   // tu as tourné la tête vers lui
         if (gy.want !== turn) { gy.want = turn; gy.wantT = 0; }
         gy.wantT += dt;
-        if (gy.wantT > .3) { gy.to = turn; gy.sw = 1; gy.want = 0; }
-      } else gy.want = 0;
+        if (gy.wantT > .2) { gy.to = turn; gy.sw = 1; gy.want = 0; gy.why = 'tourne'; }
+      } else {
+        gy.want = 0;
+        if (gy.st < 0 && el > 2.5 && gy.auto > gy.autoT && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }   // farceur : il te tourne autour
+      }
     }
     if (gy.sw === 1) {                                     // changement net : il rétrécit vite…
       gy.pop = Math.max(0, gy.pop - dt / .12);
-      if (gy.pop <= 0) { gy.side = gy.to; gy.init = false; gy.sw = 2; gy.auto = 0; gy.gag++; gy.lineT = 0; }
+      if (gy.pop <= 0) {
+        gy.side = gy.to; gy.init = false; gy.sw = 2; gy.auto = 0; gy.autoT = C.PAAT_AUTO * (.8 + Math.random() * .4);
+        gy.yawB = gy.yawF;                                 // nouvelle position de référence : pas de va-et-vient
+        if (gy.st < 0) gy.bub = { txt:pick(gy.why === 'tourne' ? 'tourne' : 'dos'), t0:el, dur:3 };
+      }
     } else if (gy.sw === 2) {                              // … et rebondit de l'autre côté
       gy.pop = Math.min(1, gy.pop + dt / .25);
       if (gy.pop >= 1) gy.sw = 0;
     }
-    gy.lineT += dt;
     const ps = gy.sw === 2 ? backOut(gy.pop) : gy.pop;     // sa taille pendant le changement
-    if (ps < .02) return;
     const sd = gy.side;
-    const T = G(sd * COTE, HAUT + (stand ? .08 * Math.sin(el * 1.6) : 0));   // sa tête (le Stand flotte)
-    T[0] = Math.max(R * 1.05, Math.min(W - R * 1.05, T[0]));                 // sa tête reste toujours entière dans l'image
-    T[1] = Math.max(R * 1.05, Math.min(H - R * 1.05, T[1]));
-    const kf = 1 - Math.exp(-dt * 6);                      // il suit tes mouvements avec un petit temps de retard
+
+    /* --- position : sa tête à côté de la tienne, plus haut ; son torse penché rentre dans ton dos --- */
+    const T = G(sd * COTE, HAUT + .1 * sk * Math.sin(el * 1.6));   // (le Stand flotte)
+    const inImg = () => { T[0] = Math.max(R * 1.02, Math.min(W - R * 1.02, T[0])); T[1] = Math.max(R * 1.02, Math.min(H - R * 1.02, T[1])); };
+    inImg();                                               // sa tête reste toujours entière dans l'image
+    {                                                      // … et ne passe jamais derrière sa propre main (ta tête trop haute dans l'image, etc.)
+      const hr = handRect([G(sd * MX, C.PAAT_MAINS_Y), C.PAAT_MAINS * U * TAI * shrink]), mg = R * .06;
+      const hit = () => { const cx = Math.max(hr[0] - mg, Math.min(hr[2] + mg, T[0])), cy = Math.max(hr[1] - mg, Math.min(hr[3] + mg, T[1])); return Math.hypot(T[0] - cx, T[1] - cy) < R; };
+      for (let i = 0; i < 16 && hit(); i++) { T[0] += sd * rx * R * .1; T[1] += sd * ry * R * .1; inImg(); }   // il s'écarte sur le côté
+    }
     if (!gy.init) { gy.x = T[0]; gy.y = T[1]; gy.ang = roll; gy.init = true; }
     gy.x += (T[0] - gy.x) * kf; gy.y += (T[1] - gy.y) * kf;
     const up = Math.min(backOut(el / .9), a);              // il sort de ton dos à l'arrivée… et y rentre à la fin
     const A0 = G(sd * C.PAAT_DOS_X, C.PAAT_DOS_Y);         // le point de ton dos d'où il sort
-    const hx = A0[0] + (gy.x - A0[0]) * up, hy = A0[1] + (gy.y - A0[1]) * up + .02 * fw * Math.sin(el * 2.4);
-    const k = 2.2 * fw * TAI * ps * (.4 + .6 * up) / 512;
-    /* penché : son torse pointe vers ton dos (il en sort), allongé juste ce qu'il faut pour y rentrer */
-    let tgt = roll * .5 + .05 * Math.sin(el * 1.1), stretch = 1;
-    if (!stand) {
-      const vx = A0[0] - hx, vy = A0[1] - hy, L = Math.hypot(vx, vy) || 1;
-      let d = Math.atan2(-vx, vy) - roll; d = Math.atan2(Math.sin(d), Math.cos(d));
-      tgt = roll + Math.max(-.9, Math.min(.9, d));
-      stretch = Math.max(.8, Math.min(1.6, (L + .5 * fw - 224 * k) / (620 * k)));
-    }
+    const hx = A0[0] + (gy.x - A0[0]) * up, hy = A0[1] + (gy.y - A0[1]) * up + .02 * U * Math.sin(el * 2.4);
+    const k = 2.2 * U * TAI * shrink * Math.max(.02, ps) * (.4 + .6 * up) / 512;
+    const vx = A0[0] - hx, vy = A0[1] - hy, Lb = Math.hypot(vx, vy) || 1;
+    let dA = Math.atan2(-vx, vy) - roll; dA = Math.atan2(Math.sin(dA), Math.cos(dA));
+    const lean = roll + Math.max(-.9, Math.min(.9, dA)), tgt = lean + (roll * .5 + .05 * Math.sin(el * 1.1) - lean) * sk;   // le Stand se redresse
+    const stretch = 1 + (Math.max(.8, Math.min(1.6, (Lb + .5 * U - 224 * k) / (620 * k))) - 1) * (1 - sk);
     gy.ang += (tgt - gy.ang) * kf;
-    const lookT = stand ? 0 : (el % 5.2) < 3.8 ? -sd : 0;  // regard en coin vers toi… puis vers la caméra (le Stand : la caméra)
+    const lookT = sk > .5 ? 0 : (el % 5.2) < 3.8 ? -sd : 0;   // regard en coin vers toi… puis vers la caméra
     gy.look += (lookT - gy.look) * (1 - Math.exp(-dt * 7));
     const bt = (el + .7) % 3.4, blink = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;   // clignement
-    /* corps + tête (le Stand : aura violette, translucide, bas du torse qui s'efface) */
-    g.save();
-    if (stand) { g.shadowColor = 'rgba(164,92,255,.95)'; g.shadowBlur = R * (.45 + .2 * Math.sin(el * 5)); g.globalAlpha = .9; }
-    const L2G = paatFigure(g, S, hx, hy, gy.ang, k, gy.look, blink, stretch, stand ? 'stand' : 'soft');
-    g.restore();
-    /* bras */
-    const ap = (el < 1 ? 0 : backOut((el - 1) / .4)) * Math.min(1, a * 2) * up * (gy.sw ? 0 : 1);
-    const rushing = stand && (el % 6) > 3.4 && (el % 6) < 5.2;     // Stand : rafale toutes les 6 s
-    const gag = farceur && gy.gag >= 0 && gy.lineT < 2.5;         // farceur : double doigt juste après chaque changement de côté
-    let hand = null, hand2 = null;
-    if (ap > 0.01 && !rushing) {
-      const S0 = L2G(256 + sd * 230, 600);                 // son épaule extérieure
-      const pump = .08 * Math.abs(Math.sin(el * 3.4));     // il te le « pousse » en rythme
-      const down = [-Math.sin(gy.ang), Math.cos(gy.ang)];  // le « bas » de son corps penché
-      if (stand) {                                         // le Stand lève le bras à côté de sa tête, doigt vers la caméra
-        const Wt = L2G(256 + sd * 420, 330 - pump * 300), R0 = L2G(256 + sd * 150, 760);
+
+    let L2G = null;
+    if (ps > .02) {
+      /* corps + tête (Stand : aura violette, bas du torse qui s'efface) */
+      g.save();
+      if (sk > .01) { g.shadowColor = 'rgba(164,92,255,.95)'; g.shadowBlur = R * (.45 + .2 * Math.sin(el * 5)) * sk; g.globalAlpha = 1 - .1 * sk; }
+      L2G = paatFigure(g, S, hx, hy, gy.ang, k, gy.look, blink, stretch, sk > .5 ? 'stand' : 'soft');
+      g.restore();
+    }
+    /* deux bras : un doigt de chaque côté de ton visage (le 2e bras passe derrière toi, ressort derrière ton autre épaule) */
+    const hands = [];
+    gy.armK = gy.sw ? 0 : Math.min(1, (gy.armK || 0) + dt / .35);   // après un changement de côté, il relève les bras
+    const ap = (el < 1 ? 0 : backOut((el - 1) / .4)) * Math.min(1, a * 2) * up * backOut(gy.armK);
+    if (L2G && ap > .01) {
+      const hh0 = C.PAAT_MAINS * U * TAI * shrink;
+      for (const s of [-sd, sd]) {                         // s = côté de ton visage où va la main (d'abord celle qui passe derrière toi)
+        const near = s === sd, ph = near ? 0 : 1.4;
+        const pump = .12 * Math.abs(Math.sin(el * 3.4 + ph)) * (1 + sk);   // il te les « pousse » en rythme
+        const Wt = G(s * MX, C.PAAT_MAINS_Y - pump);
+        let S0, R0, E = null;
+        if (near) { S0 = L2G(256 + sd * 230, 600); R0 = L2G(256 + sd * 120, 760); }          // son épaule extérieure
+        else { S0 = L2G(256 - sd * 230, 600); E = G(-sd * 1.55, 3); R0 = G(-sd * 1.6, 2.5); }   // épaule côté toi → derrière ton autre épaule
         const W0 = [R0[0] + (Wt[0] - R0[0]) * ap, R0[1] + (Wt[1] - R0[1]) * ap];
-        paatArm(g, S0, W0, k, down, C.PAAT_BRAS, el, false);
-        hand = [W0, 280 * k * (.4 + .6 * ap), gy.ang + .06 * Math.sin(el * 6.8), sd > 0, Math.min(1, ap * 3)];
-      } else {                                             // bras tendu vers toi, doigt à hauteur de ta tête
-        const Wt = G(sd * (1.3 - pump), 1.1), R0 = L2G(256 + sd * 120, 760);
-        const W0 = [R0[0] + (Wt[0] - R0[0]) * ap, R0[1] + (Wt[1] - R0[1]) * ap];
-        paatArm(g, S0, W0, k, [dx * .35 * fw, dy * .35 * fw], C.PAAT_BRAS, el, false);
-        hand = [W0, 1.2 * fw * TAI * (.4 + .6 * ap), roll - sd * .55 + .06 * Math.sin(el * 6.8), sd > 0, Math.min(1, ap * 3)];
-      }
-      if (gag) {                                           // farceur : 2e bras levé, côté toi
-        const S1 = L2G(256 - sd * 230, 600), W1 = L2G(256 - sd * 400, 330 - pump * 300);   // à côté de sa tête, côté toi
-        paatArm(g, S1, W1, k, down, C.PAAT_BRAS, el, false);
-        hand2 = [W1, 280 * k, gy.ang + sd * .25, sd < 0, 1];
+        const Lseg = 1.15 * k * 512 / 2.2;                 // longueur bras / avant-bras : jamais de bras démesuré
+        if (near) {
+          E = elbowIK(S0, W0, Lseg, Lseg, [dx + sd * rx * .6, dy + sd * ry * .6]);   // coude vers le bas, vers l'extérieur
+          paatArm(g, S0, W0, k, [dx, dy], C.PAAT_BRAS, el, false, { elbow:E, tat:true });
+        } else {                                           // il passe par ton dos (caché par toi), puis ressort derrière ton autre épaule
+          const B = G(-sd * .2, 2.6);
+          paatArm(g, S0, B, k, [dx, dy], 'muscle', el, false, { elbow:B });
+          paatArm(g, B, W0, k, [dx, dy], 'muscle', el, false, { elbow:E });
+        }
+        hands.push([W0, hh0 * (.4 + .6 * ap) * ps, roll + s * .14 + .06 * Math.sin(el * 6.8 + ph), s > 0, Math.min(1, ap * 3)]);
       }
     }
-    if (fx.mask) g.drawImage(personLayer(v, W, H), 0, 0); // toi par-dessus → il est bien DERRIÈRE toi
-    if (hand) paatHand(g, ...hand);                        // les mains arrivent DEVANT toi
-    if (hand2) paatHand(g, ...hand2);
-    if (farceur && gy.gag >= 0) {                          // bulle après chaque changement de côté
-      const al = Math.min(1, gy.lineT / .15, (3.4 - gy.lineT) / .3) * up;
-      const M = L2G(256 + sd * 150, 300);
-      bubble(g, M[0], M[1] - R * .3, BULLES[gy.gag % BULLES.length], R * .32, sd, al);
+    if (L2G && sk > .01) menacing(g, hx, hy + R * .6, R * .75, el, sk * up);   // ゴゴゴ (derrière toi aussi)
+    /* toi devant lui : on gomme Paatrice là où le détourage te voit (ou, ancienne méthode, toi détouré par-dessus) */
+    if (fx.mask) {
+      if (erase) {
+        g.save(); g.globalCompositeOperation = 'destination-out';
+        g.drawImage(C.PAAT_MARGE > 0 ? segMaskD : segMask, 0, 0, W, H); g.restore();
+      } else g.drawImage(personLayer(v, W, H), 0, 0);
     }
-    if (stand) {
-      menacing(g, hx, hy + R * .6, R * .75, el, a * up);
-      if (rushing) { const RC = G(sd * 1.5, .7); rush(g, RC[0], RC[1], R * .6, el, sd, Math.min(1, a * 2)); }
-      standCard(g, hx + sd * R * 2, hy + R * .3, R * .28, Math.min(1, el / .5, (4.5 - el) / .6) * up);
+    for (const h of hands) paatHand(g, ...h);              // ses mains : à côté de ton visage, par-dessus tout
+    const fc = G(0, 0);
+    if (rushing) for (const h of hands) rushAround(g, h, el, face, fc, Math.min(1, sk * 2));
+    if (!L2G) return;
+    /* bulles : à l'arrivée, à chaque changement de côté, au Stand… et s'il se tait depuis trop longtemps */
+    if (!gy.said0 && el > 1.2) { gy.said0 = true; if (!gy.bub) gy.bub = { txt:pick('arrivee'), t0:el, dur:3 }; }
+    if (gy.bub && el - gy.bub.t0 > gy.bub.dur) { gy.bub = null; gy.bubEnd = el; }
+    if (!gy.bub && gy.said0 && !gy.sw && gy.st < 0 && el - gy.bubEnd > C.PAAT_BLABLA) gy.bub = { txt:pick('dos'), t0:el, dur:3 };
+    const avoid = [face].concat(hands.map(handRect));
+    const bub = gy.bub ? paatSay(g, gy.bub, el, L2G, hx, hy, R, sd, avoid, W, H, up * ps) : null;
+    if (sk > .01 && se < 2.6) {                            // carte « STAND 「PAATRICE」 » au début du Stand
+      const cs = R * .34, m = standCardSize(g, cs);
+      const ox = sd > 0 ? hx + R * .95 : hx - R * .95 - m.w;   // côté extérieur
+      const cands = [[hx - m.w / 2, hy - R * 1.08 - m.h], [ox, hy - R * .55 - m.h / 2], [ox, hy - R - m.h * .3], [ox, hy + R * .9], [hx - m.w / 2, hy + R * 1.05]];
+      if (bub) bub[4] = 4;
+      const [x, y] = placeBox(m.w, m.h, cands, avoid.concat([bub, [hx - R * .85, hy - R * .9, hx + R * .85, hy + R * .9, 3]]), W, H);
+      standCard(g, x, y, cs, Math.min(1, se / .5, (2.6 - se) / .5) * sk);
     }
   };
 
   /* Tu n'es pas à l'image : Paatrice seul, au milieu, coupé au bassin par le bas de l'écran (comme une marionnette),
-     doigt d'honneur vers la caméra. Dessiné sur un calque transparent : la vraie cam reste dessous. */
-  const paatPuppet = (g, W, H, t, dt, a, mode) => {
-    const S = sprites(), pp = fx.pup || (fx.pup = { t0:t });
-    const el = (t - pp.t0) / 1000, stand = mode === 'stand';
-    const k = .8 * H / 1000 * C.PAAT_TAILLE, R = 238 * k;
+     DEUX doigts d'honneur vers la caméra, tatouage bien visible. Calque transparent : la vraie cam reste dessous. */
+  const paatPuppet = (g, W, H, t, dt, a) => {
+    const S = sprites(), pp = fx.pup || (fx.pup = { t0:t, bub:null, n:0 });
+    const el = (t - pp.t0) / 1000;
+    const k = .8 * H / 1000 * C.PAAT_MARIONNETTE, R = 238 * k;
     const up = Math.min(backOut(el / .6), a);              // il monte du bas de l'écran (et redescend à la fin)
     const sway = .03 * Math.sin(el * 1.6);                 // petit balancement de marionnette
     const hx = W / 2, hy = H - (1040 - 256) * k + (1 - up) * H * .9;   // bassin pile au bas de l'écran
     const bt = (el + .3) % 3.1, blink = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;
-    g.save();
-    if (stand) { g.shadowColor = 'rgba(164,92,255,.95)'; g.shadowBlur = R * (.45 + .2 * Math.sin(el * 5)); }
     const L2G = paatFigure(g, S, hx, hy, sway, k, 0, blink, 1, false);
-    g.restore();
     const ap = up * backOut(Math.min(1, Math.max(0, (el - .5) / .4)));
-    if (ap > .01) {                                        // bras d'honneur vers la caméra
-      const pump = .05 * Math.abs(Math.sin(el * 3.4));
-      const S0 = L2G(486, 600), Wt = L2G(686, 330 - pump * 300), R0 = L2G(406, 760);
+    const hands = [];
+    if (ap > .01) for (const s of [-1, 1]) {               // deux bras levés, un doigt de chaque côté de sa tête
+      const ph = s > 0 ? 0 : 1.3, pump = .05 * Math.abs(Math.sin(el * 3.4 + ph));
+      const S0 = L2G(256 + s * 230, 600), Wt = L2G(256 + s * 500, 330 - pump * 300), R0 = L2G(256 + s * 150, 760);
+      const E = L2G(256 + s * (300 + 150 * ap), 800 + 60 * ap);   // coude bien écarté : l'avant-bras ne cache pas l'épaule
       const W0 = [R0[0] + (Wt[0] - R0[0]) * ap, R0[1] + (Wt[1] - R0[1]) * ap];
-      paatArm(g, S0, W0, k, [-Math.sin(sway), Math.cos(sway)], C.PAAT_BRAS, el, false);
-      paatHand(g, W0, 300 * k * (.4 + .6 * ap), sway + .06 * Math.sin(el * 6.8), true, Math.min(1, ap * 3));
+      paatArm(g, S0, W0, k, [-Math.sin(sway), Math.cos(sway)], C.PAAT_BRAS, el, false, { elbow:E, tat:s > 0, tatZ:1.3 });
+      hands.push([W0, 300 * k * (.4 + .6 * ap), sway + s * .1 + .06 * Math.sin(el * 6.8 + ph), s > 0, Math.min(1, ap * 3)]);
     }
-    if (stand) menacing(g, hx, hy + R * .6, R * .8, el, a * up);
-    if (mode === 'creatif') {                              // farceur : il commente ton absence
-      const i = Math.floor(el / 4), lt = el - i * 4, al = Math.min(1, (lt - .8) / .15, (3.6 - lt) / .3) * up;
-      const M = L2G(156, 300);
-      bubble(g, M[0], M[1] - R * .3, BULLES_ABS[i % BULLES_ABS.length], R * .5, -1, al);
+    for (const h of hands) paatHand(g, ...h);
+    /* il commente ton absence, à côté de sa tête (une fois à gauche, une fois à droite) */
+    const lt = el - .8 - pp.n * 4.2;
+    if (lt > 4.2) pp.n++;
+    if (lt > 0 && lt < 3.6) {
+      if (!pp.bub || pp.bub.n !== pp.n) pp.bub = { n:pp.n, txt:pick('absent'), t0:el, dur:3.6 };
+      paatSay(g, pp.bub, el, L2G, hx, hy, R, pp.n % 2 ? 1 : -1, hands.map(handRect), W, H, up);
     }
   };
 
@@ -1521,10 +1716,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       g.restore();
     },
 
-    /* 👀 Paatrice, cam bureau : 3 variantes (voir paatScene) */
-    derriere:  (g, P, a, el, dt, v, W, H) => paatScene(g, P, a, el, dt, v, W, H, 'reco'),
-    derriere2: (g, P, a, el, dt, v, W, H) => paatScene(g, P, a, el, dt, v, W, H, 'creatif'),
-    stand:     (g, P, a, el, dt, v, W, H) => paatScene(g, P, a, el, dt, v, W, H, 'stand')
+    /* 👀 Paatrice farceur, ancienne méthode (PAAT_CALQUE false : image entière + toi détouré par-dessus) */
+    derriere: (g, P, a, el, dt, v, W, H) => paatScene(g, P, a, el, dt, v, W, H, false)
   };
 
 
@@ -1655,7 +1848,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     }
   }, 250);
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', farceur:'derriere2', jojo:'stand' };   // mêmes noms que la cam tel
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand' };   // mêmes noms que la cam tel
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
     let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
@@ -1711,7 +1904,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       'État   : ' + (fx.on ? FX[fx.key].name + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
                   + (fxQ.length ? ' · file ' + fxQ.length : ''),
       fx.on && FX[fx.key].keep ? 'Paatrice : ' + ({ ok:'à côté de toi', profil:'dans ton dos (visage perdu)', absent:'marionnette (tu n\'es pas à l\'image)' }[fx.pstate] || '…')
-                  + (fx.body ? ' · silhouette ' + Math.round((fx.body.cov || 0) * 100) + ' %' : '') : '',
+                  + (fx.body ? ' · silhouette ' + Math.round((fx.body.cov || 0) * 100) + ' %' : '')
+                  + (fx.guy && fx.guy.st >= 0 ? ' · STAND' : '') + (C.PAAT_CALQUE ? ' · calque transparent' : ' · ancienne méthode') : '',
       ST.err ? 'Erreur : ' + ST.err : '',
       RAW ? 'BRUT   : vidéo ' + vid.videoWidth + '×' + vid.videoHeight + ' · capacités ' + (ST.caps || '?')
             + '\nAppareils : ' + (ST.devs || '?') : ''
