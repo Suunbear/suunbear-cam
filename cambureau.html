@@ -75,6 +75,7 @@ const CONFIG = {
   BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
   BEAU_ETOILES     : 2.4,   // s pendant lesquelles les étoiles multicolores scintillent autour de lui, puis elles s'arrêtent
   BEAU_FANTOME     : 0.92,  // opacité de sa tête (1 = pleine · 0.8 = plus fantôme)
+  CHAD_PAATRICE    : true,  // Chad : la tête de Paatrice beau gosse flotte autour de toi pendant le filtre (jamais devant ton visage)
   CHAD_ETOILES_COULEUR : 'multi',  // Chad : 'multi' = une couleur par étoile · 'or' = toutes dorées
   CHAD_ETOILES_TAILLE  : 2,        // Chad : taille des étoiles (1 = avant)
   CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
@@ -228,7 +229,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [176,  .16, -.15, .30, 0, .20], [400,  .16, -.15, .30, 0, .20],   // menton large et carré
       [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
       [172,  .02, -.10, .22], [397,  .02, -.10, .22],
-      [61,  -.14, -.08, .20, 1], [291, -.04, -.05, .13, 1],   // sourire en coin (un côté plus haut)
+      [61,  -.21, -.14, .27, 1], [291, -.18, -.13, .26, 1],   // sourire chad : les deux coins bien relevés et la bouche élargie (un poil plus côté sourcil levé)
+      [50,  -.07,    0, .17], [280, -.07,    0, .17],     // les joues remontent avec le sourire
       [105, -.20,    0, .24, 1], [70, -.12, 0, .20, 1], [107, -.07, 0, .16, 1],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
       [334,  .06,  .03, .15, 1], [296, .06, .04, .12, 1], [300, .04, 0, .13, 1],  // l'autre bas et lourd
       [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés (comme la cam tel)     // yeux plissés
@@ -484,10 +486,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
   const frame = () => {
     if (!fx.on) return;
-    const v = vid, W = v.videoWidth, H = v.videoHeight, t = performance.now();
+    const ghostOnly = !!(FX[fx.key] && FX[fx.key].ghost && !fx.track);   // Paatrice beau gosse : pas besoin de l'image de la cam
+    const v = vid, W = ghostOnly ? C.WIDTH : v.videoWidth, H = ghostOnly ? C.HEIGHT : v.videoHeight, t = performance.now();
     const dt = Math.min(0.1, (t - (fx.last || t)) / 1000);
     fx.last = fx.now = t; ST.frames++;
-    if (!fx.useRaf) fx.lastFrame = t;
+    if (!fx.useRaf || ghostOnly) fx.lastFrame = t;
     else {                                           // secours : on vérifie que l'image avance vraiment
       const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality().totalVideoFrames : -1;
       if (q !== fx.q) { fx.q = q; fx.lastFrame = t; }
@@ -1807,10 +1810,20 @@ const paatBeauEyes = (g, S) => {
   };
   /* Paatrice beau gosse : sa tête apparaît en fondu au milieu des étoiles multicolores, déjà en mouvement,
      puis flotte comme un fantôme sur un chemin régulier (un 8 couché) jusqu'à la fin du filtre. */
-  const beauGhost = (g, W, H, el, dt, amt) => {
+  const beauGhost = (g, W, H, el, dt, amt, P) => {          // P = ton visage (filtre Chad) : il ne passe jamais devant
     const spr = beauSprite(), hh = H * C.BEAU_TAILLE, k = hh / 670, sw = spr.width * k, sh = spr.height * k;
     const th = el / Math.max(4, C.BEAU_TOUR) * 6.2832 - 1.2;  // il part déjà lancé
-    const x = W / 2 + W * .32 * Math.sin(th), y = H * .4 + H * .18 * Math.sin(th) * Math.cos(th) + H * .015 * Math.sin(el * 2.1);
+    let x = W / 2 + W * .32 * Math.sin(th), y = H * .4 + H * .18 * Math.sin(th) * Math.cos(th) + H * .015 * Math.sin(el * 2.1);
+    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })) });
+    if (P) {                                                 // ton visage (cheveux et barbe compris) + sa tête : zone interdite, il glisse autour
+      const ex = P.mx, ey = P.my + .25 * P.fw, ax = 1.7 * P.fw + sw * .36, ay = 2.4 * P.fw + sh * .42;
+      const qx = (x - ex) / ax, qy = (y - ey) / ay, d = Math.hypot(qx, qy);
+      if (d < 1) { const s2 = 1 / Math.max(.05, d); x = ex + (x - ex) * s2; y = ey + (y - ey) * s2; if (d < .05) x = ex + ax; }
+      x = Math.max(sw * .32, Math.min(W - sw * .32, x)); y = Math.max(sh * .36, Math.min(H - sh * .4, y));   // toujours dans l'image
+      if (sp.x == null) { sp.x = x; sp.y = y; }
+      const kf = 1 - Math.exp(-dt / .3); sp.x += (x - sp.x) * kf; sp.y += (y - sp.y) * kf;   // trajet adouci : il contourne en douceur
+      x = sp.x; y = sp.y;
+    }
     const rot = .1 * Math.cos(th) + .03 * Math.sin(el * 1.7);   // il se penche dans le sens où il va, et ondule
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
     const alpha = Math.min(ap, amt) * C.BEAU_FANTOME;
@@ -1820,7 +1833,6 @@ const paatBeauEyes = (g, S) => {
       g.restore();
     }
     /* les étoiles : elles scintillent autour de lui pendant l'apparition, puis plus aucune ne naît */
-    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })) });
     for (const q of sp.st) {
       if (el - q.t0 > q.life && el < C.BEAU_ETOILES) {
         Object.assign(q, { t0:el + Math.random() * .2, life:.5 + Math.random() * .6, an:Math.random() * 6.2832,
@@ -2108,6 +2120,7 @@ const paatBeauEyes = (g, S) => {
         }
         g.restore();
       }
+      if (C.CHAD_PAATRICE) try { beauGhost(g, g.canvas.width, g.canvas.height, el, dt, a, P); } catch (e) { log('BEAU ' + e.message); }   // Paatrice beau gosse flotte autour de toi
       if (!tingOn) return;
       const lt = tl, right = fx.mirT !== false;
       const c = fx.sm[right ? 291 : 61], o = fx.sm[right ? 61 : 291]; if (!c || !o) return;
@@ -2199,12 +2212,20 @@ const paatBeauEyes = (g, S) => {
     segPrev = null; segImg = null;
     ST.err = '';
     try {
+      if (FX[key].ghost) {                           // Paatrice beau gosse : il flotte sur un calque transparent, sans ouvrir
+        glInit(); sprites(); beauSprite();           // la caméra virtuelle ni le moteur de suivi (marche même s'ils sont éteints)
+        fx.useRaf = true; fx.got = true;
+        const first = new Promise(r => { fx.drawn = r; });
+        sched(); await first;
+        if (!fx.on) return;
+        fx.t0 = performance.now(); log('filtre', key, 'lancé (sans caméra)'); return;
+      }
       await ensureLM();
       if (FX[key].seg && C.PAAT_DETOURAGE) await ensureSeg().catch(() => {});
       if (FX[key].keep && C.PAAT_CORPS) await ensureBody().catch(e => log('suivi du corps indisponible : ' + (e.message || e)));
       glInit();
       if (FX[key].stk) sprites();                    // dessins préparés AVANT le compte à rebours
-      if (FX[key].ghost) beauSprite();
+      if (FX[key].stk === 'chad' && C.CHAD_PAATRICE) beauSprite();
       await vcamOn();
       const id = await findCam();
       const s = await openCam(id);
@@ -2257,12 +2278,12 @@ const paatBeauEyes = (g, S) => {
     }
   }, 250);
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand', beaugosse:'beau', beau_gosse:'beau', handsome:'beau' };   // mêmes noms que la cam tel
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand', beaugosse:'beau', handsome:'beau', paatricebeaugosse:'beau', paatricechad:'beau', paatchad:'beau', chadpaatrice:'beau', paatricebeau:'beau' };   // mêmes noms que la cam tel
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
-    let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+    let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_\-]+/g, '').trim();
     key = FX_ALIAS[key] || key;
-    if (!FX[key]) { log('filtre inconnu :', key); return; }
+    if (!FX[key]) { log('filtre inconnu :', key); ST.err = 'filtre inconnu : « ' + key + ' »'; return; }
     if (fx.on) { if (fxQ.length < C.FILTER_QUEUE_MAX) fxQ.push(key); return; }
     fxStart(key);
   };
@@ -2332,6 +2353,7 @@ const paatBeauEyes = (g, S) => {
 
   /* ---------- Lancement ---------- */
   if (C.FILTERS && C.FILTER_PRELOAD) setTimeout(() => ensureLM().catch(() => {}), 1500);
+  if (C.FILTERS && C.FILTER_PRELOAD && !window.__TEST) setTimeout(() => { try { beauSprite(); } catch (_) {} }, 3500);   // tête de Paatrice beau gosse prête d'avance
   try { document.fonts.load('40px "Mouse Memoirs"'); } catch (_) {}   // police des bulles et du Stand
   if (has('test')) setTimeout(() => fxRequest({ meta:{ nom:get('test') || 'zinzin' } }), 5000);
 })();
