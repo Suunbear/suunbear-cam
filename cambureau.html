@@ -68,10 +68,10 @@ const CONFIG = {
   FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
-  CHAD_TING        : true,  // Chad : « ting ✨ » sur son sourire de temps en temps
-  CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
+  CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
+  CHAD_ETOILES     : 0,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune · 7 = avant)
   CHAD_FAUX        : true,  // Chad : tes sourcils gommés, remplacés par ceux du meme (false = tes vrais sourcils)
-  CHAD_POMPE       : true,  // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
+  CHAD_POMPE       : false, // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
   /* --- Paatrice (nom SAMMI « derriere ») : le farceur, gag Stand de temps en temps --- */
   PAAT_CALQUE      : true,  // true = dessiné seul sur un calque transparent, gommé là où tu es : la vraie cam reste dessous
@@ -215,15 +215,27 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const q = .014 * Math.max(0, Math.sin(el * 1.6)) * Math.sin(el * 44);
       return [[17, q, 0, .09], [14, q * .7, 0, .07]];
     }},
-    chad: { name:'🗿 Chad', pts:[                        // gigachad (filtre « Tough Guy ») : mâchoire carrée et large, menton long et carré,
-      [152,  .30,    0, .40],                           //   joues creusées + FAUX sourcils dessinés · menton bien allongé
-      [148,  .18, -.08, .26], [377,  .18, -.08, .26],   // menton large, le bas bien carré
-      [176,  .14, -.14, .28], [400,  .14, -.14, .28],
-      [136,  .06, -.15, .28], [365,  .06, -.15, .28],   // mâchoire élargie…
-      [58,   .03, -.13, .25], [288,  .03, -.13, .25],   // … jusqu'à l'angle : une mâchoire « à angle droit »
-      [205,    0,  .05, .16], [425,    0,  .05, .16],   // joues un peu creusées sous les pommettes : ça sculpte la mâchoire
-      [116, -.03, -.03, .15], [345, -.03, -.03, .15],   // pommettes marquées
-      [17,  -.06,    0, .12], [14,  -.03,    0, .09]    // ta bouche reste en place (le menton qui s'allonge ne la tire pas)
+    chad: { name:'🗿 Chad', pts:[                        // le filtre TikTok « Tough Guy » (photos de référence) : bas du visage allongé,
+      // menton long, large et carré · mâchoire très large · yeux plissés, air sûr de soi · nez long et fin · sourire en coin
+      // · un sourcil levé très haut en pointe, l'autre bas et lourd. Les points marqués 1 suivent le côté du sourcil levé.
+      [152,  .44,    0, .56],                           // menton très allongé
+      [148,  .24, -.08, .30], [377,  .24, -.08, .30],   // menton large, le bas bien carré
+      [176,  .18, -.17, .32], [400,  .18, -.17, .32],
+      [136,  .08, -.21, .34], [365,  .08, -.21, .34],   // mâchoire très élargie…
+      [58,   .03, -.17, .30], [288,  .03, -.17, .30],   // … jusqu'à l'angle
+      [17,  -.06,    0, .12], [14,  -.03,    0, .09],   // ta bouche reste en place (le menton qui s'allonge ne la tire pas)
+      [61,  -.10, -.07, .15, 1], [291, -.04, -.05, .13, 1],   // sourire en coin : le coin du côté du sourcil levé monte plus
+      [159,  .03,    0, .08, 1], [386,  .06,    0, .08, 1],   // yeux plissés (plus fermé du côté du sourcil baissé)
+      [145, -.03,    0, .07], [374, -.03,    0, .07],
+      [1,    .06,    0, .14],                           // nez plus long…
+      [98,     0,  .03, .07], [327,    0,  .03, .07],   // … et plus fin
+      [205,    0,  .05, .16], [425,    0,  .05, .16],   // joues creusées sous les pommettes
+      [116, -.03, -.03, .15], [345, -.03, -.03, .15]    // pommettes hautes
+    ], bulge:[
+      [[152, 148, 377], 1.1, .75, .3]                   // loupe sur le menton : un menton énorme, comme sur les photos
+    ], brow:[                                           // sourcils en déformation (seulement si CHAD_FAUX = false : tes lunettes suivent)
+      [105, -.27,    0, .28, 1], [70, -.16, 0, .22, 1], [107, -.10, 0, .18, 1],
+      [334,  .07,  .03, .15, 1], [296, .07, .04, .12, 1], [300, .04, 0, .13, 1]
     ], stk:'chad', side:true, fake:true, guard:true },  // fake : faux sourcils (CHAD_FAUX) · guard : jamais d'image repliée
     chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
       [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
@@ -324,9 +336,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
                     content:[468, 473].concat(EYE_R, EYE_L), chad:[61, 291, 159, 386].concat(BROW_R.up, BROW_R.lo, BROW_L.up, BROW_L.lo), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   /* Chad : version miroir (l'autre sourcil levé, l'autre coin de la bouche) — paires gauche/droite du maillage */
-  const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397, 148:377, 58:288, 205:425 };
+  const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397, 148:377, 58:288, 205:425, 98:327 };
   Object.entries(MIRROR).forEach(([a, b]) => { MIRROR[b] = +a; });
-  const SIDE_R = new Set([61, 105, 70, 107, 66, 159, 145, 116, 176, 136, 172, 148, 58, 205]);   // côté droit de ton visage (à gauche à l'écran)
+  const SIDE_R = new Set([61, 105, 70, 107, 66, 159, 145, 116, 176, 136, 172, 148, 58, 205, 98]);   // côté droit de ton visage (à gauche à l'écran)
+  if (C.CHAD_FAUX === false) FX.chad.pts = FX.chad.pts.concat(FX.chad.brow);   // vrais sourcils déformés (lunettes tirées)
   ['chad', 'chad2'].forEach(k => { FX[k].ptsM = FX[k].pts.map(([i, ...r]) => [MIRROR[i] != null ? MIRROR[i] : i, ...r]); });
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
@@ -1645,11 +1658,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
      I = bout côté nez, O = bout côté tempe, up = « vers le haut », r = 0 (bas, plat, froncé) → 1 (« People's Eyebrow » : levé, arqué aux 2/3) */
   const fakeBrow = (g, I, O, up, fw, r, alpha, seed) => {
     const ax = O[0] - I[0], ay = O[1] - I[1], L = Math.hypot(ax, ay) || 1, ux = ax / L, uy = ay / L;
-    const pk = .66;                                                     // point haut : jonction 2/3 – 1/3
-    const hLow = t => -.015 + .03 * t;                                  // baissé : plat, la tête un peu plus basse (froncé)
-    const hHi = t => t < pk ? .07 + .19 * Math.sin(t / pk * Math.PI / 2) : .26 - .11 * Math.pow((t - pk) / (1 - pk), 1.4);   // levé : arqué aux 2/3
+    const pk = .62;                                                     // point haut : vers les 2/3
+    const hLow = t => -.05 + .06 * t;                                   // baissé : bas, lourd, la tête qui plonge vers le nez (regard dur)
+    const hHi = t => t < pk ? .05 + .29 * Math.pow(t / pk, .85) : .34 - .2 * Math.pow((t - pk) / (1 - pk), 1.1);   // levé : très haut, en pointe aux 2/3 (photos)
     const Hh = t => hLow(t) + (hHi(t) - hLow(t)) * r;
-    const Th = t => (t < .12 ? .085 + .2 * t : .11) * (t > .62 ? 1 - .7 * (t - .62) / .38 : 1);   // tête épaisse (≈ 0,1 écart d'yeux), queue fine
+    const Th = t => (t < .12 ? .12 + .25 * t : .15) * (t > .6 ? 1 - .65 * (t - .6) / .4 : 1);   // tête épaisse (≈ 0,1 écart d'yeux), queue fine
     const P = (t, h) => [I[0] + ax * t + up[0] * h * fw, I[1] + ay * t + up[1] * h * fw];
     g.save(); g.globalAlpha = alpha * .6;                               // fond léger, bords fondus : la peau passe un peu à travers
     const N = 18; g.beginPath();
@@ -1657,7 +1670,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     for (let j = N; j >= 0; j--) { const t = j / N, p = P(t, Hh(t) - Th(t) * .4); g.lineTo(p[0], p[1]); }
     g.closePath(); g.fillStyle = '#21150e'; g.shadowColor = '#21150e'; g.shadowBlur = .035 * fw; g.fill();
     g.shadowBlur = 0; g.globalAlpha = alpha; g.lineCap = 'round';
-    const pr = seeded(seed), nH = 220;
+    const pr = seeded(seed), nH = 270;
     for (let k = 0; k < nH; k++) {                                      // les poils, dans le sens naturel de pousse
       const t = Math.pow(pr(), .85), v = (pr() - .5) * .95, th = Th(t), p = P(t, Hh(t) + v * th);
       const slope = Math.atan2((Hh(Math.min(1, t + .02)) - Hh(Math.max(0, t - .02))) * fw, .04 * L);   // pente du sourcil à cet endroit
