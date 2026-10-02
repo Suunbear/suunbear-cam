@@ -70,7 +70,7 @@ const CONFIG = {
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
   CHAD_ETOILES     : 0,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune · 7 = avant)
-  CHAD_FAUX        : true,  // Chad : tes sourcils gommés, remplacés par ceux du meme (false = tes vrais sourcils)
+  CHAD_FAUX        : false, // Chad : false = TES sourcils déformés (comme le filtre d'origine) · true = gommés et remplacés par des sourcils dessinés
   CHAD_POMPE       : false, // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
   /* --- Paatrice (nom SAMMI « derriere ») : le farceur, gag Stand de temps en temps --- */
@@ -218,12 +218,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     chad: { name:'🗿 Chad', pts:[                        // le filtre TikTok « Tough Guy » (photos de référence) : bas du visage allongé,
       // menton long, large et carré · mâchoire très large · yeux plissés, air sûr de soi · nez long et fin · sourire en coin
       // · un sourcil levé très haut en pointe, l'autre bas et lourd. Les points marqués 1 suivent le côté du sourcil levé.
-      [152,  .44,    0, .56],                           // menton très allongé
-      [148,  .24, -.08, .30], [377,  .24, -.08, .30],   // menton large, le bas bien carré
-      [176,  .18, -.17, .32], [400,  .18, -.17, .32],
+      [152,  .40,    0, .42, 0, .38],                   // menton très allongé (tiré d'en dessous : ta bouche ne s'étire pas)
+      [148,  .24, -.08, .30, 0, .30], [377,  .24, -.08, .30, 0, .30],   // menton large, le bas bien carré (tiré d'en dessous)
+      [176,  .18, -.17, .32, 0, .22], [400,  .18, -.17, .32, 0, .22],
       [136,  .08, -.21, .34], [365,  .08, -.21, .34],   // mâchoire très élargie…
       [58,   .03, -.17, .30], [288,  .03, -.17, .30],   // … jusqu'à l'angle
-      [17,  -.06,    0, .12], [14,  -.03,    0, .09],   // ta bouche reste en place (le menton qui s'allonge ne la tire pas)
+      [17,  -.05,    0, .14], [14,  -.02,    0, .10],   // ta bouche reste en place (le menton qui s'allonge ne la tire pas)
       [61,  -.10, -.07, .15, 1], [291, -.04, -.05, .13, 1],   // sourire en coin : le coin du côté du sourcil levé monte plus
       [159,  .03,    0, .08, 1], [386,  .06,    0, .08, 1],   // yeux plissés (plus fermé du côté du sourcil baissé)
       [145, -.03,    0, .07], [374, -.03,    0, .07],
@@ -231,11 +231,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [98,     0,  .03, .07], [327,    0,  .03, .07],   // … et plus fin
       [205,    0,  .05, .16], [425,    0,  .05, .16],   // joues creusées sous les pommettes
       [116, -.03, -.03, .15], [345, -.03, -.03, .15]    // pommettes hautes
-    ], bulge:[
-      [[152, 148, 377], 1.1, .75, .3]                   // loupe sur le menton : un menton énorme, comme sur les photos
-    ], brow:[                                           // sourcils en déformation (seulement si CHAD_FAUX = false : tes lunettes suivent)
-      [105, -.27,    0, .28, 1], [70, -.16, 0, .22, 1], [107, -.10, 0, .18, 1],
-      [334,  .07,  .03, .15, 1], [296, .07, .04, .12, 1], [300, .04, 0, .13, 1]
+    ], brow:[                                           // TES sourcils déformés, comme sur les photos (CHAD_FAUX = false, réglage de base)
+      [105, -.28,    0, .38, 1, -.02], [105, -.26, 0, .36, 1, -.22],   // un sourcil levé très haut (tiré par le front : l'œil suit moins)…
+      [70,  -.12,    0, .20, 1, -.04], [107, -.05, 0, .15, 1, -.03],   // … en pointe vers les 2/3 (la queue et la tête montent moins)
+      [334,  .13,  .04, .19, 1, -.04], [296, .12, .06, .16, 1], [300, .06, 0, .15, 1]   // l'autre bas, lourd, la tête qui plonge vers le nez
     ], stk:'chad', side:true, fake:true, guard:true },  // fake : faux sourcils (CHAD_FAUX) · guard : jamais d'image repliée
     chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
       [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
