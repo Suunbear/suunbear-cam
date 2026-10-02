@@ -70,7 +70,10 @@ const CONFIG = {
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
-  BEAU_TAILLE      : 0.36,  // Paatrice beau gosse : hauteur de sa tête (part de la hauteur de l'image)
+  BEAU_TAILLE      : 0.2,   // Paatrice beau gosse : hauteur de sa tête (part de la hauteur de l'image), à mi-profondeur
+  BEAU_LOIN        : 0.6,   // … × ça quand il est au fond du bureau
+  BEAU_PRES        : 1.6,   // … × ça quand il est tout près de la caméra
+  BEAU_PROF_TOUR   : 9,     // s pour un aller-retour fond du bureau ↔ caméra
   BEAU_TOUR        : 14,    // s pour un tour complet de son chemin (un 8 couché, régulier)
   BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
   BEAU_ETOILES     : 2.4,   // s pendant lesquelles les étoiles multicolores scintillent autour de lui, puis elles s'arrêtent
@@ -623,6 +626,14 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (st && pose && sa > 0.01) try { STK[st](out2d, pose, sa, el, dt, v, cw, ch); } catch (e) { log('STK ' + st + ' : ' + e.message); }
       }
 
+      /* Chad : la tête de Paatrice beau gosse se balade sur le calque transparent, indépendante de ton visage
+         (elle reste même si le suivi te perd) · visage vu → elle le contourne */
+      const chadPaat = !!(F.stk === 'chad' && C.CHAD_PAATRICE && !absent && !paatT && !ghost);
+      if (chadPaat) {
+        const ga = fxaCtx(cw, ch);
+        ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.globalCompositeOperation = 'source-over'; ga.clearRect(0, 0, cw, ch);
+        try { beauGhost(ga, cw, ch, el, dt, amt, pose && faceOn ? pose : null); } catch (e) { log('BEAU ' + e.message); }
+      }
       /* 5. Le calque ne couvre la cam que si ton visage est vu ET que l'image est bien en 16:9
             (sinon : cam normale, jamais d'image parasite ni déformée à l'antenne) */
       const okRatio = RAW || ratioOK(W, H);
@@ -630,7 +641,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const live = !!(fx.t0 && !fx.ending);
       const want = !absent && !paatT && !ghost && (RAW ? live
                        : !!(okRatio && live && fx.seen && (F.keep ? fx.lastPresent : t - fx.seen < C.FACE_HOLD * 1000)));
-      const wantA = live && ((ghost && (RAW || okRatio)) || absent || (paatT && (RAW || !!(okRatio && fx.seen && fx.lastPresent))));   // calque transparent
+      const wantA = live && (((ghost || chadPaat) && (RAW || okRatio)) || absent || (paatT && (RAW || !!(okRatio && fx.seen && fx.lastPresent))));   // calque transparent
       if (want !== fxCv.classList.contains('on')) fxCv.classList.toggle('on', want);
       if (wantA !== fxa.classList.contains('on')) fxa.classList.toggle('on', wantA);
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
@@ -1811,9 +1822,12 @@ const paatBeauEyes = (g, S) => {
   /* Paatrice beau gosse : sa tête apparaît en fondu au milieu des étoiles multicolores, déjà en mouvement,
      puis flotte comme un fantôme sur un chemin régulier (un 8 couché) jusqu'à la fin du filtre. */
   const beauGhost = (g, W, H, el, dt, amt, P) => {          // P = ton visage (filtre Chad) : il ne passe jamais devant
-    const spr = beauSprite(), hh = H * C.BEAU_TAILLE, k = hh / 670, sw = spr.width * k, sh = spr.height * k;
+    /* profondeur : il va au fond du bureau (petit, plus haut, plus pâle) puis revient près de la caméra (grand, plus bas) */
+    const zt = el / Math.max(4, C.BEAU_PROF_TOUR) * 6.2832 + .6, z = .5 - .5 * Math.cos(zt);   // 0 = au fond · 1 = près de la caméra
+    const dep = C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3);
+    const spr = beauSprite(), hh = H * C.BEAU_TAILLE * dep, k = hh / 670, sw = spr.width * k, sh = spr.height * k;
     const th = el / Math.max(4, C.BEAU_TOUR) * 6.2832 - 1.2;  // il part déjà lancé
-    let x = W / 2 + W * .32 * Math.sin(th), y = H * .4 + H * .18 * Math.sin(th) * Math.cos(th) + H * .015 * Math.sin(el * 2.1);
+    let x = W / 2 + W * (.24 + .1 * z) * Math.sin(th), y = H * (.3 + .22 * z) + H * .12 * Math.sin(th) * Math.cos(th) + H * .012 * Math.sin(el * 2.1);
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })) });
     if (P) {                                                 // ton visage (cheveux et barbe compris) + sa tête : zone interdite, il glisse autour
       const ex = P.mx, ey = P.my + .25 * P.fw, ax = 1.7 * P.fw + sw * .36, ay = 2.4 * P.fw + sh * .42;
@@ -1826,7 +1840,7 @@ const paatBeauEyes = (g, S) => {
     }
     const rot = .1 * Math.cos(th) + .03 * Math.sin(el * 1.7);   // il se penche dans le sens où il va, et ondule
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
-    const alpha = Math.min(ap, amt) * C.BEAU_FANTOME;
+    const alpha = Math.min(ap, amt) * C.BEAU_FANTOME * (.72 + .28 * z);   // au fond : un peu plus fantôme
     if (alpha > .01) {
       g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot);
       g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);           // (x, y) = milieu de son visage
@@ -2120,7 +2134,6 @@ const paatBeauEyes = (g, S) => {
         }
         g.restore();
       }
-      if (C.CHAD_PAATRICE) try { beauGhost(g, g.canvas.width, g.canvas.height, el, dt, a, P); } catch (e) { log('BEAU ' + e.message); }   // Paatrice beau gosse flotte autour de toi
       if (!tingOn) return;
       const lt = tl, right = fx.mirT !== false;
       const c = fx.sm[right ? 291 : 61], o = fx.sm[right ? 61 : 291]; if (!c || !o) return;
