@@ -39,7 +39,7 @@
      3. HTTP Request GET https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"zinzin"}}
      4. attendre 95000 ms · 5. arrêter la caméra virtuelle
    noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (sans accents)
-          (anciennes versions : content1 · chad1 · chad2 = Chad avec les lunettes qui suivent le sourcil)
+          (anciennes versions : content1 · chad1 · chad2)
           Paatrice cam bureau = le farceur : derriere (Stand de temps en temps) · stand (pareil, Stand dès le début)
           (anciens noms acceptés : derriere2 · farceur · bouche · jojo)
    La cam tel écoute "filtre", la cam bureau "filtre_bureau" : chacune ignore l'autre.
@@ -215,27 +215,18 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const q = .014 * Math.max(0, Math.sin(el * 1.6)) * Math.sin(el * 44);
       return [[17, q, 0, .09], [14, q * .7, 0, .07]];
     }},
-    chad: { name:'🗿 Chad', pts:[                        // le filtre TikTok « Tough Guy » (photos de référence) : bas du visage allongé,
-      // menton long, large et carré · mâchoire très large · yeux plissés, air sûr de soi · nez long et fin · sourire en coin
-      // · un sourcil levé très haut en pointe, l'autre bas et lourd. Les points marqués 1 suivent le côté du sourcil levé.
-      [152,  .40,    0, .42, 0, .38],                   // menton très allongé (tiré d'en dessous : ta bouche ne s'étire pas)
-      [148,  .24, -.08, .30, 0, .30], [377,  .24, -.08, .30, 0, .30],   // menton large, le bas bien carré (tiré d'en dessous)
-      [176,  .18, -.17, .32, 0, .22], [400,  .18, -.17, .32, 0, .22],
-      [136,  .08, -.21, .34], [365,  .08, -.21, .34],   // mâchoire très élargie…
-      [58,   .03, -.17, .30], [288,  .03, -.17, .30],   // … jusqu'à l'angle
-      [17,  -.05,    0, .14], [14,  -.02,    0, .10],   // ta bouche reste en place (le menton qui s'allonge ne la tire pas)
-      [61,  -.10, -.07, .15, 1], [291, -.04, -.05, .13, 1],   // sourire en coin : le coin du côté du sourcil levé monte plus
-      [159,  .03,    0, .08, 1], [386,  .06,    0, .08, 1],   // yeux plissés (plus fermé du côté du sourcil baissé)
-      [145, -.03,    0, .07], [374, -.03,    0, .07],
-      [1,    .06,    0, .14],                           // nez plus long…
-      [98,     0,  .03, .07], [327,    0,  .03, .07],   // … et plus fin
-      [205,    0,  .05, .16], [425,    0,  .05, .16],   // joues creusées sous les pommettes
-      [116, -.03, -.03, .15], [345, -.03, -.03, .15]    // pommettes hautes
-    ], brow:[                                           // TES sourcils déformés, comme sur les photos (CHAD_FAUX = false, réglage de base)
-      [105, -.28,    0, .38, 1, -.02], [105, -.26, 0, .36, 1, -.22],   // un sourcil levé très haut (tiré par le front : l'œil suit moins)…
-      [70,  -.12,    0, .20, 1, -.04], [107, -.05, 0, .15, 1, -.03],   // … en pointe vers les 2/3 (la queue et la tête montent moins)
-      [334,  .13,  .04, .19, 1, -.04], [296, .12, .06, .16, 1], [300, .06, 0, .15, 1]   // l'autre bas, lourd, la tête qui plonge vers le nez
-    ], stk:'chad', side:true, fake:true, guard:true },  // fake : faux sourcils (CHAD_FAUX) · guard : jamais d'image repliée
+    chad: { name:'🗿 Chad', pts:[                        // mâchoire de gigachad + air sûr de lui
+      [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
+      [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
+      [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
+      [172,  .02, -.10, .22], [397,  .02, -.10, .22],
+      [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
+      [105, -.20,    0, .24], [70, -.12, 0, .20], [107, -.07, 0, .16],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
+      [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
+      [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
+      [145, -.02,    0, .07], [374, -.02,  0, .07],
+      [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
+    ]},
     chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
       [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
       [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
@@ -338,7 +329,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397, 148:377, 58:288, 205:425, 98:327 };
   Object.entries(MIRROR).forEach(([a, b]) => { MIRROR[b] = +a; });
   const SIDE_R = new Set([61, 105, 70, 107, 66, 159, 145, 116, 176, 136, 172, 148, 58, 205, 98]);   // côté droit de ton visage (à gauche à l'écran)
-  if (C.CHAD_FAUX === false) FX.chad.pts = FX.chad.pts.concat(FX.chad.brow);   // vrais sourcils déformés (lunettes tirées)
+  if (C.CHAD_FAUX === false && FX.chad.brow) FX.chad.pts = FX.chad.pts.concat(FX.chad.brow);   // vrais sourcils déformés (lunettes tirées)
   ['chad', 'chad2'].forEach(k => { FX[k].ptsM = FX[k].pts.map(([i, ...r]) => [MIRROR[i] != null ? MIRROR[i] : i, ...r]); });
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
