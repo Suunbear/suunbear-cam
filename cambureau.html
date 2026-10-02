@@ -66,6 +66,8 @@ const CONFIG = {
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
   FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // filtre par filtre (chat = Kawai, fache = Colère)
   FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
+  CHAD_SOURCIL     : 'auto',  // Chad : sourcil levé 'auto' (du côté tourné vers la caméra) · 'gauche' · 'droite' (vu à l'écran)
+  CHAD_TING        : true,  // Chad : petit « ting ✨ » qui brille sur son sourire de temps en temps
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
   /* --- Paatrice (nom SAMMI « derriere ») : le farceur, gag Stand de temps en temps --- */
   PAAT_CALQUE      : true,  // true = dessiné seul sur un calque transparent, gommé là où tu es : la vraie cam reste dessous
@@ -214,13 +216,13 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
       [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
       [172,  .02, -.10, .22], [397,  .02, -.10, .22],
-      [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
-      [105, -.20,    0, .24], [70, -.12, 0, .20], [107, -.07, 0, .16],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
-      [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
-      [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
+      [61,  -.07, -.05, .14, 1], [291, -.02, -.03, .12, 1],   // sourire en coin (un côté plus haut)
+      [105, -.25,    0, .27, 1], [70, -.15, 0, .22, 1], [107, -.09, 0, .18, 1],   // un sourcil levé haut, en entier (cam bureau : plus haut, il dépasse des lunettes)
+      [334,  .06,  .03, .15, 1], [296, .06, .04, .12, 1], [300, .04, 0, .13, 1],  // l'autre bas et lourd
+      [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
-    ]},
+    ], stk:'chad', side:true },                         // side : le sourcil levé passe du côté tourné vers la caméra (CHAD_SOURCIL)
     chad1: { name:'🗿 Chad', pts:[                       // ancienne version (nom SAMMI « chad1 ») si la nouvelle plaît moins
       [152,  .22,    0, .38],                           // menton allongé
       [148,  .17, -.06, .24], [377,  .17, -.06, .24],   // menton large et carré
@@ -303,10 +305,15 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
                     [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
   const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
-                    content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
+                    content:[468, 473].concat(EYE_R, EYE_L), chad:[61, 291, 13, 14], fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
+  /* Chad : version miroir (l'autre sourcil levé, l'autre coin de la bouche) — paires gauche/droite du maillage */
+  const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397 };
+  Object.entries(MIRROR).forEach(([a, b]) => { MIRROR[b] = +a; });
+  FX.chad.ptsM = FX.chad.pts.map(([i, ...r]) => [MIRROR[i] != null ? MIRROR[i] : i, ...r]);
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
-    (f.pts || []).forEach(q => need.add(q[0]));
+    (f.pts || []).concat(f.ptsM || []).forEach(q => need.add(q[0]));
+    if (f.side) [234, 454, 1].forEach(i => need.add(i));
     (f.bulge || []).forEach(b => b[0].forEach(i => need.add(i)));
     (STK_PTS[f.stk] || []).forEach(i => need.add(i));
     if (f.dyn) EXA_IDS.concat([205, 187, 425, 411, 4, 6], MOUTH, EYE_R, EYE_L).forEach(i => need.add(i));
@@ -418,6 +425,27 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     return [o[0] + o[2] * a, o[1] + o[3] * a];
   };
 
+  /* Chad : le sourcil levé (et le sourire en coin) du côté tourné vers la caméra, le plus visible.
+     Tu regardes vers la gauche de l'image → sourcil de droite (à l'écran), et inversement. */
+  const chadSide = (dt, rx, ry) => {
+    const mode = String(C.CHAD_SOURCIL || 'auto');
+    let want = mode === 'droite' ? true : mode === 'gauche' ? false : null;   // true = sourcil de droite à l'écran (version miroir)
+    if (want == null) {
+      const L = fx.sm[234], R = fx.sm[454], N = fx.sm[1];
+      want = fx.mirT == null ? true : fx.mirT;           // au départ : sourcil de droite (tu regardes ton écran, à gauche)
+      if (L && R && N && fx.miss < 3) {
+        const w = (R[0] - L[0]) * rx + (R[1] - L[1]) * ry, yaw = w > 1 ? ((N[0] - L[0]) * rx + (N[1] - L[1]) * ry) / w : .5;
+        const cand = yaw < .42 ? true : yaw > .58 ? false : want;
+        fx.mirHold = cand !== want ? (fx.mirHold || 0) + dt : 0;
+        if (fx.mirHold > .8 || fx.mirT == null) { want = cand; fx.mirHold = 0; }
+      }
+    }
+    fx.mirT = want;
+    if (fx.mir == null) { fx.mir = want; fx.mirK = 1; }
+    if (fx.mir !== want) { fx.mirK = Math.max(0, fx.mirK - dt / .25); if (fx.mirK <= 0) fx.mir = want; }
+    else fx.mirK = Math.min(1, fx.mirK + dt / .25);
+  };
+
   const frame = () => {
     if (!fx.on) return;
     const v = vid, W = v.videoWidth, H = v.videoHeight, t = performance.now();
@@ -487,8 +515,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
           bufBD[nb * 4 + 2] = Math.max(-0.9, Math.min(0.9, bs * k));   // au-delà de 0,9 l'image se retournerait
           nb++;
         }
-        if (k > 0.001) for (const [i, kd, ki, kr] of ((DY ? DY.pts : (F.anim ? F.pts.concat(F.anim(el)) : F.pts)) || [])) {
+        if (F.side) chadSide(dt, rx, ry);           // Chad : de quel côté lever le sourcil
+        const PTS = F.side && fx.mir ? F.ptsM : F.pts;
+        if (k > 0.001) for (const [i, kd0, ki0, kr, asym] of ((DY ? DY.pts : (F.anim ? PTS.concat(F.anim(el)) : PTS)) || [])) {
           let p = at(i); if (!p || n >= FX_N) continue;
+          const ak = asym ? fx.mirK : 1, kd = kd0 * ak, ki = ki0 * ak;   // bascule de côté : le sourcil redescend puis l'autre monte
           if ((F.inv || F.dyn) && nb) p = bulgeInv(p, nb);          // le point suit le trait là où la loupe l'a déplacé
           const sd = Math.sign((p[0] - mx) * rx + (p[1] - my) * ry);
           let ox = (dx * kd - rx * sd * ki) * fw * k, oy = (dy * kd - ry * sd * ki) * fw * k;
@@ -1775,6 +1806,24 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       g.restore();
     },
 
+    /* 🗿 Chad : « ting ✨ » façon mème gigachad, au coin du sourire (côté sourcil levé), de temps en temps */
+    chad: (g, P, a, el) => {
+      if (!C.CHAD_TING || !(a > .5)) return;
+      const tg = fx.ting || (fx.ting = { at:1.2 + Math.random() });
+      if (el > tg.at + .55) tg.at = el + 3.5 + Math.random() * 2.5;    // prochain ting dans 3,5 à 6 s
+      const lt = el - tg.at; if (lt < 0 || lt > .55) return;
+      const c = fx.sm[fx.mir ? 291 : 61], o = fx.sm[fx.mir ? 61 : 291]; if (!c || !o) return;
+      const { fw } = P, m = warpPos(c), ux = (c[0] - o[0]), uy = (c[1] - o[1]), L = Math.hypot(ux, uy) || 1;
+      const x = m[0] + ux / L * .1 * fw, y = m[1] + uy / L * .1 * fw - .06 * fw;   // un peu à l'extérieur, un peu au-dessus
+      const s = Math.sin(lt / .55 * Math.PI), r = .2 * fw * s;
+      g.save(); g.translate(x, y); g.rotate(lt * 2.2);
+      g.shadowColor = 'rgba(255,255,255,.95)'; g.shadowBlur = .12 * fw; g.fillStyle = '#fff'; g.globalAlpha = Math.min(1, a) * Math.min(1, s * 1.6);
+      star4(g, 0, 0, r); g.rotate(.785); star4(g, 0, 0, r * .45);
+      g.restore();
+      g.save(); g.globalAlpha = Math.min(1, a) * s; g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = .06 * fw;
+      star4(g, x + ux / L * .16 * fw, y - .14 * fw, r * .35); g.restore();   // petite étoile à côté
+    },
+
     /* 👀 Paatrice farceur, ancienne méthode (PAAT_CALQUE false : image entière + toi détouré par-dessus) */
     derriere: (g, P, a, el, dt, v, W, H) => paatScene(g, P, a, el, dt, v, W, H, false)
   };
@@ -1847,6 +1896,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (fx.on) return;
     Object.assign(fx, { on:true, ending:false, key, t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, parts:[], guy:null,
                         pup:null, body:null, refBody:null, lastPresent:0, pstate:'', ori:null, refHead:null, nPose:0,
+                        mir:null, mirT:null, mirK:1, mirHold:0, ting:null,
                         mask:false, last:0, tDet:0, lastFrame:performance.now(), useRaf:false, got:false, q:-1 });
     segPrev = null; segImg = null;
     ST.err = '';
