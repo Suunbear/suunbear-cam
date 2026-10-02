@@ -70,7 +70,7 @@ const CONFIG = {
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : true,  // Chad : « ting ✨ » sur son sourire de temps en temps
   CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
-  CHAD_FAUX        : true,  // Chad : tes sourcils et ta bouche gommés, remplacés par ceux du meme (false = tes vrais traits)
+  CHAD_FAUX        : true,  // Chad : tes sourcils gommés, remplacés par ceux du meme (false = tes vrais sourcils)
   CHAD_POMPE       : true,  // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
   /* --- Paatrice (nom SAMMI « derriere ») : le farceur, gag Stand de temps en temps --- */
@@ -219,7 +219,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [152,  .30,    0, .40],                           // menton bien allongé
       [176,  .14, -.15, .30], [400,  .14, -.15, .30],   // menton large et carré
       [136,  .08, -.13, .26], [365,  .08, -.13, .26]    // mâchoire élargie
-    ], stk:'chad', side:true, fake:true },              // fake : tes sourcils et ta bouche sont gommés et remplacés (CHAD_FAUX)
+    ], stk:'chad', side:true, fake:true },              // fake : tes sourcils sont gommés et remplacés (CHAD_FAUX)
     chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
       [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
       [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
@@ -316,9 +316,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* Chad : contours de tes sourcils (de la tempe vers le nez) et de ta bouche */
   const BROW_R = { up:[70, 63, 105, 66, 107], lo:[46, 53, 52, 65, 55] };          // ton sourcil droit (à gauche de l'écran)
   const BROW_L = { up:[300, 293, 334, 296, 336], lo:[276, 283, 282, 295, 285] };  // ton sourcil gauche (à droite de l'écran)
-  const LIPS = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
   const STK_PTS = { chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
-                    content:[468, 473].concat(EYE_R, EYE_L), chad:[13, 14, 159, 386].concat(BROW_R.up, BROW_R.lo, BROW_L.up, BROW_L.lo, LIPS), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
+                    content:[468, 473].concat(EYE_R, EYE_L), chad:[61, 291, 159, 386].concat(BROW_R.up, BROW_R.lo, BROW_L.up, BROW_L.lo), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   /* Chad : version miroir (l'autre sourcil levé, l'autre coin de la bouche) — paires gauche/droite du maillage */
   const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397 };
   Object.entries(MIRROR).forEach(([a, b]) => { MIRROR[b] = +a; });
@@ -456,9 +455,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     let want = mode === 'droite' ? true : mode === 'gauche' ? false : null;   // true = ton sourcil gauche (à droite à l'écran)
     if (want == null) {
       want = fx.mirT == null ? true : fx.mirT;
-      const cand = want ? !(yaw > .62) : yaw < .56;          // quitter ton sourcil gauche : tête franchement tournée · y revenir : vite
+      const cand = want ? !(yaw > .6) : yaw < .54;           // pas d'attente : bascule dès que tu tournes la tête (écart aller/retour : pas de clignotement)
       fx.mirHold = cand !== want ? (fx.mirHold || 0) + dt : 0;
-      if (fx.mirHold > (want ? 1 : .4)) { want = cand; fx.mirHold = 0; }
+      if (fx.mirHold > .06) { want = cand; fx.mirHold = 0; }   // 2 images de suite, contre les à-coups du suivi
     }
     fx.mirT = want;
     if (fx.mir == null) { fx.mir = want; fx.mirK = 1; }
@@ -1658,50 +1657,6 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     }
     g.restore();
   };
-  /* faux sourire du meme : bouche fermée, sûre d'elle, un coin relevé avec son crochet et le pli de la joue.
-     A, B = coins (gauche, droite de l'écran), M = milieu, rA / rB = coin relevé (0 → 1), teeth = dents parfaites (0 → 1, pendant le ting) */
-  const fakeSmirk = (g, A, B, M, up, fw, rA, rB, teeth, alpha) => {
-    const lift = r => (.02 + .15 * r) * fw;
-    const A2 = [A[0] + up[0] * lift(rA), A[1] + up[1] * lift(rA)], B2 = [B[0] + up[0] * lift(rB), B[1] + up[1] * lift(rB)];
-    const C2 = [M[0] - up[0] * .015 * fw, M[1] - up[1] * .015 * fw];
-    const K = [2 * C2[0] - (A2[0] + B2[0]) / 2, 2 * C2[1] - (A2[1] + B2[1]) / 2];
-    const Q = t => [(1 - t) * (1 - t) * A2[0] + 2 * (1 - t) * t * K[0] + t * t * B2[0], (1 - t) * (1 - t) * A2[1] + 2 * (1 - t) * t * K[1] + t * t * B2[1]];
-    const N = 20, line = Array.from({ length:N + 1 }, (_, j) => Q(j / N));
-    const band = (h0, h1, t0, t1) => {                                 // bande entre deux hauteurs (en largeurs d'yeux), le long de la bouche
-      g.beginPath();
-      for (let j = 0; j <= N; j++) { const t = t0 + (t1 - t0) * j / N, p = Q(t), s = Math.sin(Math.PI * t); j ? g.lineTo(p[0] + up[0] * h0 * s * fw, p[1] + up[1] * h0 * s * fw) : g.moveTo(p[0] + up[0] * h0 * s * fw, p[1] + up[1] * h0 * s * fw); }
-      for (let j = N; j >= 0; j--) { const t = t0 + (t1 - t0) * j / N, p = Q(t), s = Math.sin(Math.PI * t); g.lineTo(p[0] + up[0] * h1 * s * fw, p[1] + up[1] * h1 * s * fw); }
-      g.closePath();
-    };
-    g.save(); g.globalAlpha = alpha; g.lineCap = 'round'; g.lineJoin = 'round';
-    g.shadowColor = 'rgba(40,15,10,.55)'; g.shadowBlur = .02 * fw;
-    band(0, -.075, 0, 1); g.fillStyle = '#8c4335'; g.fill();          // lèvre du bas, pleine
-    band(.032, 0, 0, 1); g.fillStyle = '#5c2620'; g.fill();           // lèvre du haut, fine
-    g.shadowBlur = 0;
-    band(-.022, -.045, .25, .75); g.fillStyle = 'rgba(235,170,150,.33)'; g.fill();   // reflet sur la lèvre du bas
-    if (teeth > .01) {                                                 // dents parfaites, du côté relevé
-      const [t0, t1] = rB >= rA ? [.42, .93] : [.07, .58];
-      g.globalAlpha = alpha * teeth; band(.028, -.012, t0, t1); g.fillStyle = '#fbfaf3'; g.fill();
-      g.strokeStyle = 'rgba(150,140,130,.6)'; g.lineWidth = Math.max(1, .006 * fw);
-      for (let t = t0 + .08; t < t1 - .03; t += .085) { const p = Q(t); g.beginPath(); g.moveTo(p[0] + up[0] * .026 * fw, p[1] + up[1] * .026 * fw); g.lineTo(p[0] - up[0] * .01 * fw, p[1] - up[1] * .01 * fw); g.stroke(); }
-      g.globalAlpha = alpha;
-    }
-    g.strokeStyle = '#1b0b07'; g.lineWidth = Math.max(1.5, .028 * fw);
-    g.beginPath(); line.forEach(([x, y], j) => j ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
-    const ox0 = B[0] - A[0], oy0 = B[1] - A[1], OL = Math.hypot(ox0, oy0) || 1;
-    for (const [E, r, s] of [[A2, rA, -1], [B2, rB, 1]]) {             // coin relevé : crochet + pli de la joue
-      if (r < .05) continue;
-      const ox = ox0 / OL * s, oy = oy0 / OL * s, at = (u, v) => [E[0] + (ox * u + up[0] * v) * fw, E[1] + (oy * u + up[1] * v) * fw];
-      g.globalAlpha = alpha * Math.min(1, r); g.strokeStyle = '#1b0b07'; g.lineWidth = Math.max(1.2, .024 * fw);
-      let p0 = at(0, 0), p1 = at(.06, .035), p2 = at(.065, .09);
-      g.beginPath(); g.moveTo(p0[0], p0[1]); g.quadraticCurveTo(p1[0], p1[1], p2[0], p2[1]); g.stroke();
-      g.strokeStyle = 'rgba(30,12,8,.5)'; g.lineWidth = Math.max(1, .015 * fw);
-      p0 = at(.1, .12); p1 = at(.15, .01); p2 = at(.1, -.09);
-      g.beginPath(); g.moveTo(p0[0], p0[1]); g.quadraticCurveTo(p1[0], p1[1], p2[0], p2[1]); g.stroke();
-    }
-    g.restore();
-    return rB >= rA ? B2 : A2;                                         // le coin relevé (pour le ting)
-  };
 
   const STK = {
     /* 😁 paillettes dans les yeux (façon dessin animé) : grosse étoile + reflets qui scintillent */
@@ -1922,24 +1877,22 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (!(a > .05)) return;
       const { fw, rx, ry, dx, dy, mx, my } = P, nT = C.CHAD_ETOILES | 0, up = [-dx, -dy];
       const W_ = i => fx.sm[i] ? warpPos(fx.sm[i]) : null, mid = (i, j) => { const p = W_(i), q = W_(j); return p && q ? [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2] : null; };
-      let corner = null, teeth = 0;
       const tg = fx.ting || (fx.ting = { at:1.2 + Math.random() });
       if (el > tg.at + .55) tg.at = el + 3.5 + Math.random() * 2.5;    // prochain ting dans 3,5 à 6 s
       const tl = el - tg.at, tingOn = C.CHAD_TING && a > .5 && tl >= 0 && tl <= .55;
-      if (tingOn) teeth = Math.min(1, Math.sin(tl / .55 * Math.PI) * 1.8);
       if (FX[fx.key].fake && C.CHAD_FAUX !== false) {
         /* ressorts : hauteur de chaque sourcil et de chaque coin de bouche (gauche / droite de l'écran) → bascule nette avec un petit rebond */
         const sp = fx.cs || (fx.cs = { init:false, pumpAt:el + 3 + Math.random() * 3 });
         const tR = fx.mirT !== false ? 1 : 0;                         // ton sourcil gauche (à droite de l'écran) en priorité
-        if (!sp.init) Object.assign(sp, { bL:1 - tR, bR:tR, mL:1 - tR, mR:tR, vbL:0, vbR:0, vmL:0, vmR:0, init:true });
+        if (!sp.init) Object.assign(sp, { bL:1 - tR, bR:tR, vbL:0, vbR:0, init:true });
         const h = Math.min(.1, dt || .033) / 4;
-        for (let k = 0; k < 4; k++) for (const [p, v, t, kk] of [['bL', 'vbL', 1 - tR, 520], ['bR', 'vbR', tR, 520], ['mL', 'vmL', 1 - tR, 380], ['mR', 'vmR', tR, 380]]) {
+        for (let k = 0; k < 4; k++) for (const [p, v, t, kk] of [['bL', 'vbL', 1 - tR, 520], ['bR', 'vbR', tR, 520]]) {
           sp[v] += (kk * (t - sp[p]) - 2 * .55 * Math.sqrt(kk) * sp[v]) * h; sp[p] += sp[v] * h;
         }
         if (el > sp.pumpAt + .7) sp.pumpAt = el + 4.5 + Math.random() * 3.5;   // « pompe-pompe » façon The Rock
         const pl = el - sp.pumpAt, pump = C.CHAD_POMPE !== false && pl > 0 && pl < .7 ? .1 * Math.max(0, Math.sin(pl / .35 * Math.PI)) : 0;
         const al = Math.min(1, a * 1.25), blur = .03 * fw;
-        /* 1. gommer : tes sourcils (la peau du front juste au-dessus, sans toucher la monture) et ta bouche (la barbe juste en dessous) */
+        /* 1. gommer tes sourcils (la peau du front juste au-dessus, sans toucher la monture) */
         const bro = [];
         for (const [B, side] of [[BROW_R, 'L'], [BROW_L, 'R']]) {
           const U = B.up.map(W_), D = B.lo.map(W_); if (U.some(p => !p) || D.some(p => !p)) continue;
@@ -1950,22 +1903,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
           eraseZone(g, poly, up[0] * .2 * fw, up[1] * .2 * fw, blur);
           bro.push([I, O, side]);
         }
-        const lips = LIPS.map(W_), M = W_(13), top = W_(0), bot = W_(17);
-        if (lips.every(Boolean) && M && top && bot) {
-          let cx = 0, cy = 0; lips.forEach(p => { cx += p[0]; cy += p[1]; }); cx /= lips.length; cy /= lips.length;
-          const poly = lips.map(p => [cx + (p[0] - cx) * 1.28, cy + (p[1] - cy) * 1.32]), dn = Math.hypot(bot[0] - top[0], bot[1] - top[1]) + .12 * fw;
-          eraseZone(g, poly, -up[0] * dn, -up[1] * dn, blur);
-          /* 3. faux sourire (après les sourcils) */
-          var smirk = () => { corner = fakeSmirk(g, W_(61), W_(291), M, up, fw, sp.mL, sp.mR, teeth, al); };
-        }
         /* 2. faux sourcils du meme */
         for (const [I, O, side] of bro) {
           const r = Math.max(-.15, Math.min(1.25, sp['b' + side])), raised = (side === 'R') === (tR === 1);
           fakeBrow(g, I, O, up, fw, r + (raised ? pump : 0), al, side === 'R' ? 4099 : 7919);
         }
-        if (typeof smirk === 'function') smirk();
       }
-      const tingCorner = corner;
       if (nT > 0) {                                      // étoiles permanentes : chacune scintille puis réapparaît ailleurs autour de ta tête
         const tw = fx.tw || (fx.tw = Array.from({ length:nT }, (_, j) => ({ t0:el + j * .17, life:0 })));
         g.save(); g.shadowColor = '#fff';
@@ -1986,7 +1929,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (!tingOn) return;
       const lt = tl, right = fx.mirT !== false;
       const c = fx.sm[right ? 291 : 61], o = fx.sm[right ? 61 : 291]; if (!c || !o) return;
-      const m = tingCorner || warpPos(c), ux = (c[0] - o[0]), uy = (c[1] - o[1]), L = Math.hypot(ux, uy) || 1;
+      const m = warpPos(c), ux = (c[0] - o[0]), uy = (c[1] - o[1]), L = Math.hypot(ux, uy) || 1;
       const x = m[0] + ux / L * .06 * fw + up[0] * .03 * fw, y = m[1] + uy / L * .06 * fw + up[1] * .03 * fw;   // au coin relevé du sourire
       const s = Math.sin(lt / .55 * Math.PI), r = .2 * fw * s;
       g.save(); g.translate(x, y); g.rotate(lt * 2.2);
