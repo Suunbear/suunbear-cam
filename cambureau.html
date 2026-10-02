@@ -38,7 +38,8 @@
      1. démarrer la caméra virtuelle · 2. attendre 1500 ms ·
      3. HTTP Request GET https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"zinzin"}}
      4. attendre 95000 ms · 5. arrêter la caméra virtuelle
-   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (sans accents)
+   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere · beau (sans accents)
+          beau = Paatrice beau gosse : sa tête flotte comme un fantôme (aussi : beaugosse)
           (anciennes versions : content1 · chad1 · chad2)
           Paatrice cam bureau = le farceur : derriere (Stand de temps en temps) · stand (pareil, Stand dès le début)
           (anciens noms acceptés : derriere2 · farceur · bouche · jojo)
@@ -69,6 +70,11 @@ const CONFIG = {
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
+  BEAU_TAILLE      : 0.36,  // Paatrice beau gosse : hauteur de sa tête (part de la hauteur de l'image)
+  BEAU_TOUR        : 14,    // s pour un tour complet de son chemin (un 8 couché, régulier)
+  BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
+  BEAU_ETOILES     : 2.4,   // s pendant lesquelles les étoiles multicolores scintillent autour de lui, puis elles s'arrêtent
+  BEAU_FANTOME     : 0.92,  // opacité de sa tête (1 = pleine · 0.8 = plus fantôme)
   CHAD_ETOILES_COULEUR : 'multi',  // Chad : 'multi' = une couleur par étoile · 'or' = toutes dorées
   CHAD_ETOILES_TAILLE  : 2,        // Chad : taille des étoiles (1 = avant)
   CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
@@ -241,6 +247,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ], stk:'chad', side:true },                         // side : le sourcil levé passe du côté tourné vers la caméra (CHAD_SOURCIL)
+    beau: { name:'✨ Paatrice beau gosse', ghost:true },   // sa tête de beau gosse flotte comme un fantôme (calque transparent, ton visage n'est pas touché)
     chad1: { name:'🗿 Chad', pts:[                       // ancienne version (nom SAMMI « chad1 ») si la nouvelle plaît moins
       [152,  .22,    0, .38],                           // menton allongé
       [148,  .17, -.06, .24], [377,  .17, -.06, .24],   // menton large et carré
@@ -491,7 +498,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const F = FX[fx.key];
 
       /* 1. Suivi du visage (DETECT_FPS fois par seconde) + expressions + détourage */
-      if (lm && t - fx.tDet >= 1000 / C.DETECT_FPS - 4) {
+      if (lm && !F.ghost && t - fx.tDet >= 1000 / C.DETECT_FPS - 4) {   // (le fantôme n'a pas besoin de ton visage)
         const t0 = performance.now(); let p = null, res = null;
         try { res = lm.detectForVideo(v, lmTime()); p = res && res.faceLandmarks && res.faceLandmarks[0]; } catch (_) {}
         const bsc = res && res.faceBlendshapes && res.faceBlendshapes[0] && res.faceBlendshapes[0].categories;
@@ -579,8 +586,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
       /* 4. Dessin : déformation (WebGL) puis dessins animés par-dessus (2D).
             Paatrice (PAAT_CALQUE) : dessiné seul sur le calque transparent, la vraie cam reste dessous en direct. */
-      const paatT = !!(F.keep && C.PAAT_CALQUE);
-      if (absent || paatT) {
+      const paatT = !!(F.keep && C.PAAT_CALQUE), ghost = !!F.ghost;
+      if (ghost) {                                   // Paatrice beau gosse : sa tête seule, sur le calque transparent
+        const ga = fxaCtx(cw, ch);
+        ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.globalCompositeOperation = 'source-over'; ga.clearRect(0, 0, cw, ch);
+        try { beauGhost(ga, cw, ch, el, dt, amt); } catch (e) { log('BEAU ' + e.message); }
+      } else if (absent || paatT) {
         const ga = fxaCtx(cw, ch);
         ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.globalCompositeOperation = 'source-over'; ga.clearRect(0, 0, cw, ch);
         if (absent) {                                // tu n'es pas à l'image : marionnette
@@ -614,9 +625,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const okRatio = RAW || ratioOK(W, H);
       if (!okRatio) ST.err = 'image ' + W + '×' + H + ' au lieu de 16:9 → calque masqué';
       const live = !!(fx.t0 && !fx.ending);
-      const want = !absent && !paatT && (RAW ? live
+      const want = !absent && !paatT && !ghost && (RAW ? live
                        : !!(okRatio && live && fx.seen && (F.keep ? fx.lastPresent : t - fx.seen < C.FACE_HOLD * 1000)));
-      const wantA = live && (absent || (paatT && (RAW || !!(okRatio && fx.seen && fx.lastPresent))));   // calque transparent
+      const wantA = live && ((ghost && (RAW || okRatio)) || absent || (paatT && (RAW || !!(okRatio && fx.seen && fx.lastPresent))));   // calque transparent
       if (want !== fxCv.classList.contains('on')) fxCv.classList.toggle('on', want);
       if (wantA !== fxa.classList.contains('on')) fxa.classList.toggle('on', wantA);
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
@@ -1692,6 +1703,135 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     g.restore();
   };
 
+/* Paatrice « beau gosse » : la transformation glow-up (trope des persos de dessin animé qui deviennent ultra-détaillés).
+   Repère 512 × 720 (le haut du crâne comme la Paatrice normale). Ses traits à lui : boule rouge, gros yeux blancs, sourcils épais. */
+const paatBeauBase = () => mk(512, 720, g => {
+  const rng = rnd;
+  const head = new Path2D();
+  head.moveTo(20, 270);
+  head.arc(256, 262, 238, Math.PI, 0);                      // le crâne, rond
+  head.bezierCurveTo(496, 330, 470, 420, 436, 520);         // sous les pommettes, les joues se creusent et s'affinent…
+  head.lineTo(418, 596);                                     // … angle de la mâchoire, plus étroit
+  head.bezierCurveTo(396, 636, 352, 660, 316, 666);          // menton long et carré
+  head.lineTo(196, 666);
+  head.bezierCurveTo(160, 660, 116, 636, 94, 596);
+  head.lineTo(76, 520);
+  head.bezierCurveTo(42, 420, 16, 330, 20, 270);
+  head.closePath();
+  const bg = g.createLinearGradient(0, 40, 0, 680);
+  bg.addColorStop(0, '#d9422f'); bg.addColorStop(.55, P_RED); bg.addColorStop(1, '#9a2419');
+  g.fillStyle = bg; g.fill(head);
+  g.save(); g.clip(head);
+  for (let i = 0; i < 9000; i++) {                           // grain de crayon
+    g.fillStyle = Math.random() < .7 ? 'rgba(120,20,12,' + rng(0, .1) + ')' : 'rgba(255,150,130,' + rng(0, .07) + ')';
+    g.fillRect(rng(0, 512), rng(0, 680), rng(1, 3), rng(1, 3));
+  }
+  const shade = (x, y, rx, ry, a, al, col) => {             // volumes : ombres douces
+    const r = g.createRadialGradient(x, y, 2, x, y, rx);
+    r.addColorStop(0, (col || 'rgba(80,10,6,') + al + ')'); r.addColorStop(1, (col || 'rgba(80,10,6,') + '0)');
+    g.save(); g.translate(x, y); g.rotate(a); g.scale(1, ry / rx); g.translate(-x, -y);
+    g.fillStyle = r; g.beginPath(); g.arc(x, y, rx, 0, 6.2832); g.fill(); g.restore();
+  };
+  shade(104, 460, 70, 150, .3, .6); shade(408, 460, 70, 150, -.3, .6);       // joues bien creusées
+  shade(256, 690, 230, 70, 0, .45);                                           // sous le menton
+  shade(256, 330, 34, 80, 0, .25);                                            // l'arête du nez
+  shade(150, 150, 120, 60, -.4, .35, 'rgba(255,215,195,');                    // reflet brillant sur le crâne
+  shade(120, 120, 46, 22, -.6, .7, 'rgba(255,240,230,');
+  g.restore();
+  brush(g, (() => { const p = []; for (let i = 0; i <= 60; i++) { const a = Math.PI + i / 60 * Math.PI; p.push([256 + Math.cos(a) * 244, 262 + Math.sin(a) * 244]); } return p; })(), 13, rng);
+  brush(g, catmull([[500, 262], [494, 340], [468, 430], [440, 522]], 6).concat([[422, 600], [398, 642], [316, 670], [196, 670], [114, 642], [90, 600]], catmull([[72, 522], [44, 430], [18, 340], [12, 262]], 6)), 13, rng);
+  /* traits « ultra-détaillés » : plis du front, pommettes, sillons, fossette, muscles de la mâchoire */
+  const line = (pts, w) => brush(g, catmull(pts, 6), w || 5, rng);
+  line([[150, 92], [210, 78], [270, 84]], 5); line([[300, 100], [350, 92], [392, 102]], 5);      // plis du front
+  line([[178, 128], [240, 118], [300, 124]], 4);
+  line([[52, 320], [96, 352], [124, 404]], 5); line([[460, 320], [416, 352], [388, 404]], 5);    // pommettes
+  line([[196, 384], [178, 440], [186, 500]], 5); line([[318, 384], [338, 440], [328, 500]], 5);  // sillons nez-bouche
+  line([[132, 470], [140, 540], [156, 596]], 4); line([[380, 470], [372, 540], [356, 596]], 4);  // muscle de la mâchoire
+  line([[244, 616], [256, 640], [268, 616]], 6);                                                 // fossette du menton
+  /* yeux : ses gros yeux blancs, paupières lourdes, cernes */
+  for (const [x, y, rx, ry] of P_EYES) {
+    g.beginPath(); g.ellipse(x, y, rx + 6, ry + 6, 0, 0, 6.2832); g.fillStyle = '#f6f3ee'; g.fill();
+    const pts = []; for (let i = 0; i <= 48; i++) { const a = i / 48 * 6.2832; pts.push([x + Math.cos(a) * (rx + 8), y + Math.sin(a) * (ry + 8)]); }
+    brush(g, pts, 12, rng);
+    line([[x - rx + 6, y + ry + 22], [x, y + ry + 34], [x + rx - 6, y + ry + 20]], 4);           // cernes
+  }
+  /* sourcils épais, détendus (sûr de lui) */
+  brush(g, [[62, 168], [140, 150], [228, 162]], 26, rng);
+  brush(g, [[276, 158], [360, 142], [440, 156]], 26, rng);
+  /* nez dessiné, avec narines */
+  brush(g, catmull([[246, 222], [240, 300], [232, 352], [218, 372]], 6), 7, rng);
+  line([[214, 374], [236, 386], [256, 380], [278, 386], [298, 372]], 6);
+  line([[226, 360], [218, 374]], 5); line([[288, 358], [298, 372]], 5);
+  /* lèvres pleines, un peu boudeuses */
+  const lip = new Path2D();
+  lip.moveTo(186, 470); lip.bezierCurveTo(214, 446, 240, 444, 256, 456); lip.bezierCurveTo(272, 444, 300, 446, 328, 470);
+  lip.bezierCurveTo(300, 506, 214, 506, 186, 470); lip.closePath();
+  const lg = g.createLinearGradient(0, 444, 0, 506); lg.addColorStop(0, '#7e1c1a'); lg.addColorStop(.5, '#a42e2a'); lg.addColorStop(1, '#8a2220');
+  g.fillStyle = lg; g.fill(lip);
+  g.fillStyle = 'rgba(255,190,175,.45)'; g.beginPath(); g.ellipse(240, 486, 22, 6, -.1, 0, 6.2832); g.fill();   // reflet
+  brush(g, catmull([[186, 470], [214, 446], [240, 444], [256, 456], [272, 444], [300, 446], [328, 470]], 5), 7, rng);
+  brush(g, catmull([[186, 470], [222, 478], [256, 476], [292, 478], [328, 470]], 5), 6, rng);
+  brush(g, catmull([[194, 476], [230, 500], [256, 504], [284, 500], [320, 476]], 5), 6, rng);
+});
+/* yeux beau gosse : pupilles droit dans la caméra, paupières à moitié fermées */
+const paatBeauEyes = (g, S) => {
+  P_EYES.forEach(([x, y, rx, ry, tilt]) => {
+    g.save(); g.beginPath(); g.ellipse(x, y, rx + 2, ry + 2, 0, 0, 6.2832); g.clip();
+    g.translate(x, y + 18); g.rotate(tilt * .5); if (tilt > 0) g.scale(-1, 1);
+    g.drawImage(S.pupil, -22, -46, 44, 92); g.restore();
+    const lid = .5;
+    g.save(); g.beginPath(); g.ellipse(x, y, rx + 4, ry + 4, 0, 0, 6.2832); g.clip();
+    g.fillStyle = P_RED; g.fillRect(x - rx - 8, y - ry - 8, 2 * rx + 16, (2 * ry + 8) * lid + 4); g.restore();
+    const ly = y - ry + (2 * ry) * lid;
+    brush(g, [[x - rx - 6, ly + 8], [x, ly - 4], [x + rx + 6, ly + 6]], 14, rnd);
+    brush(g, [[x - rx + 4, ly - 16], [x, ly - 26], [x + rx - 4, ly - 18]], 4, rnd);                      // pli de la paupière
+  });
+};
+
+  /* sa tête seule, préparée une fois : tête + yeux + halo blanc doux (aucun flou à recalculer en direct) */
+  let BEAU_SPR = null;
+  const beauSprite = () => BEAU_SPR || (BEAU_SPR = (() => {
+    const S = sprites(), head = mk(512, 720, g => { g.drawImage(paatBeauBase(), 0, 0); paatBeauEyes(g, S); });
+    const p = 70;
+    return mk(512 + 2 * p, 720 + 2 * p, g => {
+      g.filter = 'blur(26px) brightness(0) invert(1)'; g.globalAlpha = .55; g.drawImage(head, p, p);   // halo de fantôme
+      g.filter = 'none'; g.globalAlpha = 1; g.drawImage(head, p, p);
+    });
+  })());
+  const ghostStar = (g, x, y, r, col, a, rot) => {           // même étoile que Chad : contour foncé, couleur + halo, cœur blanc
+    g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = a;
+    g.fillStyle = 'rgba(40,22,5,.75)'; star4(g, 0, 0, r * 1.18);
+    g.shadowColor = col; g.shadowBlur = r * .9; g.fillStyle = col; star4(g, 0, 0, r);
+    g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = r * .3; g.fillStyle = '#fffbe6'; star4(g, 0, 0, r * .45);
+    g.restore();
+  };
+  /* Paatrice beau gosse : sa tête apparaît en fondu au milieu des étoiles multicolores, déjà en mouvement,
+     puis flotte comme un fantôme sur un chemin régulier (un 8 couché) jusqu'à la fin du filtre. */
+  const beauGhost = (g, W, H, el, dt, amt) => {
+    const spr = beauSprite(), hh = H * C.BEAU_TAILLE, k = hh / 670, sw = spr.width * k, sh = spr.height * k;
+    const th = el / Math.max(4, C.BEAU_TOUR) * 6.2832 - 1.2;  // il part déjà lancé
+    const x = W / 2 + W * .32 * Math.sin(th), y = H * .4 + H * .18 * Math.sin(th) * Math.cos(th) + H * .015 * Math.sin(el * 2.1);
+    const rot = .1 * Math.cos(th) + .03 * Math.sin(el * 1.7);   // il se penche dans le sens où il va, et ondule
+    const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
+    const alpha = Math.min(ap, amt) * C.BEAU_FANTOME;
+    if (alpha > .01) {
+      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot);
+      g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);           // (x, y) = milieu de son visage
+      g.restore();
+    }
+    /* les étoiles : elles scintillent autour de lui pendant l'apparition, puis plus aucune ne naît */
+    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })) });
+    for (const q of sp.st) {
+      if (el - q.t0 > q.life && el < C.BEAU_ETOILES) {
+        Object.assign(q, { t0:el + Math.random() * .2, life:.5 + Math.random() * .6, an:Math.random() * 6.2832,
+                           d:.55 + Math.random() * .45, sz:(.035 + Math.random() * .035) * hh, rot:Math.random(),
+                           col:STAR_COLS[(STAR_I++) % STAR_COLS.length] });
+      }
+      const lt = el - q.t0; if (q.an == null || lt < 0 || lt > q.life) continue;
+      const s = Math.sin(lt / q.life * Math.PI), rx = hh * .5 * q.d, ry = hh * .62 * q.d;
+      ghostStar(g, x + Math.cos(q.an) * rx, y + Math.sin(q.an) * ry, q.sz * (.5 + .5 * s), q.col, s * Math.min(1, amt * 2), q.rot + lt * 1.5);
+    }
+  };
   const STAR_COLS = ['#ffb000', '#ff2a2a', '#ff3fa4', '#33d6ff', '#ff7a1a', '#b26bff'];   // or · rouge · rose · cyan · orange · violet
   let STAR_I = 0;
   const STK = {
@@ -2054,7 +2194,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (fx.on) return;
     Object.assign(fx, { on:true, ending:false, key, t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, parts:[], guy:null,
                         pup:null, body:null, refBody:null, lastPresent:0, pstate:'', ori:null, refHead:null, nPose:0,
-                        mir:null, mirT:null, mirK:1, mirHold:0, ting:null, tw:null, cYaw:null, turnA:0, farR:false,
+                        beau:null, mir:null, mirT:null, mirK:1, mirHold:0, ting:null, tw:null, cYaw:null, turnA:0, farR:false,
                         mask:false, last:0, tDet:0, lastFrame:performance.now(), useRaf:false, got:false, q:-1 });
     segPrev = null; segImg = null;
     ST.err = '';
@@ -2064,6 +2204,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (FX[key].keep && C.PAAT_CORPS) await ensureBody().catch(e => log('suivi du corps indisponible : ' + (e.message || e)));
       glInit();
       if (FX[key].stk) sprites();                    // dessins préparés AVANT le compte à rebours
+      if (FX[key].ghost) beauSprite();
       await vcamOn();
       const id = await findCam();
       const s = await openCam(id);
@@ -2116,7 +2257,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     }
   }, 250);
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand' };   // mêmes noms que la cam tel
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand', beaugosse:'beau', beau_gosse:'beau', handsome:'beau' };   // mêmes noms que la cam tel
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
     let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
