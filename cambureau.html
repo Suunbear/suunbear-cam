@@ -69,6 +69,8 @@ const CONFIG = {
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
+  CHAD_ETOILES_COULEUR : 'multi',  // Chad : 'multi' = une couleur par étoile · 'or' = toutes dorées
+  CHAD_ETOILES_TAILLE  : 2,        // Chad : taille des étoiles (1 = avant)
   CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
   CHAD_FAUX        : false, // Chad : false = TES sourcils déformés (comme le filtre d'origine) · true = gommés et remplacés par des sourcils dessinés
   CHAD_POMPE       : false, // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
@@ -216,14 +218,14 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       return [[17, q, 0, .09], [14, q * .7, 0, .07]];
     }},
     chad: { name:'🗿 Chad', pts:[                        // mâchoire de gigachad + air sûr de lui
-      [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
-      [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
+      [152,  .36,    0, .40, 0, .30],                           // menton bien allongé (sans tirer la lèvre du bas)
+      [176,  .16, -.15, .30, 0, .20], [400,  .16, -.15, .30, 0, .20],   // menton large et carré
       [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
       [172,  .02, -.10, .22], [397,  .02, -.10, .22],
-      [61,  -.07, -.05, .14, 1], [291, -.02, -.03, .12, 1],   // sourire en coin (un côté plus haut)
+      [61,  -.14, -.08, .20, 1], [291, -.04, -.05, .13, 1],   // sourire en coin (un côté plus haut)
       [105, -.20,    0, .24, 1], [70, -.12, 0, .20, 1], [107, -.07, 0, .16, 1],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
       [334,  .06,  .03, .15, 1], [296, .06, .04, .12, 1], [300, .04, 0, .13, 1],  // l'autre bas et lourd
-      [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés
+      [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés (comme la cam tel)     // yeux plissés
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ], stk:'chad', side:true },                         // = Chad de la cam tel · + étoiles (CHAD_ETOILES) · + sourcil levé qui change de côté (marqués 1)
@@ -1690,6 +1692,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     g.restore();
   };
 
+  const STAR_COLS = ['#ffb000', '#ff2a2a', '#ff3fa4', '#33d6ff', '#ff7a1a', '#b26bff'];   // or · rouge · rose · cyan · orange · violet
+  let STAR_I = 0;
   const STK = {
     /* 😁 paillettes dans les yeux (façon dessin animé) : grosse étoile + reflets qui scintillent */
     content: (g, P, a, el) => {
@@ -1949,13 +1953,18 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
           if (el - q.t0 > q.life) {
             let an; do { an = Math.random() * 6.2832; } while (Math.sin(an) > .5);   // pas sous ton menton
             Object.assign(q, { t0:el + Math.random() * .25, life:.6 + Math.random() * .7, an, rr:1 + (Math.random() - .5) * .18,
-                               sz:.08 + Math.random() * .08, col:Math.random() < .6 ? '#ffffff' : '#fff1b8', rot:Math.random() });
+                               sz:(.08 + Math.random() * .08) * (C.CHAD_ETOILES_TAILLE || 1), rot:Math.random(),
+                               col:C.CHAD_ETOILES_COULEUR === 'multi' ? STAR_COLS[(STAR_I++) % STAR_COLS.length] : '#ffb000' });
           }
           const lt = el - q.t0; if (lt < 0 || !q.an) continue;
           const s = Math.sin(lt / q.life * Math.PI), u = Math.cos(q.an) * 1.6 * q.rr, w = .45 + Math.sin(q.an) * 2.05 * q.rr;
           const x = mx + (rx * u + dx * w) * fw, y = my + (ry * u + dy * w) * fw;
-          g.globalAlpha = Math.min(1, a) * s; g.fillStyle = q.col; g.shadowBlur = .05 * fw;
-          g.save(); g.translate(x, y); g.rotate(q.rot + lt * 1.5); star4(g, 0, 0, q.sz * fw * (.5 + .5 * s)); g.restore();
+          const rS = q.sz * fw * (.5 + .5 * s);
+          g.save(); g.translate(x, y); g.rotate(q.rot + lt * 1.5); g.globalAlpha = Math.min(1, a) * s;
+          g.shadowBlur = 0; g.fillStyle = 'rgba(40,22,5,.75)'; star4(g, 0, 0, rS * 1.18);                                 // fin contour foncé : elle se détache du décor
+          g.shadowColor = q.col; g.shadowBlur = .07 * fw; g.fillStyle = q.col; star4(g, 0, 0, rS);                         // étoile colorée + halo de sa couleur
+          g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = .02 * fw; g.fillStyle = '#fffbe6'; star4(g, 0, 0, rS * .45);   // cœur blanc brillant
+          g.restore();
         }
         g.restore();
       }
