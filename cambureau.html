@@ -69,7 +69,7 @@ const CONFIG = {
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
   CHAD_TING        : false, // Chad : « ting ✨ » sur son sourire de temps en temps
-  CHAD_ETOILES     : 0,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune · 7 = avant)
+  CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
   CHAD_FAUX        : false, // Chad : false = TES sourcils déformés (comme le filtre d'origine) · true = gommés et remplacés par des sourcils dessinés
   CHAD_POMPE       : false, // Chad : de temps en temps le sourcil levé fait « pompe-pompe » façon The Rock
   OVERLAY_FADE     : 0.15,  // apparition / disparition du calque (s)
@@ -220,13 +220,13 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
       [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
       [172,  .02, -.10, .22], [397,  .02, -.10, .22],
-      [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
-      [105, -.20,    0, .24], [70, -.12, 0, .20], [107, -.07, 0, .16],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
-      [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
-      [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
+      [61,  -.07, -.05, .14, 1], [291, -.02, -.03, .12, 1],   // sourire en coin (un côté plus haut)
+      [105, -.20,    0, .24, 1], [70, -.12, 0, .20, 1], [107, -.07, 0, .16, 1],   // un sourcil levé haut, en entier (l'œil ne bouge pas, pas de pli)
+      [334,  .06,  .03, .15, 1], [296, .06, .04, .12, 1], [300, .04, 0, .13, 1],  // l'autre bas et lourd
+      [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
-    ]},
+    ], stk:'chad', side:true },                         // = Chad de la cam tel · + étoiles (CHAD_ETOILES) · + sourcil levé qui change de côté (marqués 1)
     chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
       [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
       [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
@@ -465,12 +465,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       want = fx.mirT == null ? true : fx.mirT;
       const cand = want ? !(yaw > .6) : yaw < .54;           // pas d'attente : bascule dès que tu tournes la tête (écart aller/retour : pas de clignotement)
       fx.mirHold = cand !== want ? (fx.mirHold || 0) + dt : 0;
-      if (fx.mirHold > .06) { want = cand; fx.mirHold = 0; }   // 2 images de suite, contre les à-coups du suivi
+      if (fx.mirHold > .05) { want = cand; fx.mirHold = 0; }   // réaction : 0,05 s + bascule 0,1 s = 0,15 s
     }
     fx.mirT = want;
     if (fx.mir == null) { fx.mir = want; fx.mirK = 1; }
-    if (fx.mir !== want) { fx.mirK = Math.max(0, fx.mirK - dt / .1); if (fx.mirK <= 0) fx.mir = want; }
-    else fx.mirK = Math.min(1, fx.mirK + dt / .1);
+    if (fx.mir !== want) { fx.mirK = Math.max(0, fx.mirK - dt / .05); if (fx.mirK <= 0) fx.mir = want; }
+    else fx.mirK = Math.min(1, fx.mirK + dt / .05);
   };
 
   const frame = () => {
