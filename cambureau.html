@@ -26,23 +26,25 @@
    https://suunbear.github.io/suunbear-cam/cambureau.html#chat=TA_SESSION
    Options à ajouter après le # :
      &stats        = panneau de mesures (VISIBLE À L'ANTENNE : tests hors live)
-     &test=zinzin  = lance ce filtre 5 s après le chargement (Actualiser la source = relancer)
+     &test=benet   = lance ce filtre 5 s après le chargement (Actualiser la source = relancer)
      &dur=30       = durée du filtre en secondes
      &fps=30 · &det=30 · &scale=0.667 = réglages de charge sans renvoyer le fichier
      &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
                    = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
                      angle de tête/corps qui le fait changer de côté, sans suivi du corps
+     &paat=0       = sans les têtes de Paatrice des 7 filtres (Chad garde la sienne)
+     &joues=1      = Exagéré : sourire diabolique avec les grosses joues (modèle A)
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI, un bouton par filtre :
      1. démarrer la caméra virtuelle · 2. attendre 1500 ms ·
-     3. HTTP Request GET https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"zinzin"}}
+     3. HTTP Request GET https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"benet"}}
      4. attendre 95000 ms · 5. arrêter la caméra virtuelle
-   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere · beau (sans accents)
-          beau = Paatrice beau gosse : sa tête flotte comme un fantôme (aussi : beaugosse)
-          (anciennes versions : content1 · chad1 · chad2)
-          Paatrice cam bureau = le farceur : derriere (Stand de temps en temps) · stand (pareil, Stand dès le début)
-          (anciens noms acceptés : derriere2 · farceur · bouche · jojo)
+   noms : content · benet · mini · pleure · kawai · exagere · colere · chad · derriere (sans accents)
+          Pendant chaque filtre, la tête de Paatrice qui va avec se balade autour de toi (Chad : Paatrice beau gosse).
+          Paatrice cam bureau = le farceur : derriere (Stand de temps en temps)
+          (anciens noms acceptés : stand · jojo · derriere2 · farceur · bouche → derriere · chat · kawaii → kawai ·
+           fache · mad → colere · idee → pleure · yeux → mini · zinzin → benet)
    La cam tel écoute "filtre", la cam bureau "filtre_bureau" : chacune ignore l'autre.
 
    OBS doit être lancé avec l'option --enable-media-stream.
@@ -65,7 +67,7 @@ const CONFIG = {
   FILTERS          : true,
   FILTER_DURATION  : 90,    // secondes par filtre (1 min 30)
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
-  FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // filtre par filtre (chat = Kawai, fache = Colère)
+  FILTER_LEVELS    : { content:1, derriere:1, mini:1, benet:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // filtre par filtre (chat = Kawai, fache = Colère)
   FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
@@ -76,9 +78,15 @@ const CONFIG = {
   BEAU_PROF_TOUR   : 9,     // s pour un aller-retour fond du bureau ↔ caméra
   BEAU_TOUR        : 14,    // s pour un tour complet de son chemin (un 8 couché, régulier)
   BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
-  BEAU_ETOILES     : 2.4,   // s pendant lesquelles les étoiles multicolores scintillent autour de lui, puis elles s'arrêtent
+  BEAU_ETOILES     : 2.4,   // s de la pluie d'étoiles multicolores de l'apparition
+  CHAD_PAATRICE_ETOILES : 7, // Chad : étoiles qui scintillent EN PERMANENCE autour de la tête de Paatrice beau gosse
+                            //        (même style que celles autour de ton visage) · 0 = seulement à l'apparition
   BEAU_FANTOME     : 0.92,  // opacité de sa tête (1 = pleine · 0.8 = plus fantôme)
   CHAD_PAATRICE    : true,  // Chad : la tête de Paatrice beau gosse flotte autour de toi pendant le filtre (jamais devant ton visage)
+  FILTER_PAATRICE  : true,  // les 7 autres filtres : la tête de Paatrice qui va avec le filtre se balade autour de toi
+                            // (même mouvement que beau gosse dans Chad, sans étoiles) · false = pas de tête
+  TETE_TAILLE      : 1,     // taille de ces têtes (1 = même hauteur que la tête beau gosse)
+  SOURIRE_JOUES    : false, // Exagéré, sourire diabolique : false = modèle B (choisi) · true = modèle A, grosses joues sur le sourire
   CHAD_ETOILES_COULEUR : 'multi',  // Chad : 'multi' = une couleur par étoile · 'or' = toutes dorées
   CHAD_ETOILES_TAILLE  : 2,        // Chad : taille des étoiles (1 = avant)
   CHAD_ETOILES     : 7,     // Chad : petites étoiles qui scintillent en permanence autour de ton visage (0 = aucune)
@@ -158,6 +166,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   if (get('marge') !== '') C.PAAT_MARGE = +get('marge') || 0;            // Paatrice : &marge=2 (gommage plus large autour de toi)
   if (get('haut') !== '') C.PAAT_HAUT = +get('haut');                    // Paatrice : &haut=-1.8 (sa tête plus haut)
   if (+get('mains') > 0) C.PAAT_MAINS = +get('mains');                   // Paatrice : &mains=1.2 (mains plus grandes)
+  if (has('paat'))       C.FILTER_PAATRICE = get('paat') !== '0';        // têtes de Paatrice des 7 filtres : &paat=0 (coupées)
+  if (has('joues'))      C.SOURIRE_JOUES = get('joues') !== '0';         // Exagéré : &joues=1 (sourire diabolique avec les grosses joues)
 
   const $ = s => document.querySelector(s);
   const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
@@ -189,25 +199,16 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [17,  .03,   0, .12],                             // bas du U
       [50, -.07,   0, .18], [280, -.07,   0, .18]       // pommettes remontées
     ]},
-    content1: { name:'😁 Abusément content', bulge:[   // ancienne version sans paillettes (nom SAMMI « content1 »)
-      [EYE_R, .52, .47, .68], [EYE_L, .52, .47, .68]    // yeux globuleux
-    ], pts:[
-      [61, -.20, -.10, .30], [291, -.20, -.10, .30],    // sourire jusqu'aux oreilles : coins très haut et large
-      [40, -.06,   0, .13], [270, -.06,   0, .13],      // lèvre du haut : les côtés remontent
-      [91, -.08,   0, .13], [321, -.08,   0, .13],      // lèvre du bas : bouche en U
-      [17,  .03,   0, .12],                             // bas du U
-      [50, -.07,   0, .18], [280, -.07,   0, .18]       // pommettes remontées
-    ]},
+
 
     /* --- Façon Snapchat / TikTok : loupes [points (centre = moyenne), largeur, hauteur, force]
        force > 0 = grossit (0.75 ≈ ×4 au centre) · force < 0 = rapetisse --- */
     derriere: { name:'👀 Paatrice farceur', stk:'derriere', seg:true },   // cam bureau : LE Paatrice (farceur, Stand de temps en temps)
-    stand: { name:'👻 Paatrice farceur (Stand)', stk:'derriere', seg:true, standFirst:true },   // pareil, mais il commence par le Stand
-    mini: { name:'🤏 Mini', bulge:[                     // l'inverse de Zinzin
+    mini: { name:'🤏 Mini', bulge:[                     // l'inverse de Benêt
       [EYE_R, .48, .38, -.86], [EYE_L, .48, .38, -.86], // yeux tout petits
       [MOUTH, .80, .42, -.86]                           // bouche toute petite
     ]},
-    zinzin: { name:'🤪 Zinzin', bulge:[
+    benet: { name:'🤪 Benêt', bulge:[
       [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72],   // gros yeux…
       [MOUTH, .92, .55, .70],                           // … et grande bouche
       [NOSE,  .28, .24, -.30]
@@ -240,33 +241,6 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [145, -.02,    0, .07], [374, -.02,  0, .07],
       [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
     ], stk:'chad', side:true },                         // = Chad de la cam tel · + étoiles (CHAD_ETOILES) · + sourcil levé qui change de côté (marqués 1)
-    chad2: { name:'🗿 Chad (lunettes tirées)', pts:[    // version précédente (nom SAMMI « chad2 ») : sourcil plus haut, les lunettes suivent
-      [152,  .27,    0, .36],                           // menton bien allongé (sans tirer la lèvre du bas)
-      [176,  .14, -.14, .28], [400,  .14, -.14, .28],   // menton large et carré
-      [136,  .09, -.12, .24], [365,  .09, -.12, .24],   // mâchoire élargie, anguleuse
-      [172,  .02, -.10, .22], [397,  .02, -.10, .22],
-      [61,  -.07, -.05, .14, 1], [291, -.02, -.03, .12, 1],   // sourire en coin (un côté plus haut)
-      [105, -.25,    0, .27, 1], [70, -.15, 0, .22, 1], [107, -.09, 0, .18, 1],   // un sourcil levé haut, en entier (cam bureau : plus haut, il dépasse des lunettes)
-      [334,  .06,  .03, .15, 1], [296, .06, .04, .12, 1], [300, .04, 0, .13, 1],  // l'autre bas et lourd
-      [159,  .035,   0, .08, 1], [386, .045,  0, .08, 1],     // yeux plissés
-      [145, -.02,    0, .07], [374, -.02,  0, .07],
-      [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
-    ], stk:'chad', side:true },                         // side : le sourcil levé passe du côté tourné vers la caméra (CHAD_SOURCIL)
-    beau: { name:'✨ Paatrice beau gosse', ghost:true },   // sa tête de beau gosse flotte comme un fantôme (calque transparent, ton visage n'est pas touché)
-    chad1: { name:'🗿 Chad', pts:[                       // ancienne version (nom SAMMI « chad1 ») si la nouvelle plaît moins
-      [152,  .22,    0, .38],                           // menton allongé
-      [148,  .17, -.06, .24], [377,  .17, -.06, .24],   // menton large et carré
-      [176,  .14, -.09, .22], [400,  .14, -.09, .22],
-      [136,  .08, -.10, .22], [365,  .08, -.10, .22],   // mâchoire élargie, anguleuse
-      [172,  .02, -.09, .22], [397,  .02, -.09, .22],
-      [17,   .04,    0, .12],                           // bas du visage allongé
-      [61,  -.07, -.05, .14], [291, -.02, -.03, .12],   // sourire en coin (un côté plus haut)
-      [105, -.16,    0, .15], [66, -.12,  0, .13], [70, -.07, 0, .14],   // un sourcil arqué très haut
-      [334,  .06,  .03, .15], [296, .06, .04, .12], [300, .04, 0, .13],  // l'autre bas et lourd
-      [159,  .035,   0, .08], [386, .045,  0, .08],     // yeux plissés
-      [145, -.02,    0, .07], [374, -.02,  0, .07],
-      [116, -.03, -.02, .12], [345, -.03, -.02, .12]    // pommettes marquées
-    ]},
     fache: { name:'😠 Colère', stk:'fache', pts:[      // la colère qui bout : regard noir rouge, visage qui rougit, vapeur…
       [107,  .15,  .09, .20], [336,  .15,  .09, .20],   // bouts intérieurs des sourcils : très bas et serrés
       [105,  .06,  .03, .16], [334,  .06,  .03, .16],
@@ -344,7 +318,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   Object.entries(MIRROR).forEach(([a, b]) => { MIRROR[b] = +a; });
   const SIDE_R = new Set([61, 105, 70, 107, 66, 159, 145, 116, 176, 136, 172, 148, 58, 205, 98]);   // côté droit de ton visage (à gauche à l'écran)
   if (C.CHAD_FAUX === false && FX.chad.brow) FX.chad.pts = FX.chad.pts.concat(FX.chad.brow);   // vrais sourcils déformés (lunettes tirées)
-  ['chad', 'chad2'].forEach(k => { FX[k].ptsM = FX[k].pts.map(([i, ...r]) => [MIRROR[i] != null ? MIRROR[i] : i, ...r]); });
+  ['chad'].forEach(k => { FX[k].ptsM = FX[k].pts.map(([i, ...r]) => [MIRROR[i] != null ? MIRROR[i] : i, ...r]); });
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
     (f.pts || []).concat(f.ptsM || []).forEach(q => need.add(q[0]));
@@ -433,7 +407,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* ============================================================
      Calque bureau : état, suivi, dessin (propre à cette page)
      ============================================================ */
-  ['derriere', 'stand'].forEach(k => { FX[k].keep = true; });   // Paatrice : présence (profil, absent → marionnette)
+  ['derriere'].forEach(k => { FX[k].keep = true; });   // Paatrice : présence (profil, absent → marionnette)
   const fx = { on:false, ending:false, key:'', t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, n:0, nb:0, k:0,
                parts:[], guy:null, mask:false, last:0, now:0, tDet:0, lastFrame:0, track:null,
                rvfc:0, raf:0, useRaf:false, got:false, drawn:null, q:-1 };
@@ -626,13 +600,14 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (st && pose && sa > 0.01) try { STK[st](out2d, pose, sa, el, dt, v, cw, ch); } catch (e) { log('STK ' + st + ' : ' + e.message); }
       }
 
-      /* Chad : la tête de Paatrice beau gosse se balade sur le calque transparent, indépendante de ton visage
-         (elle reste même si le suivi te perd) · visage vu → elle le contourne */
-      const chadPaat = !!(F.stk === 'chad' && C.CHAD_PAATRICE && !absent && !paatT && !ghost);
+      /* Tête de Paatrice (Chad : beau gosse · les 7 autres filtres : la tête du filtre) : elle se balade sur le calque
+         transparent, indépendante de ton visage (elle reste même si le suivi te perd) · visage vu → elle le contourne */
+      const tKey = C.FILTER_PAATRICE && TETE_KEYS.has(fx.key) ? fx.key : null;
+      const chadPaat = !!(((F.stk === 'chad' && C.CHAD_PAATRICE) || tKey) && !absent && !paatT && !ghost);
       if (chadPaat) {
         const ga = fxaCtx(cw, ch);
         ga.setTransform(1, 0, 0, 1, 0, 0); ga.globalAlpha = 1; ga.globalCompositeOperation = 'source-over'; ga.clearRect(0, 0, cw, ch);
-        try { beauGhost(ga, cw, ch, el, dt, amt, pose && faceOn ? pose : null); } catch (e) { log('BEAU ' + e.message); }
+        try { beauGhost(ga, cw, ch, el, dt, amt, pose && faceOn ? pose : null, tKey); } catch (e) { log('TETE ' + e.message); }
       }
       /* 5. Le calque ne couvre la cam que si ton visage est vu ET que l'image est bien en 16:9
             (sinon : cam normale, jamais d'image parasite ni déformée à l'antenne) */
@@ -1819,16 +1794,22 @@ const paatBeauEyes = (g, S) => {
     g.shadowColor = 'rgba(255,255,255,.9)'; g.shadowBlur = r * .3; g.fillStyle = '#fffbe6'; star4(g, 0, 0, r * .45);
     g.restore();
   };
-  /* Paatrice beau gosse : sa tête apparaît en fondu au milieu des étoiles multicolores, déjà en mouvement,
-     puis flotte comme un fantôme sur un chemin régulier (un 8 couché) jusqu'à la fin du filtre. */
-  const beauGhost = (g, W, H, el, dt, amt, P) => {          // P = ton visage (filtre Chad) : il ne passe jamais devant
+  /* Tête de Paatrice qui se balade : beau gosse (Chad) ou la tête du filtre en cours (tk).
+     Elle apparaît en fondu, déjà en mouvement, puis flotte comme un fantôme sur un 8 couché avec de la profondeur ;
+     le chemin (sens, départ, largeur, hauteur) est tiré au sort à chaque filtre.
+     Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
+  const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage : il ne passe jamais devant · tk = tête du filtre
+    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{},
+                                       r:{ ph:Math.random() * 6.2832, sens:Math.random() < .5 ? -1 : 1, zph:Math.random() * 6.2832,
+                                           ax:.2 + Math.random() * .08, ay:.08 + Math.random() * .08, yb:.26 + Math.random() * .08 } });
+    const R = sp.r;
     /* profondeur : il va au fond du bureau (petit, plus haut, plus pâle) puis revient près de la caméra (grand, plus bas) */
-    const zt = el / Math.max(4, C.BEAU_PROF_TOUR) * 6.2832 + .6, z = .5 - .5 * Math.cos(zt);   // 0 = au fond · 1 = près de la caméra
+    const zt = el / Math.max(4, C.BEAU_PROF_TOUR) * 6.2832 + R.zph, z = .5 - .5 * Math.cos(zt);   // 0 = au fond · 1 = près de la caméra
     const dep = C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3);
-    const spr = beauSprite(), hh = H * C.BEAU_TAILLE * dep, k = hh / 670, sw = spr.width * k, sh = spr.height * k;
-    const th = el / Math.max(4, C.BEAU_TOUR) * 6.2832 - 1.2;  // il part déjà lancé
-    let x = W / 2 + W * (.24 + .1 * z) * Math.sin(th), y = H * (.3 + .22 * z) + H * .12 * Math.sin(th) * Math.cos(th) + H * .012 * Math.sin(el * 2.1);
-    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })) });
+    const hh = H * C.BEAU_TAILLE * dep * (tk ? C.TETE_TAILLE || 1 : 1), spr = tk ? null : beauSprite();
+    const k = tk ? hh / 442 : hh / 670, sw = tk ? 488 * k : spr.width * k, sh = tk ? 442 * k : spr.height * k;
+    const th = R.sens * el / Math.max(4, C.BEAU_TOUR) * 6.2832 + R.ph;   // il part déjà lancé
+    let x = W / 2 + W * (R.ax + .1 * z) * Math.sin(th), y = H * (R.yb + .22 * z) + H * R.ay * Math.sin(th) * Math.cos(th) + H * .012 * Math.sin(el * 2.1);
     if (P) {                                                 // ton visage (cheveux et barbe compris) + sa tête : zone interdite, il glisse autour
       const ex = P.mx, ey = P.my + .25 * P.fw, ax = 1.7 * P.fw + sw * .36, ay = 2.4 * P.fw + sh * .42;
       const qx = (x - ex) / ax, qy = (y - ey) / ay, d = Math.hypot(qx, qy);
@@ -1843,23 +1824,756 @@ const paatBeauEyes = (g, S) => {
     const alpha = Math.min(ap, amt) * C.BEAU_FANTOME * (.72 + .28 * z);   // au fond : un peu plus fantôme
     if (alpha > .01) {
       g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot);
-      g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);           // (x, y) = milieu de son visage
+      if (tk) {                                              // tête du filtre : composée à part (animations comprises), posée en une fois
+        const L = Math.max(2, Math.ceil((512 + 2 * T_PAD) * k)), lc = teteLayer(L), lg = lc.getContext('2d');
+        lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalAlpha = 1; lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, lc.width, lc.height);
+        lg.setTransform(k, 0, 0, k, T_PAD * k, T_PAD * k);
+        teteDraw(lg, tk, el, sp.tst, dt);
+        g.drawImage(lc, 0, 0, L, L, -L / 2, -L / 2, L, L);  // (x, y) = milieu de la boule
+      } else g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);   // (x, y) = milieu de son visage
       g.restore();
     }
-    /* les étoiles : elles scintillent autour de lui pendant l'apparition, puis plus aucune ne naît */
-    for (const q of sp.st) {
-      if (el - q.t0 > q.life && el < C.BEAU_ETOILES) {
+    if (tk) return;                                          // les étoiles : réservées à Chad
+    /* les étoiles : pluie pendant l'apparition, puis CHAD_PAATRICE_ETOILES qui scintillent en permanence (taille ×CHAD_ETOILES_TAILLE) */
+    sp.st.forEach((q, j) => {
+      const app = el < C.BEAU_ETOILES;
+      if (el - q.t0 > q.life && (app || j < (C.CHAD_PAATRICE_ETOILES || 0))) {
         Object.assign(q, { t0:el + Math.random() * .2, life:.5 + Math.random() * .6, an:Math.random() * 6.2832,
-                           d:.55 + Math.random() * .45, sz:(.035 + Math.random() * .035) * hh, rot:Math.random(),
+                           d:.55 + Math.random() * .45, sz:(.035 + Math.random() * .035) * hh * (app ? 1 : C.CHAD_ETOILES_TAILLE || 1), rot:Math.random(),
                            col:STAR_COLS[(STAR_I++) % STAR_COLS.length] });
       }
-      const lt = el - q.t0; if (q.an == null || lt < 0 || lt > q.life) continue;
+      const lt = el - q.t0; if (q.an == null || lt < 0 || lt > q.life) return;
       const s = Math.sin(lt / q.life * Math.PI), rx = hh * .5 * q.d, ry = hh * .62 * q.d;
       ghostStar(g, x + Math.cos(q.an) * rx, y + Math.sin(q.an) * ry, q.sz * (.5 + .5 * s), q.col, s * Math.min(1, amt * 2), q.rot + lt * 1.5);
-    }
+    });
   };
   const STAR_COLS = ['#ffb000', '#ff2a2a', '#ff3fa4', '#33d6ff', '#ff7a1a', '#b26bff'];   // or · rouge · rose · cyan · orange · violet
   let STAR_I = 0;
+  /* ============================================================
+     TÊTES DE PAATRICE — une par filtre (content, benet, mini, pleure, chat = Kawai, exagere, fache = Colère)
+     Dessinées au code d'après les deux références : boule rouge au pastel (bord plus sombre),
+     sourcils + paupières au pinceau sec, grands yeux blancs cerclés de noir, pupilles en haricot,
+     nez en « L », cernes, joues roses floues. Repère 512 × 512 (centre 256, 256), boule ≈ 488 × 442.
+     Les bouches, yeux et sourcils peuvent dépasser de la boule (marge T_PAD autour).
+     ============================================================ */
+  const T_PAD = 160, T_RX = 244, T_RY = 221;                // marge du sprite · la boule
+  const tLine = (g, pts, w, n) => brush(g, n ? catmull(pts, n) : pts, w, rnd);   // trait au pinceau sec (courbe douce si n)
+  const tMir = pts => pts.map(([x, y]) => [512 - x, y]);    // même trait, de l'autre côté du visage
+  const tPoly = pts => { const p = new Path2D(); pts.forEach(([x, y], i) => i ? p.lineTo(x, y) : p.moveTo(x, y)); p.closePath(); return p; };
+  const tInk = (g, p, w) => {                                // contour à l'encre d'une forme (bord un peu irrégulier)
+    g.save(); g.strokeStyle = P_INK; g.lineJoin = 'round'; g.lineCap = 'round';
+    g.lineWidth = w; g.stroke(p);
+    g.globalAlpha = .5; g.lineWidth = w * .8; g.translate(rnd(-1.3, 1.3), rnd(-1.3, 1.3)); g.stroke(p);
+    g.restore();
+  };
+  const tGrain = (g, n, x0, y0, x1, y1, rgb, amax) => {
+    for (let i = 0; i < n; i++) { g.fillStyle = 'rgba(' + rgb + ',' + rnd(0, amax) + ')'; g.fillRect(rnd(x0, x1), rnd(y0, y1), rnd(1, 3.2), rnd(1, 2.4)); }
+  };
+  /* la boule rouge au pastel · o.sx / o.sy = gonflée · o.bas = bas des joues gonflé · o.rouge = colère */
+  const tBoule = (g, o) => {
+    o = o || {};
+    const rx = T_RX * (o.sx || 1), ry = T_RY * (o.sy || 1);
+    const R = a => {
+      let r = 1 + .006 * Math.sin(a * 5 + 1) + .004 * Math.sin(a * 11) + .0025 * Math.sin(a * 23 + 2);
+      if (o.bas) r *= 1 + o.bas * Math.max(0, Math.sin(a)) * Math.pow(Math.abs(Math.cos(a)), .6);
+      return r;
+    };
+    const at = a => [256 + Math.cos(a) * rx * R(a), 256 + Math.sin(a) * ry * R(a)], pts = [];
+    for (let i = 0; i < 180; i++) pts.push(at(i / 180 * 6.2832));
+    const p = tPoly(pts), c = o.rouge ? ['#e3341f', '#c9261a', '#86130d'] : ['#cd4232', '#b8372a', '#93251a'];
+    const bg = g.createRadialGradient(232, 222, 20, 256, 262, Math.max(rx, ry) * 1.05);
+    bg.addColorStop(0, c[0]); bg.addColorStop(.7, c[1]); bg.addColorStop(1, c[2]);
+    g.fillStyle = bg; g.fill(p);
+    g.save(); g.clip(p);
+    for (let i = 0; i < 12000; i++) {                         // grain du pastel, plus sombre au bord (surtout en haut)
+      const a = rnd(0, 6.2832), q = Math.sqrt(rnd(0, 1)), x = 256 + Math.cos(a) * rx * q, y = 256 + Math.sin(a) * ry * q;
+      const dk = q > .84 ? (Math.sin(a) < 0 ? .5 : .32) : .12;
+      g.fillStyle = Math.random() < .72 ? 'rgba(105,16,9,' + rnd(0, dk) + ')' : 'rgba(255,145,120,' + rnd(0, .09) + ')';
+      g.fillRect(x, y, rnd(1, 3.6), rnd(1, 2.4));
+    }
+    g.restore();
+    for (let i = 0; i < 1600; i++) {                          // bord granuleux : le pastel qui accroche le papier
+      const [x, y] = at(rnd(0, 6.2832));
+      g.fillStyle = 'rgba(' + (o.rouge ? '140,18,10,' : '145,30,20,') + rnd(.25, .8) + ')';
+      g.fillRect(x + rnd(-3.5, 2), y + rnd(-3.5, 2), rnd(1, 3), rnd(1, 3));
+    }
+  };
+  const tJoue = (g, x, y, rx, ry, al) => {                   // joue rose floue
+    g.save(); g.translate(x, y); g.scale(1, ry / rx);
+    const b = g.createRadialGradient(0, 0, 2, 0, 0, rx);
+    b.addColorStop(0, 'rgba(242,142,134,' + al + ')'); b.addColorStop(.55, 'rgba(240,132,126,' + al * .65 + ')'); b.addColorStop(1, 'rgba(240,130,125,0)');
+    g.fillStyle = b; g.beginPath(); g.arc(0, 0, rx, 0, 6.2832); g.fill(); g.restore();
+  };
+  /* un œil : e = { x, y, rx, ry,
+       p:[dx, dy, hauteur, largeur, inclinaison] (pupille en haricot, depuis le centre de l'œil),
+       refl:[[dx, dy, r]…] (reflets blancs sur la pupille), iris:[dx, dy, r] (iris rouge de la colère),
+       hum:[dx, dy, r, couleur, couleur claire] (iris « vrai œil », façon têtes à claques),
+       glob (œil globuleux : une boule qui sort de la tête, ombre portée sur le visage),
+       haut / bas:[[x, y]…] (paupière qui coupe l'œil : chagrin, colère), larme (fond de l'œil mouillé),
+       lid:[[x, y]…] (trait épais au-dessus de l'œil), w (épaisseur du contour) }  · flip = œil droit */
+  const tOeil = (g, S, e, flip) => {
+    const ov = new Path2D(); ov.ellipse(e.x, e.y, e.rx, e.ry, 0, 0, 6.2832);
+    const srt = L => L && catmull(L.slice().sort((a, b) => a[0] - b[0]), 5), H = srt(e.haut), B = srt(e.bas);   // même courbe que le trait : pas de blanc qui dépasse
+    const cuts = () => {                                     // ce que cachent les paupières
+      if (H) g.clip(tPoly([[H[0][0] - 60, H[0][1]]].concat(H, [[H[H.length - 1][0] + 60, H[H.length - 1][1]], [600, 800], [-190, 800]])));
+      if (B) g.clip(tPoly([[B[0][0] - 60, B[0][1]]].concat(B, [[B[B.length - 1][0] + 60, B[B.length - 1][1]], [600, -290], [-190, -290]])));
+    };
+    if (e.glob) {                                            // globuleux : l'œil sort de la tête et fait de l'ombre au visage
+      g.save(); g.filter = 'blur(' + Math.round(e.rx * .13) + 'px)'; g.fillStyle = 'rgba(70,8,4,.55)';
+      g.beginPath(); g.ellipse(e.x + e.rx * .04, e.y + e.ry * .17, e.rx * 1.07, e.ry * 1.05, 0, 0, 6.2832); g.fill(); g.restore();
+    }
+    g.save(); cuts(); g.clip(ov);
+    g.fillStyle = '#f6f3ee'; g.fill(ov);
+    tGrain(g, Math.round(e.rx * e.ry / 120), e.x - e.rx, e.y - e.ry, e.x + e.rx, e.y + e.ry, '120,110,105', .4);
+    if (e.glob) {                                            // une boule : le blanc s'assombrit sur le pourtour, surtout en bas
+      const sg = g.createRadialGradient(e.x - e.rx * .2, e.y - e.ry * .28, 0, e.x - e.rx * .08, e.y - e.ry * .1, Math.max(e.rx, e.ry) * 1.1);
+      sg.addColorStop(0, 'rgba(255,255,255,.9)'); sg.addColorStop(.4, 'rgba(255,255,255,0)');
+      sg.addColorStop(.72, 'rgba(150,138,168,.2)'); sg.addColorStop(1, 'rgba(72,54,86,.62)');
+      g.fillStyle = sg; g.fill(ov);
+    }
+    if (e.larme) {                                           // le fond de l'œil se remplit de larmes
+      const y0 = e.y + e.ry * .32, wp = new Path2D();
+      wp.moveTo(e.x - e.rx - 4, y0);
+      for (let i = 0; i <= 16; i++) wp.lineTo(e.x - e.rx + 2 * e.rx * i / 16, y0 + 3 * Math.sin(i * 1.3));
+      wp.lineTo(e.x + e.rx + 4, e.y + e.ry + 4); wp.lineTo(e.x - e.rx - 4, e.y + e.ry + 4); wp.closePath();
+      const lg = g.createLinearGradient(0, y0, 0, e.y + e.ry);
+      lg.addColorStop(0, 'rgba(150,210,255,.9)'); lg.addColorStop(1, 'rgba(70,150,245,.92)');
+      g.fillStyle = lg; g.fill(wp);
+      g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 3; g.beginPath();
+      for (let i = 2; i <= 9; i++) g.lineTo(e.x - e.rx + 2 * e.rx * i / 16, y0 + 3 + 3 * Math.sin(i * 1.3));
+      g.stroke();
+    }
+    if (e.p) {
+      const [dx, dy, h, wf, tilt] = e.p, w = h * (wf || .48);
+      g.save(); g.translate(e.x + dx, e.y + dy); g.rotate(tilt || 0); if (flip) g.scale(-1, 1);
+      g.drawImage(S.pupil, -w / 2, -h / 2, w, h); g.restore();
+      g.fillStyle = '#fff';
+      for (const [rx, ry, r] of (e.refl || [])) { g.beginPath(); g.arc(e.x + dx + rx, e.y + dy + ry, r, 0, 6.2832); g.fill(); }
+    }
+    if (e.hum) {                                             // vrai œil : iris coloré strié, pupille, reflets
+      const [dx, dy, r, col, col2] = e.hum, ix = e.x + dx, iy = e.y + dy;
+      const ig = g.createRadialGradient(ix, iy, r * .2, ix, iy, r);
+      ig.addColorStop(0, col2); ig.addColorStop(.62, col); ig.addColorStop(.9, '#2c3c4e'); ig.addColorStop(1, '#141c26');
+      g.fillStyle = ig; g.beginPath(); g.arc(ix, iy, r, 0, 6.2832); g.fill();
+      g.strokeStyle = 'rgba(20,32,48,.4)'; g.lineWidth = 1.6;
+      for (let k = 0; k < 30; k++) { const a = k / 30 * 6.2832 + rnd(-.05, .05); g.beginPath(); g.moveTo(ix + Math.cos(a) * r * .42, iy + Math.sin(a) * r * .42); g.lineTo(ix + Math.cos(a) * r * .9, iy + Math.sin(a) * r * .9); g.stroke(); }
+      g.fillStyle = '#0d0a0a'; g.beginPath(); g.arc(ix, iy, r * .4, 0, 6.2832); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.95)'; g.beginPath(); g.ellipse(ix - r * .34, iy - r * .36, r * .24, r * .19, -.5, 0, 6.2832); g.fill();
+      g.globalAlpha = .6; g.beginPath(); g.arc(ix + r * .3, iy + r * .32, r * .09, 0, 6.2832); g.fill(); g.globalAlpha = 1;
+    }
+    if (e.noir) {                                            // iris entièrement noir qui remplit presque tout l'œil, reflets brillants
+      const [dx, dy, r, mat] = e.noir, ix = e.x + dx, iy = e.y + dy;
+      if (mat) {                                             // regard vide : noir terne, un seul petit reflet gris
+        g.fillStyle = '#100907'; g.beginPath(); g.arc(ix, iy, r, 0, 6.2832); g.fill();
+        g.fillStyle = 'rgba(255,255,255,.28)'; g.beginPath(); g.ellipse(ix - r * .4, iy - r * .42, r * .13, r * .09, -.5, 0, 6.2832); g.fill();
+      } else {
+      const pg = g.createRadialGradient(ix - r * .25, iy - r * .3, r * .1, ix, iy, r);
+      pg.addColorStop(0, '#3a2c27'); pg.addColorStop(.7, '#120a08'); pg.addColorStop(1, '#050303');
+      g.fillStyle = pg; g.beginPath(); g.arc(ix, iy, r, 0, 6.2832); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.97)';
+      g.beginPath(); g.ellipse(ix - r * .36, iy - r * .38, r * .26, r * .19, -.5, 0, 6.2832); g.fill();
+      g.beginPath(); g.arc(ix + r * .36, iy + r * .32, r * .1, 0, 6.2832); g.fill();
+      g.beginPath(); g.arc(ix + r * .08, iy - r * .54, r * .055, 0, 6.2832); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = r * .06; g.lineCap = 'round';
+      g.beginPath(); g.arc(ix, iy, r * .72, .28 * Math.PI, .72 * Math.PI); g.stroke();
+      }
+    }
+    if (e.chaton) {                                          // œil de chaton : iris rond doré, énorme pupille brillante, reflets
+      const [dx, dy, r, c1, c2] = e.chaton, ix = e.x + dx, iy = e.y + dy;
+      const ig = g.createRadialGradient(ix, iy + r * .25, r * .45, ix, iy, r);
+      ig.addColorStop(0, c2); ig.addColorStop(.72, c1); ig.addColorStop(1, '#3a2e0c');
+      g.fillStyle = ig; g.beginPath(); g.arc(ix, iy, r, 0, 6.2832); g.fill();
+      const pg = g.createRadialGradient(ix - r * .2, iy - r * .25, r * .1, ix, iy, r * .84);
+      pg.addColorStop(0, '#30241f'); pg.addColorStop(1, '#0a0605');
+      g.fillStyle = pg; g.beginPath(); g.arc(ix, iy - r * .04, r * .78, 0, 6.2832); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.97)';
+      g.beginPath(); g.ellipse(ix - r * .32, iy - r * .34, r * .27, r * .2, -.5, 0, 6.2832); g.fill();
+      g.beginPath(); g.arc(ix + r * .34, iy + r * .3, r * .1, 0, 6.2832); g.fill();
+      g.beginPath(); g.arc(ix + r * .1, iy - r * .5, r * .06, 0, 6.2832); g.fill();
+      g.strokeStyle = 'rgba(255,255,255,.4)'; g.lineWidth = r * .07; g.lineCap = 'round';
+      g.beginPath(); g.arc(ix, iy, r * .6, .3 * Math.PI, .72 * Math.PI); g.stroke();
+    }
+    if (e.iris) {                                            // colère : iris rouge qui brûle, pupille fendue
+      const [dx, dy, r] = e.iris, ix = e.x + dx, iy = e.y + dy;
+      const rg = g.createRadialGradient(ix, iy, r * .1, ix, iy, r);
+      rg.addColorStop(0, '#ffc04a'); rg.addColorStop(.38, '#ff3a12'); rg.addColorStop(.82, '#c00a05'); rg.addColorStop(1, '#4a0000');
+      g.fillStyle = rg; g.beginPath(); g.arc(ix, iy, r, 0, 6.2832); g.fill();
+      g.fillStyle = P_INK; g.beginPath(); g.ellipse(ix, iy, r * .2, r * .58, 0, 0, 6.2832); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.arc(ix - r * .38, iy - r * .4, r * .17, 0, 6.2832); g.fill();
+    }
+    if (e.ombre && H) {                                      // ombre de la paupière sur le blanc (vrai œil)
+      g.save(); g.filter = 'blur(7px)'; g.strokeStyle = 'rgba(70,24,24,.5)'; g.lineWidth = 18; g.lineCap = 'round';
+      const c = catmull(H, 5); g.beginPath(); c.forEach(([x, y], i) => i ? g.lineTo(x, y + 9) : g.moveTo(x, y + 9)); g.stroke(); g.restore();
+    }
+    g.restore();
+    g.save(); cuts();                                        // contour épais (plus gras en bas, comme la référence)
+    const ring = [], bot = [];
+    for (let i = 0; i <= 48; i++) { const a = i / 48 * 6.2832; ring.push([e.x + Math.cos(a) * (e.rx + 7), e.y + Math.sin(a) * (e.ry + 7)]); }
+    for (let i = 0; i <= 20; i++) { const a = .25 + i / 20 * 2.6; bot.push([e.x + Math.cos(a) * (e.rx + 9), e.y + Math.sin(a) * (e.ry + 9)]); }
+    brush(g, ring, e.w || 12, rnd); brush(g, bot, (e.w || 12) * 1.25, rnd);
+    g.restore();
+    if (e.haut) tLine(g, e.haut, (e.w || 12) * 1.2, 5);      // la paupière qui coupe l'œil
+    if (e.bas) tLine(g, e.bas, (e.w || 12) * .8, 5);
+    if (e.lid) tLine(g, e.lid, (e.w || 12) * 1.1, 6);        // le trait épais au-dessus de l'œil
+  };
+  const tNez = (g, k) => { k = k || 1; tLine(g, [[248, 214], [244, 214 + 102 * k], [270, 214 + 80 * k]], 9); };   // nez en « L »
+  const tCernes = g => { tLine(g, [[183, 336], [211, 304]], 10); tLine(g, [[306, 299], [337, 336]], 10); };
+  const tJoues = (g, al, dy) => { tJoue(g, 92, 320 + (dy || 0), 48, 33, al || .8); tJoue(g, 420, 324 + (dy || 0), 48, 33, al || .8); };
+  /* une rangée de dents dans une bouche : top(x) = bord de la rangée · dir 1 = dents du haut (vers le bas), -1 = du bas */
+  const tDents = (g, top, x0, x1, n, h, dir) => {
+    const w = (x1 - x0) / n, mid = (x0 + x1) / 2;
+    for (let i = 0; i < n; i++) {
+      const xa = x0 + i * w + 1.5, xb = xa + w - 3, xc = (xa + xb) / 2, y0 = top(xc), d = Math.abs(xc - mid) / ((x1 - x0) / 2);
+      const hh = typeof h === 'function' ? h(xc) : h * (1 - .45 * d * d), r = Math.min(w * .38, hh * .32), yb = y0 + dir * hh, p = new Path2D();
+      p.moveTo(xa, y0 - dir * 30); p.lineTo(xa, yb - dir * r); p.quadraticCurveTo(xa, yb, xa + r, yb);
+      p.lineTo(xb - r, yb); p.quadraticCurveTo(xb, yb, xb, yb - dir * r); p.lineTo(xb, y0 - dir * 30); p.closePath();
+      const tg = g.createLinearGradient(0, y0, 0, yb);
+      tg.addColorStop(0, '#e2d6c4'); tg.addColorStop(.3, '#fbf7ee'); tg.addColorStop(1, '#ede3d2');
+      g.fillStyle = tg; g.fill(p);
+      g.strokeStyle = 'rgba(70,35,25,.6)'; g.lineWidth = 2.5; g.stroke(p);
+    }
+  };
+  const tPlis = (g, x, y, rx, ry) => {                      // plis de peau autour d'un œil qui gonfle (comme ton filtre benêt)
+    g.save(); g.lineCap = 'round';
+    for (const [k, a0, a1, al] of [[1.16, .1, .9, .55], [1.34, .18, .82, .42], [1.5, .26, .74, .3], [1.15, 1.18, 1.82, .38]]) {
+      g.filter = 'blur(2px)'; g.strokeStyle = 'rgba(80,8,5,' + al + ')'; g.lineWidth = 8;
+      g.beginPath(); g.ellipse(x, y + 4, rx * k, ry * k, 0, a0 * Math.PI, a1 * Math.PI); g.stroke();
+      g.filter = 'blur(1px)'; g.strokeStyle = 'rgba(255,160,140,' + al * .55 + ')'; g.lineWidth = 4;
+      g.beginPath(); g.ellipse(x, y + 4, rx * k + 7, ry * k + 7, 0, a0 * Math.PI, a1 * Math.PI); g.stroke();
+    }
+    g.filter = 'none'; g.restore();
+  };
+  /* dents de largeurs choisies : xs = bords des dents (de gauche à droite) */
+  const tDentsX = (g, top, xs, h, dir) => {
+    const mid = (xs[0] + xs[xs.length - 1]) / 2, half = (xs[xs.length - 1] - xs[0]) / 2;
+    for (let i = 0; i < xs.length - 1; i++) {
+      const xa = xs[i] + 1.5, xb = xs[i + 1] - 1.5, xc = (xa + xb) / 2, y0 = top(xc), d = Math.abs(xc - mid) / half;
+      const hh = h * (1 - .5 * d * d), r = Math.min((xb - xa) * .3, hh * .3), yb = y0 + dir * hh, p = new Path2D();
+      p.moveTo(xa, y0 - dir * 30); p.lineTo(xa, yb - dir * r); p.quadraticCurveTo(xa, yb, xa + r, yb);
+      p.lineTo(xb - r, yb); p.quadraticCurveTo(xb, yb, xb, yb - dir * r); p.lineTo(xb, y0 - dir * 30); p.closePath();
+      g.fillStyle = '#f8f5ef'; g.fill(p); g.strokeStyle = 'rgba(70,35,25,.5)'; g.lineWidth = 2.5; g.stroke(p);   // blanches, comme les autres têtes
+    }
+  };
+  const tFill = (g, p, a, b, y0, y1) => { const lg = g.createLinearGradient(0, y0, 0, y1); lg.addColorStop(0, a); lg.addColorStop(1, b); g.fillStyle = lg; g.fill(p); };
+  const tLangue = (g, x, y, rx, ry) => {
+    g.fillStyle = '#d9566b'; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 6.2832); g.fill();
+    g.strokeStyle = 'rgba(140,25,45,.7)'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(x, y - ry * .7); g.lineTo(x, y + ry * .2); g.stroke();
+  };
+  const tLuette = (g, x, y, h) => {                         // le petit bout qui pend au fond de la gorge
+    const p = new Path2D(); p.moveTo(x - h * .22, y); p.bezierCurveTo(x - h * .2, y + h * .7, x - h * .28, y + h, x, y + h);
+    p.bezierCurveTo(x + h * .28, y + h, x + h * .2, y + h * .7, x + h * .22, y); p.closePath();
+    g.fillStyle = '#b8323f'; g.fill(p); tInk(g, p, 4);
+  };
+  const tGoutte = (g, x, y, s) => {                          // goutte de sueur bleue
+    const p = new Path2D(); p.moveTo(x, y - s); p.bezierCurveTo(x + s * .25, y - s * .4, x + s * .62, y + s * .05, x + s * .6, y + s * .38);
+    p.bezierCurveTo(x + s * .58, y + s * .78, x - s * .58, y + s * .78, x - s * .6, y + s * .38); p.bezierCurveTo(x - s * .62, y + s * .05, x - s * .25, y - s * .4, x, y - s); p.closePath();
+    tFill(g, p, '#bfe6ff', '#4aa6f0', y - s, y + s * .8); tInk(g, p, 5);
+    g.fillStyle = 'rgba(255,255,255,.9)'; g.beginPath(); g.ellipse(x - s * .22, y + s * .2, s * .1, s * .2, .3, 0, 6.2832); g.fill();
+  };
+
+  let BAVE_REFLETS = false;                                 // benêt : petits reflets blancs dans la bave (retirés)
+  const EXA_B = { sx:1.1, sy:1.06, bas:.05 };                // Exagéré : tête gonflée
+  /* 4 · SOURIRE DIABOLIQUE (exagere) · joues = true : grosses joues qui débordent sur le sourire */
+  const SOURIRE_JOUES = !!C.SOURIRE_JOUES;
+  const sourireDiab = joues => (g, S) => {                                             // 4 · SOURIRE DIABOLIQUE : grand sourire plein de dents, grosses joues rouges
+                                                            //     qui remontent jusqu'aux yeux (plus de blanc : les yeux ne sont que des fentes), sourcils froncés
+      tBoule(g, EXA_B);
+      if (!joues) { tJoue(g, 70, 250, 60, 40, .9); tJoue(g, 442, 250, 60, 40, .9); }   // sans les grosses joues : juste du rose
+      const m = new Path2D();                               // la bouche du sourire géant, entièrement remplie de dents (grille)
+      m.moveTo(-30, 196); m.bezierCurveTo(60, 300, 170, 318, 256, 318); m.bezierCurveTo(342, 318, 452, 300, 542, 196);
+      m.bezierCurveTo(540, 470, 400, 604, 256, 604); m.bezierCurveTo(112, 604, -28, 470, -30, 196); m.closePath();
+      g.fillStyle = '#f8f5ef'; g.fill(m);
+      g.save(); g.clip(m);
+      tGrain(g, 400, -30, 196, 542, 604, '120,110,105', .3);
+      const sh = g.createRadialGradient(256, 380, 120, 256, 420, 330);
+      sh.addColorStop(0, 'rgba(90,75,70,0)'); sh.addColorStop(1, 'rgba(90,75,70,.3)'); g.fillStyle = sh; g.fill(m);
+      g.strokeStyle = P_INK; g.lineCap = 'round';
+      g.lineWidth = 7; g.beginPath(); g.moveTo(-28, 206); g.quadraticCurveTo(256, 744, 540, 206); g.stroke();   // là où les dents se touchent
+      g.lineWidth = 5;
+      for (let x = 256 - 46 * 6; x <= 256 + 46 * 6; x += 46) { g.beginPath(); g.moveTo(x, 150); g.lineTo(x, 650); g.stroke(); }   // les dents
+      g.restore();
+      tInk(g, m, 12);
+      const peau = joues && mk(512 + 2 * T_PAD, 512 + 2 * T_PAD, c => { c.translate(T_PAD, T_PAD); tBoule(c, EXA_B); });
+      if (joues) for (const sd of [-1, 1]) {                // les joues : des boules de peau qui poussent la bouche et les yeux
+        const cx = sd < 0 ? 92 : 420, ch = new Path2D(); ch.ellipse(cx, 262, 100, 80, 0, 0, 6.2832);
+        g.save(); g.clip(ch); g.drawImage(peau, -T_PAD, -T_PAD);
+        const hl = g.createRadialGradient(cx - sd * 12, 230, 6, cx, 256, 102);
+        hl.addColorStop(0, 'rgba(255,150,125,.4)'); hl.addColorStop(1, 'rgba(255,150,125,0)'); g.fillStyle = hl; g.fill(ch);
+        g.restore();
+        tJoue(g, cx, 270, 62, 42, 1);
+        const arc = []; for (let i = 0; i <= 14; i++) { const t = -.06 + i / 14 * .78; arc.push([cx - sd * 100 * Math.cos(t * Math.PI), 262 + 80 * Math.sin(t * Math.PI)]); }
+        tLine(g, arc, 8);                                   // le pli sous la joue, côté bouche
+      }
+      const eL = { x:144, y:184, rx:88, ry:74, p:[8, -22, 70, .55, -.05], bas:[[52, 240], [144, 168], [236, 240]] };   // yeux plissés par les joues
+      tOeil(g, S, eL);
+      tOeil(g, S, Object.assign({}, eL, { x:368, p:[-8, -22, 70, .55, .2], bas:tMir(eL.bas) }), true);
+      for (const L of [[[44, 176], [16, 166]], [[42, 194], [12, 198]], [[46, 212], [20, 228]]]) { tLine(g, L, 6); tLine(g, tMir(L), 6); }   // pattes d'oie
+      tLine(g, [[40, 48], [110, 70], [178, 96], [240, 124]], 28, 5); tLine(g, tMir([[40, 48], [110, 70], [178, 96], [240, 124]]), 28, 5);   // sourcils froncés
+      tLine(g, [[250, 128], [252, 156]], 5); tLine(g, [[264, 128], [262, 156]], 5);
+      tLine(g, [[252, 214], [248, 256], [272, 246]], 8);
+    };
+  const T_HEADS = {
+    /* 😁 abusément content : yeux globuleux (paillettes multicolores animées par-dessus),
+       sourire en U dont les coins montent jusqu'aux oreilles et sortent de la tête (comme ton filtre, en plus fort) */
+    content: (g, S) => {
+      tBoule(g); tJoue(g, 74, 292, 62, 42, .95); tJoue(g, 438, 292, 62, 42, .95);   // joues remontées par le sourire
+      tLine(g, [[60, 88], [100, 48], [164, 34], [226, 54]], 24, 6); tLine(g, tMir([[60, 88], [100, 48], [164, 34], [226, 54]]), 24, 6);
+      tNez(g, .78);
+      const m = new Path2D();
+      m.moveTo(-34, 236); m.bezierCurveTo(60, 330, 170, 348, 256, 348); m.bezierCurveTo(342, 348, 452, 330, 546, 236);
+      m.bezierCurveTo(526, 420, 402, 512, 256, 512); m.bezierCurveTo(110, 512, -14, 420, -34, 236); m.closePath();
+      g.fillStyle = '#f6f3ee'; g.fill(m);
+      g.save(); g.clip(m);
+      tGrain(g, 300, -34, 236, 546, 512, '120,110,105', .35);
+      const sh = g.createLinearGradient(0, 330, 0, 512); sh.addColorStop(0, 'rgba(90,70,60,0)'); sh.addColorStop(1, 'rgba(90,70,60,.22)');
+      g.fillStyle = sh; g.fill(m);
+      g.strokeStyle = P_INK; g.lineCap = 'round'; g.lineWidth = 8;
+      g.beginPath(); g.moveTo(-30, 240); g.quadraticCurveTo(256, 620, 542, 240); g.stroke();   // les dents serrées
+      g.lineWidth = 4.5; g.globalAlpha = .75;
+      for (let x = -10; x <= 522; x += 38) { const d = (x - 256) / 300; g.beginPath(); g.moveTo(x - d * 30, 200); g.lineTo(x + d * 40, 560); g.stroke(); }
+      g.restore();
+      tInk(g, m, 11);
+      tOeil(g, S, { x:140, y:204, rx:102, ry:98, glob:true, p:[4, -2, 116, .5, -.08], lid:[[38, 112], [120, 98], [214, 104]] });
+      tOeil(g, S, { x:372, y:204, rx:102, ry:98, glob:true, p:[-4, -2, 118, .5, .24], lid:tMir([[38, 112], [120, 98], [214, 104]]) }, true);
+    },
+    /* 🤪 benêt (ancien nom : zinzin), d'après ton filtre : gros yeux ronds au regard vide (grosses pupilles noires ternes
+       qui partent chacune de leur côté, paupières lourdes), grande bouche ouverte, grandes dents de devant, petit nez,
+       et de la bave qui déborde de la lèvre du bas (animée par-dessus) */
+    benet: (g, S) => {
+      tBoule(g, { bas:.06 });
+      tJoue(g, 86, 338, 56, 38, .85); tJoue(g, 426, 338, 56, 38, .85);
+      tLine(g, [[48, 84], [92, 50], [158, 40], [224, 58]], 24, 6); tLine(g, tMir([[48, 84], [92, 50], [158, 40], [224, 58]]), 24, 6);
+      tOeil(g, S, { x:144, y:204, rx:94, ry:92, glob:true, w:11, noir:[-18, 14, 58, true], haut:[[44, 174], [144, 152], [244, 170]] });   // yeux idiots : regard vide
+      tOeil(g, S, { x:368, y:204, rx:94, ry:92, glob:true, w:11, noir:[20, 4, 56, true], haut:tMir([[44, 168], [144, 148], [244, 174]]) }, true);
+      tLine(g, [[262, 270], [258, 304], [280, 295]], 8);     // petit nez
+      const O = new Path2D();                                // la bouche grande ouverte
+      O.moveTo(100, 348); O.bezierCurveTo(176, 374, 336, 374, 412, 348);
+      O.bezierCurveTo(398, 432, 332, 464, 256, 464); O.bezierCurveTo(180, 464, 114, 432, 100, 348); O.closePath();
+      g.fillStyle = '#3a0a08'; g.fill(O);
+      g.save(); g.clip(O);
+      tLangue(g, 256, 462, 112, 34);
+      const top = x => { const d = (x - 256) / 156; return 367 - 19 * d * d; };
+      tDentsX(g, x => top(x) + 9, [112, 146, 182, 256, 330, 366, 400], 64, 1);   // deux grandes dents de devant
+      g.restore();
+      tInk(g, O, 10);
+    },
+    /* 🤏 mini : dessinée en morceaux (voir miniParts) pour que les yeux et la bouche rapetissent en direct */
+    mini: null,
+    /* 😢 pleure : sourcils tristes, paupières tombantes, yeux mouillés, larmes, bouche en arc qui tremble */
+    pleure: (g, S) => {
+      tBoule(g); tJoues(g, .95, 4);
+      tLine(g, [[92, 156], [146, 140], [196, 118], [234, 100]], 22, 6); tLine(g, tMir([[92, 156], [146, 140], [196, 118], [234, 100]]), 22, 6);
+      tOeil(g, S, { x:147, y:246, rx:70, ry:64, p:[2, -12, 78, .48, -.08], refl:[[-7, -18, 7], [7, 16, 4]], larme:true, haut:[[76, 220], [150, 199], [228, 190]] });
+      tOeil(g, S, { x:364, y:244, rx:69, ry:65, p:[-6, -12, 80, .48, .24], refl:[[7, -18, 7], [-7, 16, 4]], larme:true, haut:tMir([[76, 220], [150, 199], [228, 190]]) }, true);
+      tNez(g); tCernes(g);
+      for (const sd of [-1, 1]) {                               // les rivières de larmes sur les joues
+        const P = [[124, 300], [114, 350], [108, 392], [106, 436]].map(([x, y]) => [sd < 0 ? x : 512 - x, y]), c = catmull(P, 8);
+        g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+        g.strokeStyle = 'rgba(110,185,255,.75)'; g.lineWidth = 16; g.beginPath(); c.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+        g.strokeStyle = 'rgba(235,248,255,.85)'; g.lineWidth = 4; g.beginPath(); c.forEach(([x, y], i) => i ? g.lineTo(x - sd * 3, y) : g.moveTo(x - sd * 3, y)); g.stroke();
+        g.restore();
+      }
+      const pts = []; for (let i = 0; i <= 24; i++) { const t = i / 24; pts.push([204 + 108 * t, 410 - 30 * Math.sin(Math.PI * t) + 3.2 * Math.sin(t * Math.PI * 7)]); }
+      tLine(g, pts, 10);                                         // la bouche en arc, qui tremble
+      tLine(g, [[240, 432], [258, 437], [276, 432]], 5, 4);
+    },
+    /* 🐱 Kawai : oreilles de chat, grands yeux brillants globuleux, truffe, bouche « ω », moustaches, joues roses */
+    chat: (g, S) => {
+      for (const sd of [-1, 1]) {                               // les oreilles (derrière la boule)
+        g.save(); if (sd > 0) { g.translate(512, 0); g.scale(-1, 1); }
+        const o = new Path2D(); o.moveTo(40, 190); o.quadraticCurveTo(22, 40, 80, -46); o.quadraticCurveTo(156, 0, 214, 58); o.lineTo(200, 170); o.closePath();
+        const og = g.createLinearGradient(0, -46, 0, 190); og.addColorStop(0, '#a52a1d'); og.addColorStop(1, '#c23d2e');
+        g.fillStyle = og; g.fill(o);
+        g.save(); g.clip(o); tGrain(g, 1400, 20, -50, 220, 190, '105,16,9', .35); g.restore();
+        const n = new Path2D(); n.moveTo(78, 150); n.quadraticCurveTo(64, 48, 92, -4); n.quadraticCurveTo(140, 28, 180, 66); n.closePath();
+        const ng = g.createLinearGradient(0, -4, 0, 150); ng.addColorStop(0, '#f6b0b8'); ng.addColorStop(1, '#e46f84');
+        g.fillStyle = ng; g.fill(n);
+        g.save(); g.clip(n); tGrain(g, 500, 60, -10, 190, 150, '190,60,80', .35); g.restore();
+        g.strokeStyle = 'rgba(120,20,15,.45)'; g.lineWidth = 4; g.stroke(n);
+        g.restore();
+      }
+      tBoule(g); tJoue(g, 96, 330, 52, 32, 1); tJoue(g, 416, 330, 52, 32, 1);
+      g.save(); g.strokeStyle = 'rgba(160,22,46,.75)'; g.lineWidth = 4.5; g.lineCap = 'round';   // traits de rougeur
+      for (const sd of [-1, 1]) for (let i = 0; i < 3; i++) {
+        const x = sd < 0 ? 78 + i * 16 : 512 - 78 - i * 16 - 12;
+        g.beginPath(); g.moveTo(x, 342); g.lineTo(x + 11, 322); g.stroke();
+      }
+      g.restore();
+      tLine(g, [[104, 116], [152, 102], [200, 84]], 18, 5); tLine(g, tMir([[104, 116], [152, 102], [200, 84]]), 18, 5);
+      tOeil(g, S, { x:150, y:236, rx:86, ry:84, glob:true, noir:[4, -4, 72], lid:[[82, 168], [150, 146], [216, 154]] });
+      tOeil(g, S, { x:362, y:234, rx:85, ry:85, glob:true, noir:[-4, -4, 72], lid:tMir([[82, 168], [150, 146], [216, 154]]) }, true);
+      const tr = new Path2D();                                  // la truffe
+      tr.moveTo(236, 318); tr.quadraticCurveTo(257, 306, 278, 318); tr.quadraticCurveTo(286, 326, 270, 338);
+      tr.lineTo(262, 345); tr.quadraticCurveTo(257, 349, 252, 345); tr.lineTo(244, 338); tr.quadraticCurveTo(228, 326, 236, 318); tr.closePath();
+      const tg = g.createLinearGradient(0, 308, 0, 348); tg.addColorStop(0, '#f8a6b4'); tg.addColorStop(1, '#de5f78');
+      g.fillStyle = tg; g.fill(tr); tInk(g, tr, 6);
+      g.fillStyle = 'rgba(255,255,255,.85)'; g.beginPath(); g.ellipse(249, 318, 7, 3.5, -.3, 0, 6.2832); g.fill();
+      tLine(g, [[257, 348], [257, 360]], 6);                    // la bouche « ω »
+      tLine(g, [[222, 352], [230, 366], [244, 369], [257, 359]], 7, 5); tLine(g, tMir([[222, 352], [230, 366], [244, 369], [257, 359]]), 7, 5);
+      const W = [[[134, 344], [80, 332], [-30, 316]], [[132, 358], [60, 360], [-40, 368]], [[136, 372], [76, 390], [-28, 418]]];
+      for (const w of W) { tLine(g, w, 6, 6); tLine(g, tMir(w), 6, 6); }   // les moustaches
+    },
+    /* 🤯 exagéré : tête gonflée + 4 expressions qui s'enchaînent ; bouche, yeux et sourcils sortent de la tête */
+    exagere: [
+      (g, S) => {                                             // 0 · LE CRI : yeux exorbités, sourcils envolés, bouche jusque sous le menton
+        tBoule(g, EXA_B); tJoue(g, 58, 334, 46, 32, .7); tJoue(g, 454, 334, 46, 32, .7);
+        tLine(g, [[30, -2], [84, -48], [166, -62], [232, -38]], 28, 6); tLine(g, tMir([[30, -2], [84, -48], [166, -62], [232, -38]]), 28, 6);
+        const m = new Path2D();
+        m.moveTo(84, 322); m.bezierCurveTo(150, 292, 362, 292, 428, 322);
+        m.bezierCurveTo(490, 430, 420, 662, 256, 666); m.bezierCurveTo(92, 662, 22, 430, 84, 322); m.closePath();
+        tFill(g, m, '#3a0a08', '#160302', 300, 666);
+        g.save(); g.clip(m);
+        tLangue(g, 256, 622, 120, 56);
+        tLuette(g, 256, 330, 62);
+        tDents(g, x => { const d = (x - 256) / 172; return 300 + 24 * d * d; }, 92, 420, 8, 36, 1);
+        tDents(g, x => { const d = (x - 256) / 160; return 662 - 150 * d * d; }, 168, 344, 5, 26, -1);
+        g.restore();
+        tInk(g, m, 12);
+        tLine(g, [[256, 228], [252, 262], [268, 256]], 7);
+        tOeil(g, S, { x:134, y:172, rx:112, ry:122, glob:true, p:[0, 2, 30, .62, 0], w:13 });
+        tOeil(g, S, { x:378, y:172, rx:112, ry:122, glob:true, p:[0, 2, 30, .62, 0], w:13 }, true);
+      },
+      (g, S) => {                                             // 1 · FOU RIRE : yeux fermés « ^ ^ », larmes de rire, bouche plus large que la tête
+        tBoule(g, EXA_B); tJoue(g, 62, 250, 60, 40, .95); tJoue(g, 450, 250, 60, 40, .95);
+        tLine(g, [[40, 66], [96, 12], [176, -4], [238, 28]], 26, 6); tLine(g, tMir([[40, 66], [96, 12], [176, -4], [238, 28]]), 26, 6);
+        tLine(g, [[54, 214], [92, 166], [144, 150], [196, 166], [234, 210]], 24, 6); tLine(g, tMir([[54, 214], [92, 166], [144, 150], [196, 166], [234, 210]]), 24, 6);
+        for (const sd of [-1, 1]) for (const [dx, dy, s, r] of [[-8, 206, 44, -.6], [-40, 168, 34, -1]]) {   // larmes de rire qui giclent
+          g.save(); g.translate(sd < 0 ? 46 + dx : 466 - dx, dy); g.rotate(sd * r); g.drawImage(S.tear, -s * .32, -s * .5, s * .64, s); g.restore();
+        }
+        tLine(g, [[254, 204], [250, 246], [272, 236]], 8);
+        const m = new Path2D();
+        m.moveTo(-44, 258); m.quadraticCurveTo(256, 336, 556, 258);
+        m.bezierCurveTo(524, 566, 384, 658, 256, 658); m.bezierCurveTo(128, 658, -12, 566, -44, 258); m.closePath();
+        tFill(g, m, '#3a0a08', '#160302', 258, 658);
+        g.save(); g.clip(m);
+        tLangue(g, 256, 612, 160, 70);
+        tLuette(g, 256, 340, 54);
+        tDents(g, x => { const t = (x + 44) / 600; return 258 + 156 * t * (1 - t); }, 0, 512, 12, 40, 1);
+        g.restore();
+        tInk(g, m, 12);
+      },
+      (g, S) => {                                             // 2 · STUPEUR : yeux qui sortent de la tête, sourcils partis très haut, bouche en O
+        tBoule(g, EXA_B); tJoue(g, 60, 340, 44, 30, .6); tJoue(g, 452, 340, 44, 30, .6);
+        tLine(g, [[34, -66], [94, -104], [176, -112], [234, -86]], 26, 6); tLine(g, tMir([[34, -66], [94, -104], [176, -112], [234, -86]]), 26, 6);
+        const m = new Path2D(); m.ellipse(256, 488, 64, 152, 0, 0, 6.2832);
+        tFill(g, m, '#3a0a08', '#160302', 336, 640);
+        g.save(); g.clip(m); tLangue(g, 256, 612, 50, 28); g.restore();
+        tInk(g, m, 12);
+        tLine(g, [[254, 292], [252, 316], [268, 310]], 7);
+        tOeil(g, S, { x:132, y:150, rx:122, ry:140, glob:true, p:[0, 0, 18, .95, 0], w:13 });
+        tOeil(g, S, { x:380, y:150, rx:122, ry:140, glob:true, p:[0, 0, 18, .95, 0], w:13 }, true);
+        tGoutte(g, 506, 40, 40);
+      },
+      (g, S) => {                                             // 3 · GRIMACE : un œil plissé, l'autre exorbité, bouche tordue qui sort sur le côté
+        tBoule(g, EXA_B); tJoue(g, 58, 330, 46, 32, .75); tJoue(g, 454, 330, 46, 32, .75);
+        tLine(g, [[60, 166], [148, 184], [230, 214]], 26, 5);
+        tLine(g, [[282, 44], [334, -6], [418, -16], [488, 22]], 26, 6);
+        tOeil(g, S, { x:146, y:240, rx:84, ry:70, p:[12, 0, 62, .5, 0], haut:[[52, 228], [146, 214], [240, 232]], bas:[[60, 258], [146, 268], [232, 256]] });
+        tLine(g, [[228, 300], [224, 344], [248, 334]], 8);
+        const m = new Path2D();
+        m.moveTo(-54, 330); m.bezierCurveTo(40, 296, 220, 352, 332, 416);
+        m.bezierCurveTo(320, 472, 210, 478, 110, 454); m.bezierCurveTo(30, 436, -44, 412, -54, 330); m.closePath();
+        g.fillStyle = '#f6f3ee'; g.fill(m);
+        g.save(); g.clip(m);
+        tGrain(g, 200, -54, 296, 332, 478, '120,110,105', .35);
+        g.strokeStyle = P_INK; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 7; g.beginPath();
+        for (let i = 0; i <= 24; i++) { const t = i / 24, x = -50 + 380 * t, y = 368 + 70 * t * t + (i % 2 ? 7 : -7); i ? g.lineTo(x, y) : g.moveTo(x, y); }
+        g.stroke();
+        g.lineWidth = 4.5; g.globalAlpha = .75;
+        for (let x = -24; x <= 320; x += 34) { g.beginPath(); g.moveTo(x + 8, 280); g.lineTo(x - 8, 500); g.stroke(); }
+        g.restore();
+        tInk(g, m, 11);
+        tOeil(g, S, { x:374, y:186, rx:120, ry:128, glob:true, p:[-10, 6, 30, .62, .1], w:13 }, true);
+      },
+      sourireDiab(SOURIRE_JOUES)
+    ],
+    /* 😠 colère : visage rouge vif, sourcils en V, rides du lion, yeux plissés aux iris rouges, dents serrées
+       (la veine 💢 qui palpite et la vapeur par les oreilles sont animées par-dessus) */
+    fache: (g, S) => {
+      tBoule(g, { rouge:true });
+      tLine(g, [[84, 124], [160, 154], [236, 190]], 26, 5); tLine(g, tMir([[84, 124], [160, 154], [236, 190]]), 26, 5);
+      tLine(g, [[249, 148], [251, 178]], 5); tLine(g, [[264, 148], [262, 178]], 5);   // rides du lion
+      tOeil(g, S, { x:147, y:250, rx:70, ry:62, iris:[8, 12, 26], haut:[[72, 200], [150, 218], [228, 240]], bas:[[78, 292], [150, 302], [222, 294]] });
+      tOeil(g, S, { x:364, y:250, rx:69, ry:62, iris:[-8, 12, 26], haut:tMir([[72, 200], [150, 218], [228, 240]]), bas:tMir([[78, 292], [150, 302], [222, 294]]) }, true);
+      tNez(g); tCernes(g);
+      const m = new Path2D();                                   // dents serrées, coins tirés vers le bas
+      m.moveTo(172, 424); m.bezierCurveTo(186, 392, 226, 394, 258, 392); m.bezierCurveTo(290, 390, 330, 390, 344, 424);
+      m.bezierCurveTo(326, 436, 290, 432, 258, 434); m.bezierCurveTo(226, 436, 190, 438, 172, 424); m.closePath();
+      g.fillStyle = '#f6f3ee'; g.fill(m);
+      g.save(); g.clip(m); g.strokeStyle = P_INK; g.lineCap = 'round';
+      g.lineWidth = 5; g.beginPath(); g.moveTo(170, 416); g.bezierCurveTo(220, 410, 296, 410, 346, 416); g.stroke();
+      g.lineWidth = 4; g.globalAlpha = .75;
+      for (const x of [196, 226, 258, 290, 320]) { g.beginPath(); g.moveTo(x, 380); g.lineTo(x, 450); g.stroke(); }
+      g.restore();
+      tInk(g, m, 10);
+    }
+  };
+
+  /* sprite d'une tête (ou d'une expression), préparé une fois : tête + halo blanc doux de fantôme */
+  const T_SPR = {};
+  const tHalo = head => mk(head.width, head.height, g => {
+    g.filter = 'blur(24px) brightness(0) invert(1)'; g.globalAlpha = .5; g.drawImage(head, 0, 0);
+    g.filter = 'none'; g.globalAlpha = 1; g.drawImage(head, 0, 0);
+  });
+  const teteSprite = (key, i) => {
+    const id = key + (i || 0);
+    return T_SPR[id] || (T_SPR[id] = (() => {
+      const S = sprites(), D = 512 + 2 * T_PAD, f = Array.isArray(T_HEADS[key]) ? T_HEADS[key][i || 0] : T_HEADS[key];
+      return tHalo(mk(D, D, g => { g.translate(T_PAD, T_PAD); f(g, S); }));
+    })());
+  };
+
+  /* 🤏 mini, en morceaux : la boule (avec le nez) + yeux, sourcils et bouche qui rapetissent par à-coups.
+     Chaque morceau est préparé à 8 tailles (normal → aperçu → encore plus petit) ; entre deux tailles,
+     les deux dessins voisins sont posés à la même taille et passent de l'un à l'autre en fondu. */
+  const MINI_U = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6, 1];
+  const miniGeo = u => {                                      // forme du visage à l'étape u (0 = normal · .75 = aperçu · 1 = encore plus petit)
+    const m = Math.min(1, u / .75), v = Math.max(0, (u - .75) / .25);
+    const L3 = (a, b, c) => u <= .75 ? a + (b - a) * m : b + (c - b) * v;
+    const G3 = (a, b, c) => u <= .75 ? a * Math.pow(b / a, m) : b * Math.pow(c / b, v);
+    return { m, r:G3(70, 21, 15), w:L3(12, 7, 6), ex:L3(109, 60, 50), ey:L3(250, 248, 250),
+             bs:G3(1, .63, .5), bw:24 * G3(1, .75, .65), bx:L3(18, -9, -9), by:L3(135, 60, 46),
+             W:G3(144, 14, 10), mx:L3(256, 258, 258), my:L3(396, 352, 350) };
+  };
+  let MINI = null;
+  const miniParts = () => MINI || (MINI = (() => {
+    const S = sprites(), D = 512 + 2 * T_PAD;
+    const base = tHalo(mk(D, D, g => { g.translate(T_PAD, T_PAD); tBoule(g); tJoues(g, .75, 0); tLine(g, [[256, 262], [253, 314], [276, 298]], 8); }));
+    const lv = MINI_U.map(u => {
+      const q = miniGeo(u), r = q.r, ry = r * .943, m = q.m;
+      const eye = flip => {
+        const sx = flip ? -1 : 1, hw = Math.ceil(1.4 * r + 14), hh = Math.ceil(1.9 * r + 14);
+        return mk(2 * hw, 2 * hh, g => {
+          const x = hw, y = hh, P = (a, b) => [x + sx * r * (a[0] + (b[0] - a[0]) * m), y + r * (a[1] + (b[1] - a[1]) * m)];
+          const lid = [P([-1.2, -1], [-.86, -1.1]), P([-.14, -1.11], [0, -1.29]), P([1.06, -1.03], [.86, -1.1])];
+          tOeil(g, S, { x, y, rx:r, ry, w:q.w, lid,
+                        p:[sx * r * (.03 - .03 * m), r * (-.06 + .1 * m), r * (1.14 + .1 * m), .48 + .02 * m, flip ? .24 * (1 - m) : -.08 * (1 - m)] }, flip);
+          if (m < .4) tLine(g, [[.51, 1.23], [.91, .77]].map(([a, b]) => [x + sx * r * a, y + r * b]), 10 * Math.pow(r / 70, .5));   // cernes
+          if (m > .6) tLine(g, [[-.43, 1.71], [-.14, 1.38]].map(([a, b]) => [x + sx * r * a, y + r * b]), 6 * Math.pow(r / 21, .3));
+        });
+      };
+      const brow = flip => mk(Math.ceil(180 * q.bs + 40), Math.ceil(60 * q.bs + 40), (g, w, h) =>
+        tLine(g, [[-72, 8], [-30, -3], [20, -6], [72, 2]].map(([a, b]) => [w / 2 + (flip ? -a : a) * q.bs, h / 2 + b * q.bs]), q.bw, 6));
+      const W = q.W, mouth = mk(Math.ceil(W + 40), Math.ceil(W * .5 + 40), (g, w, h) => {
+        const x = w / 2, y = h / 2;
+        if (W >= 26) tLine(g, [[-.5, -.12], [-.25, .08], [0, .14], [.25, .08], [.5, -.12]].map(([a, b]) => [x + a * W, y + b * W]), 11 * Math.pow(W / 144, .35), 6);   // « :) »
+        else { const p = new Path2D(); p.ellipse(x, y, W / 2, W * .465, 0, 0, 6.2832); g.fillStyle = '#3a0b08'; g.fill(p); tInk(g, p, 5 * Math.pow(W / 14, .5)); }   // « o »
+      });
+      return { q, eye:[eye(false), eye(true)], brow:[brow(false), brow(true)], mouth };
+    });
+    return { base, lv };
+  })());
+  const MINI_T0 = 1.8, MINI_PAS = 1.25, MINI_N = 6, MINI_FIGE = 10, MINI_BOING = .8, MINI_PAUSE = 1.5;
+  /* déroulé : visage normal 1,8 s → 6 à-coups (le plus petit à ~9 s) → figé 10 s → « boing » : retour au visage normal
+     qui rebondit (il dépasse un peu puis se stabilise) → 1,5 s → les à-coups reprennent, et ainsi de suite */
+  const miniPhase = el => {
+    if (el < MINI_T0) return { u:0 };
+    const C = MINI_N * MINI_PAS + MINI_FIGE + MINI_BOING + MINI_PAUSE;
+    let t = (el - MINI_T0) % C;
+    if (t < MINI_N * MINI_PAS) {
+      const k = t / MINI_PAS, i = Math.floor(k), f = Math.min(1, (k - i) / .3), e = f * f * (3 - 2 * f);
+      return { u:(i + e) / MINI_N, jolt:f < 1 ? f : 0 };
+    }
+    t -= MINI_N * MINI_PAS; if (t < MINI_FIGE) return { u:1 };
+    t -= MINI_FIGE; if (t < MINI_BOING) return { u:Math.exp(-8 * t) * Math.cos(14 * t), boing:t };
+    return { u:0 };
+  };
+  const miniU = el => miniPhase(el).u;
+  const miniDraw = (g, el) => {
+    const P = miniParts(), u = miniU(el), q = miniGeo(u);
+    g.drawImage(P.base, -T_PAD, -T_PAD);
+    let i = 0; while (i < MINI_U.length - 2 && u >= MINI_U[i + 1]) i++;
+    const e = Math.max(0, Math.min(1, (u - MINI_U[i]) / (MINI_U[i + 1] - MINI_U[i])));
+    const put = (c, x, y, k, a) => { if (a <= 0) return; g.globalAlpha = Math.min(1, a); g.drawImage(c, x - c.width * k / 2, y - c.height * k / 2, c.width * k, c.height * k); };
+    const both = f => { f(P.lv[i], Math.min(1, 2 - 2 * e)); if (e > 0 && P.lv[i + 1]) f(P.lv[i + 1], Math.min(1, 2 * e)); };
+    [-1, 1].forEach((sd, j) => {
+      const ex = 256 + sd * q.ex, ey = q.ey;
+      both((L, a) => put(L.brow[j], ex - sd * q.bx, ey - q.by, q.bs / L.q.bs, a));
+      both((L, a) => put(L.eye[j], ex, ey, q.r / L.q.r, a));
+    });
+    both((L, a) => put(L.mouth, q.mx, q.my, q.W / L.q.W, a));
+    g.globalAlpha = 1;
+  };
+
+  /* animations par-dessus le sprite, dans le repère de la tête (0..512) · st = état propre au filtre en cours
+     tf(el) → petit mouvement de la tête (s = gonflement, r = rotation, dx/dy = tremblement) */
+  let T_PUFF = null;
+  const T_PAILL = [['#ffb000', '#8a5200'], ['#ff3fa4', '#8c0f50'], ['#1fc8ff', '#065a80'], ['#9a5bff', '#40168f'], ['#36d65a', '#0f6a26'], ['#ff7a1a', '#8f3a06'], ['#ff2a2a', '#7d0a0a']];
+  const EXA_D = 3, EXA_FONDU = .6;                          // Exagéré : s par expression · durée du fondu enchaîné
+  let KAWAI_PEAU = null;                                     // Kawai : sa peau seule, pour les paupières quand il cligne
+  const kawaiPeau = () => KAWAI_PEAU || (KAWAI_PEAU = mk(512 + 2 * T_PAD, 512 + 2 * T_PAD, g => {
+    g.translate(T_PAD, T_PAD); tBoule(g); tJoue(g, 96, 330, 52, 32, 1); tJoue(g, 416, 330, 52, 32, 1);
+  }));
+  const kawaiBlink = el => {                                 // un clignement toutes les 3,3 s, parfois deux d'affilée · 0 = ouvert, 1 = fermé
+    const P = 3.3, t = el % P, n = Math.floor(el / P), b = d => d >= 0 && d < .2 ? Math.sin(d / .2 * Math.PI) : 0;
+    return Math.max(b(t - 1.2), n % 3 === 2 ? b(t - 1.55) : 0);
+  };
+  const T_ANIM = {
+    content: { draw:(g, el, a) => {                          // paillettes multicolores qui scintillent dans les yeux
+      const sp = (x, y, r, i, ph) => {
+        const k = .55 + .45 * Math.sin(el * 5.2 + ph); if (k < .14) return;
+        const [c, d] = T_PAILL[(i + Math.floor(el * .6 + ph)) % T_PAILL.length], rr = 1.6 * r * (.6 + .5 * k);
+        g.save(); g.globalAlpha = a; g.translate(x, y); g.rotate(.3 * Math.sin(el * 1.7 + ph));
+        g.fillStyle = d; star4(g, 0, 0, rr * 1.3);
+        g.shadowColor = c; g.shadowBlur = rr * .6; g.fillStyle = c; star4(g, 0, 0, rr);
+        g.shadowBlur = 0; g.fillStyle = '#fff'; star4(g, 0, 0, rr * .36);
+        g.restore();
+      };
+      [[132, 172, 22, 0], [86, 150, 13, 1.1], [196, 146, 14, 2.3], [72, 232, 12, 3.4], [204, 250, 15, 4.6], [116, 276, 11, 5.5], [168, 228, 10, .7]]
+        .forEach(([x, y, r, ph], i) => { sp(x, y, r, i, ph); sp(512 - x, y, r, i + 3, ph + 1.3); });
+    }},
+    benet: { tf:el => ({ r:.08 * Math.sin(el * 2.6), dy:-6 * Math.abs(Math.sin(el * 2.6)) }),   // la tête dodeline
+      draw:(g, el, a) => {                                    // de la bave qui déborde de la lèvre du bas (au milieu) et pend en coulures
+        const bz = (p, t) => { const u = 1 - t; return u * u * u * p[0] + 3 * u * u * t * p[1] + 3 * u * t * t * p[2] + t * t * t * p[3]; };
+        const OX = [412, 398, 332, 256], OY = [348, 432, 464, 464];   // le bas de l'ouverture de la bouche
+        const yIn = x => { let bt = 0, bd = 1e9; for (let i = 0; i <= 48; i++) { const d = Math.abs(bz(OX, i / 48) - x); if (d < bd) { bd = d; bt = i / 48; } } return bz(OY, bt); };
+        const X0 = 252, X1 = 372, cyc = 2.8, t = (el % cyc) / cyc;
+        const lg = t < .85 ? 64 + 40 * Math.pow(t / .85, 1.5) : 64 + 40 * Math.pow(1 - (t - .85) / .15, 2);   // la plus longue s'allonge puis lâche sa goutte
+        const D = [[270, 19, 34, 0], [303, 23, lg, 0], [334, 18, 22, 2.1], [357, 16, 44, 3.4]]   // coulures : x, demi-largeur, longueur, phase
+          .map(([x, w, L, ph], i) => [x, w, i === 1 ? L : L * (1 + .12 * Math.sin(el * 1.7 + ph))]);
+        const th = x => 24 * Math.pow(Math.max(0, Math.sin(Math.PI * (x - X0) / (X1 - X0))), .5);   // épaisseur de la nappe sur la lèvre
+        /* bas de la nappe : des coulures bien rondes au bout (comme de la peinture qui coule) */
+        const yb = x => { let m = 0; for (const [cx, w, L] of D) { const q = (x - cx) / w; if (q * q < 1) m = Math.max(m, Math.max(0, L - w) + w * Math.sqrt(1 - q * q)); } return yIn(x) + th(x) + m * Math.min(1, th(x) / 12); };
+        const p = new Path2D();
+        for (let x = X0; x <= X1; x += 2) { const y = yIn(x) - 4; x === X0 ? p.moveTo(x, y) : p.lineTo(x, y); }
+        for (let x = X1; x >= X0; x -= 1.5) p.lineTo(x, yb(x));
+        p.closePath();
+        g.save(); g.globalAlpha = a; g.lineJoin = 'round'; g.lineCap = 'round';
+        const fg = g.createLinearGradient(0, 450, 0, 580); fg.addColorStop(0, '#7cc4f2'); fg.addColorStop(1, '#47a9eb');   // bleu « goutte d'eau », plus soutenu
+        g.fillStyle = fg; g.fill(p);
+        if (BAVE_REFLETS) g.fillStyle = 'rgba(255,255,255,.75)';   // (option) un reflet par coulure
+        if (BAVE_REFLETS) for (const [cx, w] of D) { g.beginPath(); g.ellipse(cx - w * .4, yb(cx) - w * .8, w * .14, w * .32, 0, 0, 6.2832); g.fill(); }
+        if (t >= .85) {                                       // la goutte tombe et s'efface
+          const f = (t - .85) / .15, x = 302, y = yIn(302) + th(302) + 110 + 110 * f * f, r = 12;
+          const dp = new Path2D(); dp.moveTo(x, y - r * 1.6);
+          dp.bezierCurveTo(x + r * .4, y - r * .8, x + r, y - r * .2, x + r, y + r * .2); dp.arc(x, y + r * .2, r, 0, Math.PI);
+          dp.bezierCurveTo(x - r, y - r * .2, x - r * .4, y - r * .8, x, y - r * 1.6); dp.closePath();
+          g.globalAlpha = a * (1 - f); g.fillStyle = '#47a9eb'; g.fill(dp);
+          if (BAVE_REFLETS) { g.fillStyle = 'rgba(255,255,255,.75)'; g.beginPath(); g.arc(x - r * .35, y, r * .2, 0, 6.2832); g.fill(); }
+        }
+        g.restore();
+      }},
+    mini: { parts:miniDraw, tf:el => {                        // petite secousse à chaque à-coup · la tête rebondit au « boing »
+      const p = miniPhase(el);
+      if (p.jolt) return { s:1 - .03 * Math.sin(Math.PI * p.jolt) };
+      if (p.boing != null) return { s:1 + .09 * Math.exp(-6 * p.boing) * Math.sin(14 * p.boing) };
+      return null;
+    }},
+    pleure: {
+      tf:el => ({ dy:2.4 * Math.sin(el * 38) * Math.max(0, Math.sin(el * 1.6)) }),   // sanglots
+      draw:(g, el, a, S) => {                                 // des gouttes descendent les rivières et tombent
+        for (const sd of [-1, 1]) for (let i = 0; i < 3; i++) {
+          const t = (el * .55 + i / 3 + (sd > 0 ? .17 : 0)) % 1, x0 = sd < 0 ? 124 : 388, x1 = sd < 0 ? 104 : 408;
+          const y = 300 + t * 190, x = x0 + (x1 - x0) * Math.min(1, t * 1.3), w = 20 + 6 * t;
+          g.save(); g.globalAlpha = a * Math.min(1, t * 6, (1 - t) * 5); g.drawImage(S.tear, x - w / 2, y - w * .2, w, w * 1.56); g.restore();
+        }
+      }},
+    chat: { draw:(g, el, a, S) => {
+      const c = kawaiBlink(el);                               // il cligne des yeux : les paupières (sa peau) se ferment
+      if (c > 0) for (const [x, y, rx, ry] of [[150, 236, 86, 84], [362, 234, 85, 85]]) {
+        const R = rx + 22, Ry = ry + 22, top = y + 6 - Ry, bot = y + 6 + Ry, meet = y + ry * .25, sag = 22 * c;
+        const yu = top + c * (meet - top), yl = bot - c * (bot - meet);
+        const ov = new Path2D(); ov.ellipse(x, y + 6, R, Ry, 0, 0, 6.2832);
+        const lid = new Path2D();
+        lid.moveTo(x - R, top - 2); lid.lineTo(x + R, top - 2); lid.lineTo(x + R, yu); lid.quadraticCurveTo(x, yu + 2 * sag, x - R, yu); lid.closePath();
+        lid.moveTo(x - R, bot + 2); lid.lineTo(x + R, bot + 2); lid.lineTo(x + R, yl); lid.quadraticCurveTo(x, yl + 2 * sag, x - R, yl); lid.closePath();
+        g.save(); g.globalAlpha = a; g.clip(ov); g.clip(lid); g.drawImage(kawaiPeau(), -T_PAD, -T_PAD); g.restore();
+        g.save(); g.globalAlpha = a; g.clip(ov); g.strokeStyle = P_INK; g.lineCap = 'round';
+        g.lineWidth = 13; g.beginPath(); g.moveTo(x - R, yu); g.quadraticCurveTo(x, yu + 2 * sag, x + R, yu); g.stroke();
+        g.lineWidth = 7; g.beginPath(); g.moveTo(x - R, yl); g.quadraticCurveTo(x, yl + 2 * sag, x + R, yl); g.stroke();
+        g.restore();
+      }
+                                                              // des cœurs montent autour de la tête
+      for (let i = 0; i < 5; i++) {
+        const t = (el / 3.2 + i / 5) % 1, sd = i % 2 ? 1 : -1;
+        const x = 256 + sd * (290 + 30 * Math.sin(i * 2.1)) + 14 * Math.sin(el * 2 + i), y = 380 - t * 300, w = (i % 3 ? 54 : 74) * (.7 + .3 * Math.sin(t * Math.PI));
+        g.save(); g.globalAlpha = a * Math.sin(t * Math.PI); g.translate(x, y); g.rotate(.25 * Math.sin(el * 1.6 + i));
+        g.drawImage(i % 3 === 2 ? S.heart2 : S.heart, -w / 2, -w / 2, w, w); g.restore();
+      }
+    }},
+    exagere: {
+      pick:(el, st) => {                                      // expression en cours (ordre tiré au sort à chaque filtre), fondu de 0,22 s
+        const o = st.ord || (st.ord = T_HEADS.exagere.map((_, i) => i).sort(() => Math.random() - .5)), k = el / EXA_D, i = Math.floor(k);
+        const f = Math.min(1, (k - i) * EXA_D / EXA_FONDU);
+        return [o[(i + o.length - 1) % o.length], o[i % o.length], f * f * (3 - 2 * f)];
+      },
+      tf:el => {                                              // gélatine : la tête s'étire puis rebondit pendant que l'expression change
+        const t = el % EXA_D, w = Math.exp(-4.5 * t) * Math.sin(t * 11), b = .03 * Math.sin(el * 3.2);
+        return { sx:1 + b + .11 * w, sy:1 + b - .09 * w };
+      }
+    },
+    fache: {
+      tf:el => fumeOn(el) ? { dx:4 * Math.sin(el * 91), dy:4 * Math.sin(el * 67 + 1) } : null,   // tremble quand la vapeur sort
+      draw:(g, el, a, S, st, dt) => {
+        const beat = .5 + .5 * Math.sin(el * 7.2);
+        g.save(); g.translate(352, 84); g.rotate(.3); g.scale(52 * (1 + .14 * beat), 52 * (1 + .14 * beat)); g.lineCap = 'round';   // la veine 💢
+        for (const [lw, col] of [[.3, '#2a0303'], [.16, '#ff7a64']]) {
+          g.lineWidth = lw; g.strokeStyle = col; g.globalAlpha = a;
+          for (let k = 0; k < 4; k++) { g.save(); g.rotate(k * Math.PI / 2); g.beginPath(); g.moveTo(.16, .58); g.quadraticCurveTo(.2, .2, .58, .16); g.stroke(); g.restore(); }
+        }
+        g.restore();
+        g.save(); g.globalCompositeOperation = 'lighter';     // les iris rougeoient au rythme du pouls
+        for (const x of [155, 356]) {
+          const rg = g.createRadialGradient(x, 262, 4, x, 262, 46);
+          rg.addColorStop(0, 'rgba(255,60,20,' + (.35 * beat * a) + ')'); rg.addColorStop(1, 'rgba(255,0,0,0)');
+          g.fillStyle = rg; g.fillRect(x - 46, 216, 92, 92);
+        }
+        g.restore();
+        const spr = T_PUFF || (T_PUFF = mk(64, 64, c => {
+          const rg = c.createRadialGradient(32, 32, 0, 32, 32, 32);
+          rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(.45, 'rgba(246,246,248,.85)'); rg.addColorStop(.75, 'rgba(185,188,196,.45)'); rg.addColorStop(1, 'rgba(170,172,180,0)');
+          c.fillStyle = rg; c.fillRect(0, 0, 64, 64);
+        }));
+        const L = st.puff || (st.puff = []);                   // la vapeur sort par les côtés (« les oreilles »)
+        if (fumeOn(el) && a > .5) for (const sd of [-1, 1]) {
+          const n = Math.floor(dt * 40 + Math.random());
+          for (let k = 0; k < n && L.length < 90; k++) L.push({ x:256 + sd * 236, y:rnd(296, 312), vx:sd * rnd(140, 260), vy:-rnd(90, 190), s0:26, s1:rnd(90, 130), age:Math.random() * dt, life:rnd(.8, 1.2) });
+        }
+        for (let i = L.length - 1; i >= 0; i--) {
+          const p = L[i]; p.age += dt;
+          if (p.age > p.life) { L.splice(i, 1); continue; }
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 1.3; p.vy *= 1 - dt * 1.1;
+          const k = p.age / p.life, sz = p.s0 + (p.s1 - p.s0) * Math.sqrt(k);
+          g.globalAlpha = a * .95 * (1 - k * k) * Math.min(1, p.age / .08);
+          g.drawImage(spr, p.x - sz / 2, p.y - sz / 2, sz, sz);
+        }
+        g.globalAlpha = 1;
+      }}
+  };
+
+  /* dessine la tête du filtre `key` au temps `el` (s depuis l'apparition), dans le repère de la tête (boule centrée en 256, 256) */
+  const teteDraw = (g, key, el, st, dt) => {
+    const A = T_ANIM[key] || {}, tf = (A.tf && A.tf(el, st)) || {}, s = tf.s || 1;
+    g.save();
+    g.translate(256 + (tf.dx || 0), 256 + (tf.dy || 0)); g.rotate(tf.r || 0); g.scale(s * (tf.sx || 1), s * (tf.sy || 1)); g.translate(-256, -256);
+    if (A.parts) A.parts(g, el, st);
+    else if (A.pick) {                                        // plusieurs expressions : fondu enchaîné
+      const [i, j, f] = A.pick(el, st);
+      if (f < 1) { g.globalAlpha = Math.min(1, 2 - 2 * f); g.drawImage(teteSprite(key, i), -T_PAD, -T_PAD); }
+      g.globalAlpha = Math.min(1, 2 * f); g.drawImage(teteSprite(key, j), -T_PAD, -T_PAD); g.globalAlpha = 1;
+    } else g.drawImage(teteSprite(key), -T_PAD, -T_PAD);
+    if (A.draw) A.draw(g, el, 1, sprites(), st, dt);
+    g.restore();
+  };
+
+  /* prépare les dessins du filtre lancé (avant le compte à rebours) et libère ceux des autres filtres */
+  const tetePrep = key => {
+    for (const k in T_SPR) if (!k.startsWith(key)) delete T_SPR[k];
+    if (key !== 'mini') MINI = null;
+    if (key !== 'chat') KAWAI_PEAU = null;
+    if (key === 'mini') miniParts();
+    else if (Array.isArray(T_HEADS[key])) T_HEADS[key].forEach((_, i) => teteSprite(key, i));
+    else teteSprite(key);
+    if (key === 'chat') kawaiPeau();
+  };
+  const TETE_KEYS = new Set(['content', 'benet', 'mini', 'pleure', 'chat', 'exagere', 'fache']);   // filtres qui ont leur tête de Paatrice
+  let T_LAYER = null;                                        // calque de composition de la tête (réutilisé, grandit rarement)
+  const teteLayer = L => {
+    if (!T_LAYER) T_LAYER = document.createElement('canvas');
+    if (T_LAYER.width < L) T_LAYER.width = T_LAYER.height = Math.ceil(L * 1.15);
+    return T_LAYER;
+  };
+
   const STK = {
     /* 😁 paillettes dans les yeux (façon dessin animé) : grosse étoile + reflets qui scintillent */
     content: (g, P, a, el) => {
@@ -2239,6 +2953,7 @@ const paatBeauEyes = (g, S) => {
       glInit();
       if (FX[key].stk) sprites();                    // dessins préparés AVANT le compte à rebours
       if (FX[key].stk === 'chad' && C.CHAD_PAATRICE) beauSprite();
+      if (C.FILTER_PAATRICE && TETE_KEYS.has(key)) { sprites(); tetePrep(key); }   // tête de Paatrice du filtre
       await vcamOn();
       const id = await findCam();
       const s = await openCam(id);
@@ -2291,7 +3006,7 @@ const paatBeauEyes = (g, S) => {
     }
   }, 250);
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', derriere2:'derriere', farceur:'derriere', jojo:'stand', beaugosse:'beau', handsome:'beau', paatricebeaugosse:'beau', paatricechad:'beau', paatchad:'beau', chadpaatrice:'beau', paatricebeau:'beau' };   // mêmes noms que la cam tel
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', zinzin:'benet', derriere2:'derriere', farceur:'derriere', stand:'derriere', jojo:'derriere' };   // mêmes noms que la cam tel
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
     let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_\-]+/g, '').trim();
@@ -2368,7 +3083,7 @@ const paatBeauEyes = (g, S) => {
   if (C.FILTERS && C.FILTER_PRELOAD) setTimeout(() => ensureLM().catch(() => {}), 1500);
   if (C.FILTERS && C.FILTER_PRELOAD && !window.__TEST) setTimeout(() => { try { beauSprite(); } catch (_) {} }, 3500);   // tête de Paatrice beau gosse prête d'avance
   try { document.fonts.load('40px "Mouse Memoirs"'); } catch (_) {}   // police des bulles et du Stand
-  if (has('test')) setTimeout(() => fxRequest({ meta:{ nom:get('test') || 'zinzin' } }), 5000);
+  if (has('test')) setTimeout(() => fxRequest({ meta:{ nom:get('test') || 'benet' } }), 5000);
 })();
 </script>
 </body>
