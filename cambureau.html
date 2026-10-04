@@ -1800,26 +1800,32 @@ const paatBeauEyes = (g, S) => {
      Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
   const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage : il ne passe jamais devant · tk = tête du filtre
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{},
-                                       r:{ ph:Math.random() * 6.2832, sens:Math.random() < .5 ? -1 : 1, zph:Math.random() * 6.2832,
-                                           ax:.2 + Math.random() * .08, ay:.08 + Math.random() * .08, yb:.26 + Math.random() * .08 } });
+                                       r:(() => { const u = (a, b) => a + Math.random() * (b - a);   // tiré au sort une fois par filtre
+                                         return { p1:u(0, 6.2832), p2:u(0, 6.2832), p3:u(0, 6.2832),   // départs : 8 couché · profondeur · flottement
+                                                  s1:u(.8, 1.2), s2:u(.8, 1.2),                      // vitesses ±20 % (8 couché · profondeur)
+                                                  dir:Math.random() < .5 ? -1 : 1,                   // sens du 8
+                                                  ax:u(.85, 1.15), ay:u(.7, 1.3), yc:u(-.04, .04) };   // amplitude · hauteur
+                                       })() });
     const R = sp.r;
     /* profondeur : il va au fond du bureau (petit, plus haut, plus pâle) puis revient près de la caméra (grand, plus bas) */
-    const zt = el / Math.max(4, C.BEAU_PROF_TOUR) * 6.2832 + R.zph, z = .5 - .5 * Math.cos(zt);   // 0 = au fond · 1 = près de la caméra
+    const zt = el / (Math.max(4, C.BEAU_PROF_TOUR) * R.s2) * 6.2832 + R.p2, z = .5 - .5 * Math.cos(zt);   // 0 = au fond · 1 = près de la caméra
     const dep = C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3);
     const hh = H * C.BEAU_TAILLE * dep * (tk ? C.TETE_TAILLE || 1 : 1), spr = tk ? null : beauSprite();
-    const k = tk ? hh / 442 : hh / 670, sw = tk ? 488 * k : spr.width * k, sh = tk ? 442 * k : spr.height * k;
-    const th = R.sens * el / Math.max(4, C.BEAU_TOUR) * 6.2832 + R.ph;   // il part déjà lancé
-    let x = W / 2 + W * (R.ax + .1 * z) * Math.sin(th), y = H * (R.yb + .22 * z) + H * R.ay * Math.sin(th) * Math.cos(th) + H * .012 * Math.sin(el * 2.1);
+    const k = tk ? hh / 442 : hh / 670;
+    const sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;   // même encombrement que beau gosse (halo compris)
+    const th = R.dir * el / (Math.max(4, C.BEAU_TOUR) * R.s1) * 6.2832 + R.p1;   // il part déjà lancé
+    let x = W / 2 + W * (.24 + .1 * z) * R.ax * Math.sin(th),
+        y = H * (.3 + .22 * z + R.yc) + H * .12 * R.ay * Math.sin(th) * Math.cos(th) + H * .012 * Math.sin(el * 2.1 + R.p3);
     if (P) {                                                 // ton visage (cheveux et barbe compris) + sa tête : zone interdite, il glisse autour
       const ex = P.mx, ey = P.my + .25 * P.fw, ax = 1.7 * P.fw + sw * .36, ay = 2.4 * P.fw + sh * .42;
       const qx = (x - ex) / ax, qy = (y - ey) / ay, d = Math.hypot(qx, qy);
       if (d < 1) { const s2 = 1 / Math.max(.05, d); x = ex + (x - ex) * s2; y = ey + (y - ey) * s2; if (d < .05) x = ex + ax; }
-      x = Math.max(sw * .32, Math.min(W - sw * .32, x)); y = Math.max(sh * .36, Math.min(H - sh * .4, y));   // toujours dans l'image
-      if (sp.x == null) { sp.x = x; sp.y = y; }
-      const kf = 1 - Math.exp(-dt / .3); sp.x += (x - sp.x) * kf; sp.y += (y - sp.y) * kf;   // trajet adouci : il contourne en douceur
-      x = sp.x; y = sp.y;
-    }
-    const rot = .1 * Math.cos(th) + .03 * Math.sin(el * 1.7);   // il se penche dans le sens où il va, et ondule
+    }                                                        // visage pas vu : il continue son chemin seul
+    x = Math.max(sw * .32, Math.min(W - sw * .32, x)); y = Math.max(sh * .36, Math.min(H - sh * .4, y));   // toujours dans l'image
+    if (sp.x == null) { sp.x = x; sp.y = y; }
+    const kf = 1 - Math.exp(-dt / .3); sp.x += (x - sp.x) * kf; sp.y += (y - sp.y) * kf;   // trajet adouci (0,3 s) : il contourne en douceur
+    x = sp.x; y = sp.y;
+    const rot = .1 * R.dir * Math.cos(th) + .03 * Math.sin(el * 1.7 + R.p3);   // il se penche dans le sens où il va, et ondule
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
     const alpha = Math.min(ap, amt) * C.BEAU_FANTOME * (.72 + .28 * z);   // au fond : un peu plus fantôme
     if (alpha > .01) {
