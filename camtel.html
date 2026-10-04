@@ -41,7 +41,7 @@
 
    FILTRES visage (points de chaîne) : SAMMI → HTTP Request GET
    https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-   noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (ou fache)
+   noms : content · derriere · mini · benet · pleure · kawai · chad · exagere · colere (ou fache)
           (anciennes versions : content1 · chad1)
           (sans accents dans l'URL)
    Calculés par le tel, visibles sur le tel ET sur OBS, 1 min 30 chacun.
@@ -68,7 +68,7 @@ const CONFIG = {
   FILTERS          : true,  // filtres déclenchés par SAMMI (event "filtre"). false = ignorés
   FILTER_DURATION  : 90,    // secondes par filtre (fondus compris) · 90 = 1 min 30
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
-  FILTER_LEVELS    : { content:1, derriere:1, mini:1, zinzin:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // réglage fin, filtre par filtre (×)
+  FILTER_LEVELS    : { content:1, derriere:1, mini:1, benet:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // réglage fin, filtre par filtre (×)
   FACHE_ROUGE      : true,   // Colère : yeux rouges qui brillent (false = seulement les yeux plissés)
   FILTER_FADE      : 0.5,   // durée du fondu d'apparition / disparition (s)
   PAAT_BRAS        : "tatoue",   // Paatrice (filtre « derrière toi ») : "tatoue" (musclé + ton soleil) · "muscle" · "poilu" · "nouille" · "simple"
@@ -693,7 +693,7 @@ body.live #go { display:none; }
   <div id="sStat">…</div>
   <label>🎭 Tester un filtre</label>
   <div class="row fxrow" id="sFx">
-    <button data-fx="content">😁</button><button data-fx="zinzin">🤪</button><button data-fx="mini">🤏</button><button data-fx="chad">🗿</button><button data-fx="fache">😠</button>
+    <button data-fx="content">😁</button><button data-fx="benet">🤪</button><button data-fx="mini">🤏</button><button data-fx="chad">🗿</button><button data-fx="fache">😠</button>
   </div>
   <div class="row fxrow" id="sFx2">
     <button data-fx="pleure">😢</button><button data-fx="chat">🐱</button><button data-fx="derriere">👀</button><button data-fx="exagere">🤯</button>
@@ -1431,7 +1431,7 @@ body.live #go { display:none; }
 
      Déclenchement (HTTP Request GET depuis SAMMI) :
      https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre","meta":{"nom":"content"}}
-     noms : content · derriere · mini · zinzin · pleure · kawai · chad · exagere · colere (ou fache)
+     noms : content · derriere · mini · benet · pleure · kawai · chad · exagere · colere (ou fache)
             (anciennes versions : content1 · chad1)
      ============================================================ */
   const MP_BASE  = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1';   // version figée (empreinte dans l'importmap)
@@ -1466,11 +1466,11 @@ body.live #go { display:none; }
     /* --- Façon Snapchat / TikTok : loupes [points (centre = moyenne), largeur, hauteur, force]
        force > 0 = grossit (0.75 ≈ ×4 au centre) · force < 0 = rapetisse --- */
     derriere: { name:'👀 Derrière toi', stk:'derriere', seg:true },   // Paatrice surgit derrière toi (détourage)
-    mini: { name:'🤏 Mini', bulge:[                     // l'inverse de Zinzin
+    mini: { name:'🤏 Mini', bulge:[                     // l'inverse de Benêt
       [EYE_R, .48, .38, -.86], [EYE_L, .48, .38, -.86], // yeux tout petits
       [MOUTH, .80, .42, -.86]                           // bouche toute petite
     ]},
-    zinzin: { name:'🤪 Zinzin', bulge:[
+    benet: { name:'🤪 Benêt', bulge:[
       [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72],   // gros yeux…
       [MOUTH, .92, .55, .70],                           // … et grande bouche
       [NOSE,  .28, .24, -.30]
@@ -2694,7 +2694,7 @@ body.live #go { display:none; }
   if (frag.has('debug') || query.has('debug')) { window.__fx = fx; window.__fxc = { segMask, perCv, segIn }; }                      // &debug dans l'adresse : état du filtre lisible (tests)
   const fxNext = () => { if (!fx.on && fxQ.length) fxStart(fxQ.shift()); };
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere' };   // anciens noms → leur remplaçant (triste, mechant, choque, degoute : retirés)
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', zinzin:'benet' };   // anciens noms → leur remplaçant (triste, mechant, choque, degoute : retirés)
   /* --- Demande de filtre (SAMMI ou bouton test) : lancé tout de suite, ou mis en file --- */
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
