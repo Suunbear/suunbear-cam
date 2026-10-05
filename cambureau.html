@@ -32,6 +32,7 @@
      &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
                    = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
                      angle de tête/corps qui le fait changer de côté, sans suivi du corps
+     &mouv=1 · &mouv=2 = mouvement des têtes : 1 « libre » (erre et explore) · 2 « flotte » (légère ↔ lourde, petits élans)
      &paat=0       = sans les têtes de Paatrice (les 8 filtres, Chad compris)
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
@@ -74,7 +75,8 @@ const CONFIG = {
   BEAU_TAILLE      : 0.2,   // Paatrice beau gosse : hauteur de sa tête (part de la hauteur de l'image), à mi-profondeur
   BEAU_LOIN        : 0.6,   // … × ça quand elle est petite
   BEAU_PRES        : 1.6,   // … × ça quand elle est grande (la taille change au hasard, n'importe où autour de toi)
-  TETES_VITESSE    : 1,     // têtes de Paatrice : vitesse moyenne (1 = tranquille · 0.7 = plus lent · 1.4 = plus vif), le rythme varie tout seul
+  TETES_MOUVEMENT  : 'libre', // têtes de Paatrice : 'libre' (erre et explore tout l'écran) · 'flotte' (légère ↔ lourde, petits élans) · ou &mouv=1 / &mouv=2
+  TETES_VITESSE    : 1,     // … vitesse moyenne (1 = tranquille · 0.7 = plus lent · 1.4 = plus vif), le rythme varie tout seul
   TETES_TAILLE_RYTHME : 7,  // … s en moyenne entre deux changements de taille (petite ↔ grande, n'importe où dans le cadre)
   BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
   BEAU_ETOILES     : 2.4,   // s de la pluie d'étoiles multicolores de l'apparition
@@ -162,6 +164,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   if (get('marge') !== '') C.PAAT_MARGE = +get('marge') || 0;            // Paatrice : &marge=2 (gommage plus large autour de toi)
   if (get('haut') !== '') C.PAAT_HAUT = +get('haut');                    // Paatrice : &haut=-1.8 (sa tête plus haut)
   if (+get('mains') > 0) C.PAAT_MAINS = +get('mains');                   // Paatrice : &mains=1.2 (mains plus grandes)
+  if (get('mouv'))       C.TETES_MOUVEMENT = ['2', 'flotte'].includes(get('mouv')) ? 'flotte' : 'libre';   // têtes : &mouv=1 (libre) · &mouv=2 (flotte)
   if (has('paat'))       C.FILTER_PAATRICE = get('paat') !== '0';        // têtes de Paatrice des 8 filtres : &paat=0 (coupées)
 
   const $ = s => document.querySelector(s);
@@ -254,7 +257,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       return [[1, .011 * Math.sin(el * 91), .011 * Math.sin(el * 67 + 1), 1.5]];
     }},
     /* 🤯 Exagéré : tête gonflée + TES expressions exagérées en direct (bouche ouverte → énorme, sourire → jusqu'aux oreilles…) */
-    exagere: { name:'🤯 Exagéré', dyn:true, bulge:[
+    exagere: { name:'🤯 Exagéré', dyn:true, stk:'exagere', bulge:[
       [[1, 4, 6], 1.3, 1.6, .14]                          // tête un peu gonflée (une seule loupe : pas de plis)
     ]},
     chat: { name:'🐱 Kawai', stk:'chat', bulge:[
@@ -293,10 +296,10 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
     const bulge = FX.exagere.bulge.slice();
     if (j > .03) bulge.push([[13, 14], .95 + .2 * j, .6 + .42 * j, .86 * Math.min(1, j * 1.15)]);   // bouche ouverte → énorme
-    /* yeux : grands ouverts → ils grossissent énormément et la loupe s'élargit (comme pour la bouche) : ils débordent sur ton front et tes cheveux
+    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (jusqu'à ×4), ils débordent sur ton front et tes cheveux
        · plissés → minuscules */
     const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));   // 0 = normal · 1 = yeux écarquillés à fond
-    const eb = Math.max(-.65, Math.min(.93, .12 + .25 * bu - .6 * sq + .8 * wo)), er = .5 + 1.3 * wo, eh = .45 + 1.25 * wo;   // à fond : la loupe couvre front et cheveux
+    const eb = Math.max(-.65, Math.min(.6, .12 + .25 * bu - .6 * sq + .35 * wo)), er = .5 + .25 * wo, eh = .45 + .25 * wo;   // loupe modérée : le reste, ce sont tes yeux « détachés » (STK exagere)
     if (Math.abs(eb) > .03) bulge.push([EYE_R, er, eh, eb], [EYE_L, er, eh, eb]);
     return { pts, bulge };
   };
@@ -309,7 +312,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* Chad : contours de tes sourcils (de la tempe vers le nez) et de ta bouche */
   const BROW_R = { up:[70, 63, 105, 66, 107], lo:[46, 53, 52, 65, 55] };          // ton sourcil droit (à gauche de l'écran)
   const BROW_L = { up:[300, 293, 334, 296, 336], lo:[276, 283, 282, 295, 285] };  // ton sourcil gauche (à droite de l'écran)
-  const STK_PTS = { benet:[84, 17, 314, 405, 321, 87, 14, 317, 402, 318, 61, 291], chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
+  const STK_PTS = { exagere:EYE_RING[0].concat(EYE_RING[1]), benet:[84, 17, 314, 405, 321, 87, 14, 317, 402, 318, 61, 291], chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
                     content:[468, 473].concat(EYE_R, EYE_L), chad:[61, 291, 159, 386].concat(BROW_R.up, BROW_R.lo, BROW_L.up, BROW_L.lo), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   /* Chad : version miroir (l'autre sourcil levé, l'autre coin de la bouche) — paires gauche/droite du maillage */
   const MIRROR = { 61:291, 105:334, 70:300, 107:336, 66:296, 159:386, 145:374, 116:345, 176:400, 136:365, 172:397, 148:377, 58:288, 205:425, 98:327 };
@@ -1699,7 +1702,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
 /* Paatrice « beau gosse » : la transformation glow-up (trope des persos de dessin animé qui deviennent ultra-détaillés).
    Repère 512 × 720 (le haut du crâne comme la Paatrice normale). Ses traits à lui : boule rouge, gros yeux blancs, sourcils épais. */
-const paatBeauBase = () => mk(512, 720, g => {
+const paatBeauBase = nu => mk(512, 720, g => {   // nu = sans sourcils ni lèvres (ils sont animés à part)
   const rng = rnd;
   const head = new Path2D();
   head.moveTo(20, 270);
@@ -1750,13 +1753,16 @@ const paatBeauBase = () => mk(512, 720, g => {
     line([[x - rx + 6, y + ry + 22], [x, y + ry + 34], [x + rx - 6, y + ry + 20]], 4);           // cernes
   }
   /* sourcils épais, détendus (sûr de lui) */
+  if (!nu) {
   brush(g, [[62, 168], [140, 150], [228, 162]], 26, rng);
   brush(g, [[276, 158], [360, 142], [440, 156]], 26, rng);
+  }
   /* nez dessiné, avec narines */
   brush(g, catmull([[246, 222], [240, 300], [232, 352], [218, 372]], 6), 7, rng);
   line([[214, 374], [236, 386], [256, 380], [278, 386], [298, 372]], 6);
   line([[226, 360], [218, 374]], 5); line([[288, 358], [298, 372]], 5);
   /* lèvres pleines, un peu boudeuses */
+  if (nu) return;
   const lip = new Path2D();
   lip.moveTo(186, 470); lip.bezierCurveTo(214, 446, 240, 444, 256, 456); lip.bezierCurveTo(272, 444, 300, 446, 328, 470);
   lip.bezierCurveTo(300, 506, 214, 506, 186, 470); lip.closePath();
@@ -1783,14 +1789,54 @@ const paatBeauEyes = (g, S) => {
 };
 
   /* sa tête seule, préparée une fois : tête + yeux + halo blanc doux (aucun flou à recalculer en direct) */
-  let BEAU_SPR = null;
+  /* Chad : de temps en temps, il lève un sourcil (celui de droite à l'écran) en baissant l'autre et sourit en coin,
+     comme le « People's Eyebrow » de The Rock ; l'œil du sourcil levé s'ouvre un peu, l'autre se plisse. */
+  const BEAU_ANIM_T0 = 3, BEAU_ANIM_DUREE = 4, BEAU_ANIM_PAUSE = 10;   // 1re fois après 3 s · dure 4 s · puis toutes les 10 s
+  const beauAnimK = el => {                                  // 0 = visage normal · 1 = sourcil levé + sourire en coin
+    if (el < BEAU_ANIM_T0) return 0;
+    const t = (el - BEAU_ANIM_T0) % (BEAU_ANIM_DUREE + BEAU_ANIM_PAUSE);
+    if (t >= BEAU_ANIM_DUREE) return 0;
+    if (t < .35) { const x = t / .35 - 1; return 1 + 2.4 * x * x * x + 1.4 * x * x; }   // ça monte d'un coup (petit rebond)
+    if (t > BEAU_ANIM_DUREE - .45) { const f = (BEAU_ANIM_DUREE - t) / .45; return f * f * (3 - 2 * f); }
+    return 1;
+  };
+  const beauParts = (g, kk) => {                             // paupières, sourcils et lèvres de beau gosse (kk : 0 → 1)
+    const L = (a, b) => a + (b - a) * kk, M = (A, B) => A.map((p, i) => [L(p[0], B[i][0]), L(p[1], B[i][1])]);
+    P_EYES.forEach(([x, y, rx, ry], j) => {                  // paupières lourdes (l'œil du sourcil levé s'ouvre, l'autre se plisse)
+      const lid = j === 1 ? L(.5, .3) : L(.5, .62);
+      g.save(); g.beginPath(); g.ellipse(x, y, rx + 4, ry + 4, 0, 0, 6.2832); g.clip();
+      g.fillStyle = P_RED; g.fillRect(x - rx - 8, y - ry - 8, 2 * rx + 16, (2 * ry + 8) * lid + 4); g.restore();
+      const ly = y - ry + (2 * ry) * lid;
+      bStroke(g, [[x - rx - 6, ly + 8], [x, ly - 4], [x + rx + 6, ly + 6]], 14, 901 + j);
+      bStroke(g, [[x - rx + 4, ly - 16], [x, ly - 26], [x + rx - 4, ly - 18]], 4, 911 + j);   // pli de la paupière
+    });
+    bStroke(g, catmull(M([[62, 168], [140, 150], [228, 162]], [[62, 174], [142, 170], [228, 190]]), 5), 26, 921);   // l'autre sourcil s'abaisse
+    bStroke(g, catmull(M([[276, 158], [360, 142], [440, 156]], [[280, 122], [354, 78], [444, 108]]), 5), 26, 931);  // le sourcil qui monte
+    const P = (x, y) => { const w = Math.pow(Math.max(0, Math.min(1, (x - 232) / 96)), 1.6) * kk; return [x + 12 * w, y - 26 * w]; };   // le coin droit remonte
+    const lip = new Path2D(), m = (x, y) => lip.moveTo(...P(x, y)), b = (a, c, d, e, f, h) => lip.bezierCurveTo(...P(a, c), ...P(d, e), ...P(f, h));
+    m(186, 470); b(214, 446, 240, 444, 256, 456); b(272, 444, 300, 446, 328, 470); b(300, 506, 214, 506, 186, 470); lip.closePath();
+    const lg = g.createLinearGradient(0, 444, 0, 506); lg.addColorStop(0, '#7e1c1a'); lg.addColorStop(.5, '#a42e2a'); lg.addColorStop(1, '#8a2220');
+    g.fillStyle = lg; g.fill(lip);
+    const rf = P(240, 486); g.fillStyle = 'rgba(255,190,175,.45)'; g.beginPath(); g.ellipse(rf[0], rf[1], 22, 6, -.1 - .2 * kk, 0, 6.2832); g.fill();   // reflet
+    const Q = pts => catmull(pts.map(([x, y]) => P(x, y)), 5);
+    bStroke(g, Q([[186, 470], [214, 446], [240, 444], [256, 456], [272, 444], [300, 446], [328, 470]]), 7, 941);
+    bStroke(g, Q([[186, 470], [222, 478], [256, 476], [292, 478], [328, 470]]), 6, 951);
+    bStroke(g, Q([[194, 476], [230, 500], [256, 504], [284, 500], [320, 476]]), 6, 961);
+  };
+  let BEAU_SPR = null, BEAU_NU = null;
   const beauSprite = () => BEAU_SPR || (BEAU_SPR = (() => {
-    const S = sprites(), head = mk(512, 720, g => { g.drawImage(paatBeauBase(), 0, 0); paatBeauEyes(g, S); });
-    const p = 70;
-    return mk(512 + 2 * p, 720 + 2 * p, g => {
-      g.filter = 'blur(26px) brightness(0) invert(1)'; g.globalAlpha = .55; g.drawImage(head, p, p);   // halo de fantôme
+    const S = sprites(), p = 70, head = mk(512, 720, g => {
+      g.drawImage(paatBeauBase(true), 0, 0);
+      P_EYES.forEach(([x, y, rx, ry, tilt]) => {             // pupilles (les paupières sont dessinées par-dessus)
+        g.save(); g.beginPath(); g.ellipse(x, y, rx + 2, ry + 2, 0, 0, 6.2832); g.clip();
+        g.translate(x, y + 18); g.rotate(tilt * .5); if (tilt > 0) g.scale(-1, 1); g.drawImage(S.pupil, -22, -46, 44, 92); g.restore();
+      });
+    });
+    BEAU_NU = mk(512 + 2 * p, 720 + 2 * p, g => {            // sa tête sans sourcils, paupières ni lèvres + halo de fantôme
+      g.filter = 'blur(26px) brightness(0) invert(1)'; g.globalAlpha = .55; g.drawImage(head, p, p);
       g.filter = 'none'; g.globalAlpha = 1; g.drawImage(head, p, p);
     });
+    return mk(BEAU_NU.width, BEAU_NU.height, g => { g.drawImage(BEAU_NU, 0, 0); g.translate(p, p); beauParts(g, 0); });   // visage normal, prêt d'avance
   })());
   const ghostStar = (g, x, y, r, col, a, rot) => {           // même étoile que Chad : contour foncé, couleur + halo, cœur blanc
     g.save(); g.translate(x, y); g.rotate(rot); g.globalAlpha = a;
@@ -1800,94 +1846,147 @@ const paatBeauEyes = (g, S) => {
     g.restore();
   };
   /* Tête de Paatrice qui se balade : beau gosse (Chad) ou la tête du filtre en cours (tk).
-     Elle flotte dans un CADRE autour de ta tête, en forme de rectangle aux coins arrondis (comme l'écran 16:9) :
-     - le bord intérieur entoure ton visage, cheveux et barbe compris, plus la taille de sa tête : elle n'y entre jamais ;
-     - le bord extérieur, c'est l'écran (elle reste toujours entière dans l'image) ; elle va aussi dans les coins.
-     Elle tourne autour de toi par des chemins tirés au sort (en haut, en bas, à gauche, à droite), sans jamais traverser
-     ton visage ; chaque trajet a sa propre vitesse (changements de rythme) et sa taille change au hasard, n'importe où.
-     Elle suit ta tête quand tu bouges (le dernier endroit vu si tu disparais). Elle penche dans le sens où elle va.
-     Opaque : transparente seulement pendant son apparition et sa disparition (fondus).
+     Elle se déplace comme un petit personnage autonome : une position, une vitesse, et des « forces » qui la poussent
+     (principe des comportements de pilotage de Craig Reynolds : errance, exploration, évitement, rester dans l'image).
+     Deux façons de bouger (réglage TETES_MOUVEMENT, ou &mouv=1 / &mouv=2 dans l'adresse) :
+       1 « libre »  : elle erre de façon imprévisible (errance de Reynolds) et part explorer une autre région de l'écran,
+                      à tour de rôle tout en haut, tout en bas ou sur les côtés, loin d'elle ; elle ralentit en arrivant ;
+                      sa vitesse varie toute seule (changements de rythme) ;
+       2 « flotte » : légère comme un ballon, elle monte doucement en ondulant jusqu'en haut de l'image… puis devient
+                      lourde et tombe jusqu'en bas en prenant de la vitesse (petit rebond) ; de temps en temps une petite
+                      accélération (un élan) dans une direction au hasard.
+     Dans les deux cas : jamais sur ton visage (cheveux et barbe compris : elle est repoussée, et ne peut pas y entrer),
+     elle va jusqu'aux bords de l'image (haut et bas compris) ; pour passer au-dessus ou en dessous de toi, elle rapetisse
+     (elle s'éloigne) ; elle suit ta tête (le dernier endroit vu si tu disparais), sa taille change au hasard,
+     elle penche dans le sens où elle va. Opaque : transparente seulement en apparaissant et en disparaissant.
      Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
   const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage · tk = tête du filtre (sinon beau gosse)
     const u = (a, b) => a + Math.random() * (b - a), V = Math.max(.2, C.TETES_VITESSE || 1), cl = (v, a, b) => Math.max(a, Math.min(b, v));
-    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, wp:[], tz:[], vx:0, ph:u(0, 6.2832) });
-    if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu) : le centre du cadre
+    const mode = ['flotte', '2'].includes(String(C.TETES_MOUVEMENT)) ? 2 : 1;
+    const sc = W / 1920, h1 = Math.min(dt, .05);             // forces à l'échelle de l'image · pas de temps borné
+    const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, tz:[],
+                                       ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, tC:0, phase:1, tP:u(2, 4), tE:u(1.5, 4) });
+    if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu)
     const F0 = sp.f || { x:W * .5, y:H * .42, fw:H * .1 };
-    const herm = (arr, key) => {                             // courbe douce entre des valeurs tirées au sort (vitesse continue)
+    /* taille : petite ↔ grande, au hasard, n'importe où */
+    const herm = (arr, key) => {
       let i = 1; while (i < arr.length - 2 && arr[i + 1].t <= el) i++;
       const A0 = arr[i - 1], A1 = arr[i], A2 = arr[i + 1], A3 = arr[i + 2] || A2, h = A2.t - A1.t;
       const s = cl((el - A1.t) / h, 0, 1), s2 = s * s, s3 = s2 * s;
       const m1 = (A2[key] - A0[key]) / Math.max(.5, A2.t - A0.t), m2 = (A3[key] - A1[key]) / Math.max(.5, A3.t - A1.t);
       return (2 * s3 - 3 * s2 + 1) * A1[key] + (s3 - 2 * s2 + s) * h * m1 + (-2 * s3 + 3 * s2) * A2[key] + (s3 - s2) * h * m2;
     };
-    /* taille : petite ↔ grande, au hasard, n'importe où */
     while (sp.tz.length < 4 || sp.tz[sp.tz.length - 2].t <= el) {
       const q = sp.tz[sp.tz.length - 1];
       sp.tz.push({ z:q ? (q.z > .5 ? u(0, .45) : u(.55, 1)) : u(0, 1), t:q ? q.t + u(.6, 1.4) * (C.TETES_TAILLE_RYTHME || 7) / V : -u(1, 4) });
     }
     while (sp.tz.length > 4 && sp.tz[2].t <= el) sp.tz.shift();
-    const TT = tk ? C.TETE_TAILLE || 1 : 1, hMin = H * C.BEAU_TAILLE * C.BEAU_LOIN * TT;
-    const z = cl(herm(sp.tz, 'z'), 0, 1), hWant = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * TT;
-    const spr = tk ? null : beauSprite();
-    const mx = tk ? .45 : .32, mt = tk ? .6 : .36, mb = tk ? .6 : .4;   // marges au bord de l'image (oreilles, bouche… débordent)
-    const geo = hh => {                                      // encombrement de sa tête et bord intérieur du cadre, pour une taille donnée
-      const k = tk ? hh / 442 : hh / 670, sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;
-      return { hh, k, sw, sh, iA:1.35 * F0.fw + .42 * sw, iT:2.1 * F0.fw + .42 * sh, iB:1.6 * F0.fw + .42 * sh };   // ton visage (+ cheveux, barbe) + sa tête
-    };
-    /* le cadre : distance depuis ton visage, dans une direction, jusqu'au bord intérieur et jusqu'au bord extérieur (l'écran) */
-    const rin = (G, th) => { const c = Math.abs(Math.cos(th)), s = Math.sin(th), b = s < 0 ? G.iT : G.iB;   // rectangle aux coins arrondis
-      return 1 / Math.pow(Math.pow(c / G.iA, 4) + Math.pow(Math.abs(s) / b, 4), .25); };
-    const rout = (G, th) => { const c = Math.cos(th), s = Math.sin(th), x0 = G.sw * mx, x1 = W - G.sw * mx, y0 = G.sh * mt, y1 = H - G.sh * mb;
-      let t = 1e9; if (c > 1e-4) t = Math.min(t, (x1 - F0.x) / c); if (c < -1e-4) t = Math.min(t, (x0 - F0.x) / c);
-      if (s > 1e-4) t = Math.min(t, (y1 - F0.y) / s); if (s < -1e-4) t = Math.min(t, (y0 - F0.y) / s); return Math.max(0, t); };
-    const Gmin = geo(hMin), place0 = th => rout(Gmin, th) - rin(Gmin, th) > .25 * Gmin.sw;   // assez de place de ce côté (au moins en petit)
-    /* le chemin autour de toi : côté (angle) et écart dans le cadre (0 = contre ton visage · 1 = au bord) tirés au sort */
-    while (sp.wp.length < 4 || sp.wp[sp.wp.length - 2].t <= el) {
-      const q = sp.wp[sp.wp.length - 1];
-      if (!q) { let th, n = 0; do th = u(0, 6.2832); while (!place0(th) && ++n < 60); sp.wp.push({ th, r:u(.15, .8), t:-u(1, 3) }); continue; }
-      const court = Math.random() < .25;                     // 1 fois sur 4 : petit déplacement lent
-      let th = q.th, n = 0, ok = false;
-      while (!ok && n++ < 60) {
-        const sg = (sp.dir = (sp.dir || 1) * (Math.random() < .7 ? 1 : -1));   // il garde souvent son sens : il fait vraiment le tour
-        th = q.th + sg * (court ? u(.3, .7) : u(.9, 2.6)); ok = true;
-        for (let a2 = Math.min(q.th, th); a2 <= Math.max(q.th, th); a2 += .12) if (!place0(a2)) { ok = false; break; }   // jamais à travers un côté sans place
+    const colK = x => 1 - .5 * cl(1 - (Math.abs(x - F0.x) - 1.1 * F0.fw) / (1.3 * F0.fw), 0, 1);   // au-dessus / en dessous de toi : plus petite
+    sp.kp = (sp.kp || 1) + (colK(sp.x == null ? -1e4 : sp.x) - (sp.kp || 1)) * Math.min(1, h1 * 2.5);
+    const z = cl(herm(sp.tz, 'z'), 0, 1), hh = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp;
+    const spr = tk ? null : beauSprite(), k = tk ? hh / 442 : hh / 670;
+    const sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;   // même encombrement que beau gosse (halo compris)
+    const mx = tk ? .42 : .32, mt = tk ? .3 : .28, mb = tk ? .3 : .3;   // marges : elle peut aller jusqu'au bord de l'image (haut et bas compris)
+    const X0 = sw * mx, X1 = W - sw * mx, Y0 = sh * mt, Y1 = H - sh * mb;
+    /* ton visage (+ cheveux, barbe) + sa tête : un rectangle aux coins arrondis où elle n'entre jamais */
+    const zA = ks => 1.35 * F0.fw + .42 * sw * ks, zT = ks => 1.85 * F0.fw + .4 * sh * ks, zB = ks => 1.55 * F0.fw + .4 * sh * ks;
+    const iA = zA(1), iT = zT(1), iB = zB(1);
+    const fz = (x, y, ks = 1) => { const dx = x - F0.x, dy = y - F0.y, b = dy < 0 ? zT(ks) : zB(ks);   // 1 = au bord de la zone interdite · < 1 = dedans
+      return Math.pow(Math.pow(Math.abs(dx) / zA(ks), 4) + Math.pow(Math.abs(dy) / b, 4), .25); };
+    const libre = (x, y) => { const ks = colK(x) / sp.kp;     // (avec la taille qu'elle aura là-bas)
+      return x > X0 && x < X1 && y > sh * ks * mt && y < H - sh * ks * mb && fz(x, y, ks) > 1.15; };
+    if (sp.x == null) {                                      // départ : un endroit libre au hasard, déjà en mouvement
+      let x, y, n = 0; do { x = u(X0, X1); y = u(Y0, Y1); } while (!libre(x, y) && ++n < 80);
+      const a0 = u(0, 6.2832); Object.assign(sp, { x, y, vx:Math.cos(a0) * 60 * sc, vy:Math.sin(a0) * 60 * sc });
+    }
+    /* les forces qui la poussent */
+    let ax = 0, ay = 0, vmax;
+    const doux = (t, p) => (Math.sin(t * .31 + p) + Math.sin(t * .53 + p * 1.7) * .7 + Math.sin(t * .97 + p * 2.3) * .4) / 2.1;   // bruit doux (-1 → 1)
+    const pousse = (fx2, fy2, max) => { const m = Math.hypot(fx2, fy2); if (m > max) { fx2 *= max / m; fy2 *= max / m; } ax += fx2; ay += fy2; };
+    if (mode === 1) {
+      vmax = (110 + 70 * doux(el, sp.np[0])) * sc * V;       // sa vitesse varie toute seule (changements de rythme)
+      sp.wa += u(-1, 1) * 2.4 * h1;                          // errance (Reynolds) : un point qui se promène sur un cercle devant elle
+      const sv = Math.hypot(sp.vx, sp.vy) || 1, hx = sp.vx / sv, hy = sp.vy / sv;
+      const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1;
+      pousse(tx / tm * vmax - sp.vx, ty / tm * vmax - sp.vy, 160 * sc);
+      if (!sp.cible || el > sp.tC || Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) {   // exploration : une autre région, loin d'elle
+        const zn = sp.zone === 'haut' ? ['bas', 'bas', 'cote'] : sp.zone === 'bas' ? ['haut', 'haut', 'cote'] : ['haut', 'haut', 'bas'];
+        const z0 = zn[Math.floor(Math.random() * zn.length)], essais = [z0, z0 === 'haut' ? 'bas' : 'haut', 'cote'];
+        let best = null, bd = -1, zb = null;
+        for (const zo of essais) { if (best) break;
+          for (let n = 0; n < 40; n++) {
+            const yt = Y0 + (Y1 - Y0) * (zo === 'haut' ? u(-.25, .12) : zo === 'bas' ? u(.88, 1.25) : u(.15, .85));   // tout en haut · tout en bas · sur les côtés
+            const x = u(X0, X1), y = cl(yt, 0, H); if (!libre(x, y)) continue;
+            const d = Math.hypot(x - sp.x, y - sp.y) * u(.7, 1.3); if (d > bd) { bd = d; best = [x, y]; zb = zo; } } }
+        sp.cible = best; sp.zone = zb;           // le temps d'y arriver (selon la distance), puis elle repart
+        sp.tC = el + (best ? Math.hypot(best[0] - sp.x, best[1] - sp.y) / (85 * sc) : 0) / V + u(2, 5) / V;
       }
-      if (!ok) th = q.th + u(-.15, .15);
-      const r = u(.1, .85), rm = (rin(Gmin, th) + rin(Gmin, q.th)) * .5 + .45 * F0.fw;
-      const L = Math.abs(th - q.th) * rm + Math.abs(r - q.r) * 2 * F0.fw;   // longueur du trajet (px)
-      const vit = (court ? u(.025, .05) : u(.05, .1)) * W * V;   // px/s : chaque trajet a son rythme
-      sp.wp.push({ th, r, t:q.t + Math.max(1.5, L / vit) });
+      if (sp.cible) {                                         // elle y va et ralentit en arrivant
+        const dx = sp.cible[0] - sp.x, dy = sp.cible[1] - sp.y, d = Math.hypot(dx, dy) || 1, vs = vmax * Math.min(1, d / (220 * sc));
+        pousse((dx / d * vs - sp.vx) * .8, (dy / d * vs - sp.vy) * .8, 120 * sc);
+      }
+    } else {
+      vmax = 300 * sc * V;
+      const hn = (sp.y - Y0) / Math.max(1, Y1 - Y0);          // 0 = tout en haut · 1 = tout en bas
+      if (sp.phase === 1 ? (hn < .12 || el > sp.tP) : (hn > .86 || el > sp.tP)) {   // légère jusqu'en haut, puis lourde jusqu'en bas
+        sp.phase = -sp.phase; sp.tP = el + (sp.phase === 1 ? u(7, 11) : u(2.5, 4.5)) / V;
+        sp.cx = u(X0, X1);                                    // et elle dérive vers un autre endroit de l'écran
+      }
+      const dxc = (sp.cx == null ? sp.x : sp.cx) - sp.x;
+      if (sp.phase === 1) {                                   // légère : elle monte doucement en ondulant, l'air la freine beaucoup
+        ay -= 150 * sc * V; ay += 55 * sc * Math.sin(el * 1.9 + sp.ph);
+        ax += cl(dxc * .4, -90 * sc, 90 * sc) + 45 * sc * doux(el, sp.np[1]);
+        const tr = Math.exp(-1.6 * h1); sp.vx *= tr; sp.vy *= tr;
+      } else {                                                // lourde : son poids l'emporte, elle tombe de plus en plus vite
+        ay += 330 * sc * V; ax += cl(dxc * .2, -40 * sc, 40 * sc);
+        const tr = Math.exp(-.35 * h1); sp.vx *= tr; sp.vy *= tr;
+      }
+      if (el > sp.tE) {                                       // petite accélération : un élan bref dans une direction au hasard
+        sp.ea = sp.phase === 1 ? u(-3, -.15) : u(0, 6.2832); sp.ef = u(650, 1050) * sc * V; sp.eT = el + u(.18, .32);
+        sp.tE = el + u(1.2, 3.4) / V;
+      }
+      if (el < (sp.eT || 0)) { ax += Math.cos(sp.ea) * sp.ef; ay += Math.sin(sp.ea) * sp.ef; }
     }
-    while (sp.wp.length > 4 && sp.wp[2].t <= el) sp.wp.shift();
-    const th = herm(sp.wp, 'th'), rr = cl(herm(sp.wp, 'r'), 0, 1);
-    /* pas assez de place de ce côté (au-dessus de ta tête, par exemple) : il rapetisse le temps de passer */
-    let hT = hWant;
-    if (rout(geo(hT), th) - rin(geo(hT), th) < .1 * geo(hT).sw) {
-      let lo = hMin, hi = hT; for (let n = 0; n < 8; n++) { const m = (lo + hi) / 2, Gm = geo(m); if (rout(Gm, th) - rin(Gm, th) >= .1 * Gm.sw) lo = m; else hi = m; }
-      hT = lo;
-    }
-    sp.hh = sp.hh == null ? hT : sp.hh + (hT - sp.hh) * (1 - Math.exp(-dt / .25));
-    const G = geo(sp.hh), hh = G.hh, k = G.k, sw = G.sw, sh = G.sh;
-    const ia = rin(G, th), ib = Math.max(ia, Math.min(rout(G, th), ia + 2.6 * F0.fw + 1.2 * sw));   // pas trop loin
-    let x = F0.x + Math.cos(th) * (ia + rr * (ib - ia)), y = F0.y + Math.sin(th) * (ia + rr * (ib - ia));
-    y += H * .01 * Math.sin(el * 2.1 + sp.ph);                // il flotte
-    x = cl(x, sw * mx, W - sw * mx); y = cl(y, sh * mt, H - sh * mb);   // toujours dans l'image
-    if (sp.x == null) { sp.x = x; sp.y = y; }
-    const kf = 1 - Math.exp(-dt / .3); sp.x += (x - sp.x) * kf; sp.y += (y - sp.y) * kf;   // trajet adouci (0,3 s)
-    if (dt > 0) sp.vx += ((sp.x - (sp.lx == null ? sp.x : sp.lx)) / dt - sp.vx) * Math.min(1, dt * 4);
-    sp.lx = sp.x; x = sp.x; y = sp.y;
-    const rot = cl(sp.vx / (W * .5), -.14, .14) + .03 * Math.sin(el * 1.7 + sp.ph);   // il se penche dans le sens où il va, et ondule
+    { const f = fz(sp.x, sp.y);                              // ton visage : plus elle s'approche, plus elle est repoussée
+      if (f < 1.15) {
+        const dx = sp.x - F0.x, dy = sp.y - F0.y, b = dy < 0 ? iT : iB;
+        const gx = Math.sign(dx) * Math.pow(Math.abs(dx) / iA, 3) / iA, gy = Math.sign(dy) * Math.pow(Math.abs(dy) / b, 3) / b, gm = Math.hypot(gx, gy) || 1;
+        const st = 1100 * sc * Math.pow((1.15 - f) / .15, 2); ax += gx / gm * st; ay += gy / gm * st;
+        if (mode === 2 && (dy < 0) === (sp.phase === -1)) ax += Math.sign(dx || 1) * st * .4;   // elle tombe sur ta tête / monte sous ton menton : elle glisse sur le côté
+      } }
+    const bord = 120 * sc, kb = 650 * sc;                    // les bords de l'image : poussée douce vers l'intérieur
+    if (sp.x < X0 + bord) ax += kb * Math.pow(1 - (sp.x - X0) / bord, 2);
+    if (sp.x > X1 - bord) ax -= kb * Math.pow(1 - (X1 - sp.x) / bord, 2);
+    if (sp.y < Y0 + bord) ay += kb * Math.pow(1 - (sp.y - Y0) / bord, 2);
+    if (sp.y > Y1 - bord) ay -= kb * (mode === 2 ? .35 : 1) * Math.pow(1 - (Y1 - sp.y) / bord, 2);
+    sp.vx += ax * h1; sp.vy += ay * h1;                      // le mouvement
+    const vv = Math.hypot(sp.vx, sp.vy), vl = vmax * (mode === 1 ? 1.25 : 1.4); if (vv > vl) { sp.vx *= vl / vv; sp.vy *= vl / vv; }
+    sp.x += sp.vx * h1; sp.y += sp.vy * h1;
+    if (sp.x < X0) { sp.x = X0; sp.vx = Math.abs(sp.vx) * .4; } if (sp.x > X1) { sp.x = X1; sp.vx = -Math.abs(sp.vx) * .4; }
+    if (sp.y < Y0) { sp.y = Y0; sp.vy = Math.abs(sp.vy) * .4; } if (sp.y > Y1) { sp.y = Y1; sp.vy = -Math.abs(sp.vy) * .4; }
+    { const f = fz(sp.x, sp.y);                              // jamais dedans (si tu bouges vite vers elle : ramenée au bord de la zone)
+      if (f < 1) {
+        sp.x = F0.x + (sp.x - F0.x) / Math.max(.05, f); sp.y = F0.y + (sp.y - F0.y) / Math.max(.05, f);
+        sp.x = cl(sp.x, X0, X1); sp.y = cl(sp.y, Y0, Y1);
+      } }
+    const x = sp.x, y = sp.y + H * .008 * Math.sin(el * 2.1 + sp.ph);   // elle flotte
+    sp.vx2 = (sp.vx2 || 0) + (sp.vx - (sp.vx2 || 0)) * Math.min(1, h1 * 4);
+    const rot = cl(sp.vx2 / (W * .5), -.16, .16) + .03 * Math.sin(el * 1.7 + sp.ph);   // elle penche dans le sens où elle va, et ondule
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
-    const alpha = Math.min(ap, amt);                         // opaque : transparent seulement en apparaissant et en disparaissant
+    const alpha = Math.min(ap, amt);                         // opaque : transparente seulement en apparaissant et en disparaissant
     if (alpha > .01) {
-      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot);
+      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el)));   // Chad : il penche la tête en levant le sourcil
       if (tk) {                                              // tête du filtre : composée à part (animations comprises), posée en une fois
         const L = Math.max(2, Math.ceil((512 + 2 * T_PAD) * k)), lc = teteLayer(L), lg = lc.getContext('2d');
         lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalAlpha = 1; lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, lc.width, lc.height);
         lg.setTransform(k, 0, 0, k, T_PAD * k, T_PAD * k);
         teteDraw(lg, tk, el, sp.tst, dt);
         g.drawImage(lc, 0, 0, L, L, -L / 2, -L / 2, L, L);  // (x, y) = milieu de la boule
-      } else g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);   // (x, y) = milieu de son visage
+      } else {                                               // beau gosse (Chad) : visage normal tout prêt, ou l'animation du sourcil
+        const kk = beauAnimK(el);
+        if (kk > .002) { g.translate(-sw / 2, -sh * .47); g.scale(sw / spr.width, sh / spr.height); g.drawImage(BEAU_NU, 0, 0); g.translate(70, 70); beauParts(g, kk); }
+        else g.drawImage(spr, -sw / 2, -sh * .47, sw, sh);   // (x, y) = milieu de son visage
+      }
       g.restore();
     }
     if (tk) return;                                          // les étoiles : réservées à Chad
@@ -2420,17 +2519,21 @@ const paatBeauEyes = (g, S) => {
   });
   const EXA_N = 5, EXA_M1 = .7, EXA_NT = .5, EXA_M2 = .7;    // grimace → « :) » (s) · on tient le « :) » · « :) » → grimace suivante
   EXA.forEach(E => { if (!E.oR) E.oR = oeilD(E.oL); });      // œil droit = miroir du gauche (sauf grimace)
-  /* une grimace (ou un mélange de deux) dessinée en direct · wk = poids de chaque grimace (décors : larmes, sueur, rides) */
-  const exaFace = (g, E, S, wk) => {
-    for (const [x, y, rx, ry, al] of E.joues) tJoue(g, x, y, rx, ry, al);
-    /* bouche */
+  /* le contour de la bouche d'une grimace (ou d'un mélange) */
+  const exaBouche = E => {
     const T = catmull(E.top, 3), B = catmull(E.bot, 3), mp = new Path2D();
     T.forEach(([x, y], i) => i ? mp.lineTo(x, y) : mp.moveTo(x, y)); for (let i = B.length - 1; i >= 0; i--) mp.lineTo(B[i][0], B[i][1]); mp.closePath();
     const yTop = x => { for (let i = 0; i < T.length - 1; i++) { const a = T[i], b = T[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) return a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); } return null; };
     const yBot = x => { let m = null; for (let i = 0; i < B.length - 1; i++) { const a = B[i], b = B[i + 1]; if ((x - a[0]) * (x - b[0]) <= 0 && a[0] !== b[0]) { const y = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]); if (m == null || y > m) m = y; } } return m; };
-    let y0 = 1e9, y1 = -1e9; T.concat(B).forEach(([, y]) => { y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
-    tFill(g, mp, '#3a0a08', '#160302', y0, y1);
-    g.save(); g.clip(mp);
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; T.concat(B).forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+    return { T, B, mp, yTop, yBot, x0, x1, y0, y1 };
+  };
+  /* l'intérieur d'une bouche, dessiné une fois pour toutes dans sa position finale (comme un calque de dents placé
+     sous un masque en animation) : fond sombre, langue, luette, dents déjà serrées. Rien n'est découpé ici : c'est
+     le contour de la bouche, quand il s'ouvre ou se ferme, qui en montre plus ou moins. */
+  const exaInterieur = (g, E, box) => {
+    const { yTop, yBot } = exaBouche(E), [bx0, by0, bx1, by1] = box, r = new Path2D(); r.rect(bx0, by0, bx1 - bx0, by1 - by0);
+    tFill(g, r, '#3a0a08', '#160302', by0, by1);
     const [lx, ly, lrx, lry, la] = E.lg; if (la > .01) { g.globalAlpha = la; tLangue(g, lx, ly, lrx, lry); g.globalAlpha = 1; }
     const [ux, uy, uh, ua] = E.lu; if (ua > .01) {
       const p = new Path2D(); p.moveTo(ux - uh * .22, uy); p.bezierCurveTo(ux - uh * .2, uy + uh * .7, ux - uh * .28, uy + uh, ux, uy + uh);
@@ -2443,8 +2546,8 @@ const paatBeauEyes = (g, S) => {
       const H = b - t, w = xb - xa;
       const tooth = (y, h, dir) => {                          // dir 1 = dent du haut (vers le bas) · -1 = du bas
         if (h < 1) return; const r = D.rr * Math.min(w * .35, h * .3), ye = y + dir * h, p = new Path2D();
-        p.moveTo(xa, y - dir * 40); p.lineTo(xa, ye - dir * r); p.quadraticCurveTo(xa, ye, xa + r, ye); p.lineTo(xb - r, ye);
-        p.quadraticCurveTo(xb, ye, xb, ye - dir * r); p.lineTo(xb, y - dir * 40); p.closePath();
+        p.moveTo(xa, y - dir * 60); p.lineTo(xa, ye - dir * r); p.quadraticCurveTo(xa, ye, xa + r, ye); p.lineTo(xb - r, ye);
+        p.quadraticCurveTo(xb, ye, xb, ye - dir * r); p.lineTo(xb, y - dir * 60); p.closePath();
         g.fillStyle = '#f8f5ef'; g.fill(p); g.strokeStyle = 'rgba(70,35,25,.5)'; g.lineWidth = 2.5; g.stroke(p);
       };
       if (xc >= D.ux0 && xc <= D.ux1) tooth(t, Math.min(D.uc, D.uf * H), 1);
@@ -2456,7 +2559,14 @@ const paatBeauEyes = (g, S) => {
         const y = t + (b - t) * D.uf + (k++ % 2 ? D.zz : -D.zz); k === 1 ? g.moveTo(x, y) : g.lineTo(x, y); }
       g.stroke(); g.globalAlpha = 1;
     }
-    g.restore();
+  };
+  /* une grimace (ou un mélange de deux) dessinée en direct · wk = poids de chaque grimace (décors : larmes, sueur, rides)
+     · inner = le calque de l'intérieur de la bouche (celui de la grimace qui s'ouvre ou se ferme) */
+  const exaFace = (g, E, S, wk, inner) => {
+    for (const [x, y, rx, ry, al] of E.joues) tJoue(g, x, y, rx, ry, al);
+    /* bouche : le contour bouge, l'intérieur (dents déjà serrées, langue…) est un calque tout prêt, révélé par l'ouverture */
+    const { mp } = exaBouche(E);
+    g.save(); g.clip(mp); g.drawImage(inner, -T_PAD, -T_PAD); g.restore();
     inkS(g, mp, 12);
     /* les yeux */
     const oeil = (e, flip, seed) => {
@@ -2512,11 +2622,15 @@ const paatBeauEyes = (g, S) => {
     }
     g.globalAlpha = 1;
   };
-  let EXA_BASE = null, EXA_CACHE = null;
-  const exaPrep = () => {                                    // la boule (avec son halo) et une grimace prête d'avance
+  let EXA_BASE = null, EXA_CACHE = null, EXA_IN = null;
+  const exaPrep = () => {                                    // la boule (avec son halo), l'intérieur de chaque bouche, une grimace prête d'avance
     const D = 512 + 2 * T_PAD;
     if (!EXA_BASE) EXA_BASE = tHalo(mk(D, D, g => { g.translate(T_PAD, T_PAD); tBoule(g, EXA_B); }));
     if (!EXA_CACHE) EXA_CACHE = { i:-1, cv:mk(D, D, () => {}) };
+    if (!EXA_IN) EXA_IN = EXA.map(E => mk(D, D, g => {
+      const a = exaBouche(E), n = exaBouche(EXA[EXA_N]);   // assez grand pour toutes les étapes entre « :) » et la grimace
+      g.translate(T_PAD, T_PAD); exaInterieur(g, E, [Math.min(a.x0, n.x0) - 50, Math.min(a.y0, n.y0) - 50, Math.max(a.x1, n.x1) + 50, Math.max(a.y1, n.y1) + 50]);
+    }));
   };
   const exaState = (el, st) => {                             // [de, vers, avancement 0 → 1 de la déformation, s depuis le début de la dernière déformation]
     const o = st.ord || (st.ord = [0, 1, 2, 3, 4].sort(() => Math.random() - .5)), C2 = EXA_TENUE + EXA_M1 + EXA_NT + EXA_M2;
@@ -2532,12 +2646,12 @@ const paatBeauEyes = (g, S) => {
     if (e <= 0 || a === b) {                                  // grimace tenue : dessinée une fois, puis réutilisée
       if (EXA_CACHE.i !== a) {
         const c = EXA_CACHE.cv.getContext('2d'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, D, D);
-        c.drawImage(EXA_BASE, 0, 0); c.translate(T_PAD, T_PAD); exaFace(c, EXA[a], S, EXA.map((_, k) => +(k === a))); EXA_CACHE.i = a;
+        c.drawImage(EXA_BASE, 0, 0); c.translate(T_PAD, T_PAD); exaFace(c, EXA[a], S, EXA.map((_, k) => +(k === a)), EXA_IN[a]); EXA_CACHE.i = a;
       }
       g.drawImage(EXA_CACHE.cv, -T_PAD, -T_PAD);
     } else {                                                  // en pleine déformation : dessinée en direct
       g.drawImage(EXA_BASE, -T_PAD, -T_PAD);
-      exaFace(g, mixV(EXA[a], EXA[b], e), S, EXA.map((_, k) => (k === a ? 1 - e : 0) + (k === b ? e : 0)));
+      exaFace(g, mixV(EXA[a], EXA[b], e), S, EXA.map((_, k) => (k === a ? 1 - e : 0) + (k === b ? e : 0)), EXA_IN[a === EXA_N ? b : a]);
     }
   };
 
@@ -2555,19 +2669,22 @@ const paatBeauEyes = (g, S) => {
     t -= C_TENUE; if (t < C_REPLI) { const f = t / C_REPLI; return 1 - f * f * (3 - 2 * f); }
     return 0;
   };
-  const contentBouche = (g, e) => {
+  let C_IN = null;                                           // l'intérieur du grand sourire, prêt d'avance (dents serrées)
+  const contentInterieur = () => C_IN || (C_IN = mk(512 + 2 * T_PAD, 512 + 2 * T_PAD, g => {
+    g.translate(T_PAD, T_PAD);
+    const T = catmull(C_GRIN.top, 3), B = catmull(C_GRIN.bot, 3);
+    g.fillStyle = '#f6f3ee'; g.fillRect(-80, 180, 672, 380);
+    const sh = g.createLinearGradient(0, 330, 0, 512); sh.addColorStop(0, 'rgba(90,70,60,0)'); sh.addColorStop(1, 'rgba(90,70,60,.22)');
+    g.fillStyle = sh; g.fillRect(-80, 180, 672, 380);
+    g.strokeStyle = P_INK; g.lineCap = 'round'; g.lineWidth = 8; g.beginPath();   // les dents serrées (au milieu du grand sourire)
+    T.forEach(([x, y], i) => { const q = B[i]; i ? g.lineTo((x + q[0]) / 2, (y + q[1]) / 2) : g.moveTo((x + q[0]) / 2, (y + q[1]) / 2); }); g.stroke();
+    g.lineWidth = 4.5; g.globalAlpha = .75;
+    for (let x = -10; x <= 522; x += 38) { const d = (x - 256) / 300; g.beginPath(); g.moveTo(x - d * 30, 200); g.lineTo(x + d * 40, 560); g.stroke(); }
+  }));
+  const contentBouche = (g, e) => {                          // le contour s'ouvre et montre les dents déjà serrées
     const T = catmull(mixV(C_SMILE, C_GRIN.top, e), 3), B = catmull(mixV(C_SMILE, C_GRIN.bot, e), 3), mp = new Path2D();
     T.forEach(([x, y], i) => i ? mp.lineTo(x, y) : mp.moveTo(x, y)); for (let i = B.length - 1; i >= 0; i--) mp.lineTo(B[i][0], B[i][1]); mp.closePath();
-    if (e > .02) {
-      g.save(); g.globalAlpha = Math.min(1, e * 3); g.fillStyle = '#f6f3ee'; g.fill(mp); g.clip(mp);
-      const sh = g.createLinearGradient(0, 330, 0, 512); sh.addColorStop(0, 'rgba(90,70,60,0)'); sh.addColorStop(1, 'rgba(90,70,60,.22)');
-      g.fillStyle = sh; g.fill(mp);
-      g.strokeStyle = P_INK; g.lineCap = 'round'; g.lineWidth = 8; g.beginPath();   // les dents serrées (au milieu de la bouche)
-      T.forEach(([x, y], i) => { const q = B[i]; i ? g.lineTo((x + q[0]) / 2, (y + q[1]) / 2) : g.moveTo((x + q[0]) / 2, (y + q[1]) / 2); }); g.stroke();
-      g.lineWidth = 4.5; g.globalAlpha *= .75;
-      for (let x = -10; x <= 522; x += 38) { const d = (x - 256) / 300; g.beginPath(); g.moveTo(x - d * 30, 200); g.lineTo(x + d * 40, 560); g.stroke(); }
-      g.restore();
-    }
+    if (e > .005) { g.save(); g.clip(mp); g.drawImage(contentInterieur(), -T_PAD, -T_PAD); g.restore(); }
     inkS(g, mp, 11);
   };
   const star5 = (g, x, y, r, rot) => {                       // étoile à 5 branches
@@ -2733,8 +2850,10 @@ const paatBeauEyes = (g, S) => {
     for (const k in T_SPR) if (!k.startsWith(key)) delete T_SPR[k];
     if (key !== 'mini') MINI = null;
     if (key !== 'chat') KAWAI_PEAU = null;
-    if (key !== 'exagere') { EXA_BASE = null; EXA_CACHE = null; }
+    if (key !== 'exagere') { EXA_BASE = null; EXA_CACHE = null; EXA_IN = null; }
+    if (key !== 'content') C_IN = null;
     if (key === 'mini') miniParts(); else if (key === 'exagere') exaPrep(); else teteSprite(key);
+    if (key === 'content') contentInterieur();
     if (key === 'chat') kawaiPeau();
   };
   const TETE_KEYS = new Set(['content', 'benet', 'mini', 'pleure', 'chat', 'exagere', 'fache']);   // filtres qui ont leur tête de Paatrice
@@ -2745,7 +2864,36 @@ const paatBeauEyes = (g, S) => {
     return T_LAYER;
   };
 
+  let EYE_CUT = null;                                       // exagéré : toile où l'on découpe tes yeux
   const STK = {
+    /* 🤯 exagéré : yeux grands ouverts → tes yeux se « détachent » : chacun est découpé dans l'image de la caméra (bords fondus)
+       et reposé par-dessus, agrandi jusqu'à ×4 : ils débordent sur ton front, tes cheveux, ta barbe */
+    exagere: (g, P, a, el, dt, v) => {
+      const b = fx.bs || {}, ew = ((b.eyeWideLeft || 0) + (b.eyeWideRight || 0)) / 2, bu = b.browInnerUp || 0;
+      const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));
+      fx.yeuxO = (fx.yeuxO || 0) + (wo - (fx.yeuxO || 0)) * Math.min(1, dt * 7);   // lissé (ça ne clignote pas)
+      const o = fx.yeuxO; if (o < .04 || !v || !v.videoWidth) return;
+      const sx = v.videoWidth / g.canvas.width, sy = v.videoHeight / g.canvas.height, e = o * o * (3 - 2 * o);
+      const cut = EYE_CUT || (EYE_CUT = document.createElement('canvas')), cg = cut.getContext('2d');
+      for (const ring of EYE_RING) {
+        const src = ring.map(i => fx.sm[i]); if (src.some(q => !q)) continue;
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; src.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rw = (x1 - x0) * .8, rh = Math.max((y1 - y0) * 1.25, rw * .64);   // l'œil + un peu de paupière
+        let d0 = 1e9, d1 = -1e9; ring.forEach(i => { const q = warpPos(fx.sm[i]); d0 = Math.min(d0, q[0]); d1 = Math.max(d1, q[0]); });
+        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0)) * (1 + 3 * e);   // toujours plus grand que l'œil déjà grossi
+        const W2 = Math.ceil(rw * 2), H2 = Math.ceil(rh * 2);
+        if (cut.width < W2 || cut.height < H2) { cut.width = Math.max(cut.width, W2); cut.height = Math.max(cut.height, H2); }
+        cg.setTransform(1, 0, 0, 1, 0, 0); cg.globalCompositeOperation = 'source-over'; cg.clearRect(0, 0, cut.width, cut.height);
+        cg.drawImage(v, (cx - rw) * sx, (cy - rh) * sy, rw * 2 * sx, rh * 2 * sy, 0, 0, W2, H2);   // ton œil, tel que la caméra le voit
+        cg.globalCompositeOperation = 'destination-in';                                           // bords fondus (ovale)
+        cg.translate(rw, rh); cg.scale(1, rh / rw);
+        const mg = cg.createRadialGradient(0, 0, rw * .5, 0, 0, rw); mg.addColorStop(0, 'rgba(0,0,0,1)'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+        cg.fillStyle = mg; cg.beginPath(); cg.arc(0, 0, rw, 0, 6.2832); cg.fill();
+        g.save(); g.globalAlpha = a * Math.min(1, o / .18);
+        g.drawImage(cut, 0, 0, W2, H2, c[0] - rw * kd, c[1] - rh * kd, rw * 2 * kd, rh * 2 * kd);
+        g.restore();
+      }
+    },
     /* 🤪 benêt : de la bave bleue qui déborde de ta lèvre du bas (au milieu, un peu à droite) et pend en coulures aux bouts ronds ;
        la plus longue s'allonge puis lâche une goutte, toutes les 2,8 s (même dessin que la tête de Paatrice benêt) */
     benet: (g, P, a, el) => {
