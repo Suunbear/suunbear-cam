@@ -32,9 +32,9 @@
      &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
                    = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
                      angle de tête/corps qui le fait changer de côté, sans suivi du corps
-     &paat=0       = sans les têtes de Paatrice
+     &paat=0       = sans les têtes de Paatrice (les 8 filtres, Chad compris)
      &zone=0       = têtes sur toute l'image (sans lire le rognage de la caméra dans OBS)
-     &obs=…        = mot de passe du serveur WebSocket d'OBS (seulement si tu en mets un) (les 8 filtres, Chad compris)
+     &obs=…        = mot de passe du serveur WebSocket d'OBS (seulement si tu en mets un)
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI, un bouton par filtre :
@@ -106,7 +106,7 @@ const CONFIG = {
   PAAT_DOS_X       : 1.2,   // point de ton dos d'où il « sort » (épaule) : écart sur le côté…
   PAAT_DOS_Y       : 2.4,   // … et hauteur sous tes yeux
   PAAT_MAINS       : 1.0,   // taille de ses mains
-  PAAT_MAINS_X     : 2.05,  // ses deux mains, du même côté (le sien) : écart de la 1re à côté de ton visage (jamais devant)
+  PAAT_MAINS_X     : 2.05,  // ses deux mains : écart de chaque côté de ton visage (jamais devant)
   PAAT_MAINS_Y     : 1.15,  // … hauteur du poignet (le doigt monte jusqu'à tes yeux)
   PAAT_AVANTBRAS   : 1.6,   // avant-bras musclé façon Popeye · 1 = comme la cam tel
   PAAT_BRAS        : "tatoue",   // "tatoue" (muscle + soleil sur l'épaule) · "muscle" · "poilu" · "nouille" · "simple"
@@ -271,6 +271,23 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   };
   /* Exagéré : déformations recalculées à chaque image d'après tes expressions (0 → 1), amplifiées */
   const EXA_IDS = [152, 148, 377, 176, 400, 17, 14, 13, 84, 314, 61, 291, 50, 280, 145, 374, 159, 386, 107, 336, 105, 334, 70, 300, 1, 132, 361, 58, 288];
+  /* exagéré : yeux écarquillés (0 → 1), même quand tu n'es pas de face : le plus ouvert des deux yeux (blendshapes),
+     ou l'écart de tes paupières comparé à la hauteur de ton visage (qui ne rétrécit pas quand tu tournes la tête) et à ton habitude */
+  const yeuxGrands = () => {
+    const now = performance.now(); if (fx.yg && now - fx.yg.t < 8) return fx.yg.w;
+    const b = fx.bs || {}, vb = n => b[n] || 0, L = fx.sm || [], T = L[10], Ch = L[152];
+    let w = (Math.max(vb('eyeWideLeft'), vb('eyeWideRight')) - .05) / .3 + .4 * Math.max(0, vb('browInnerUp') - .35);
+    if (T && Ch) {
+      const fh = Math.hypot(Ch[0] - T[0], Ch[1] - T[1]) || 1; let o = 0;
+      for (const [i, j] of [[159, 145], [386, 374]]) { const p = L[i], q = L[j]; if (p && q) o = Math.max(o, Math.hypot(p[0] - q[0], p[1] - q[1]) / fh); }
+      if (o > 0) {
+        const hb = fx.ygB || (fx.ygB = { base:o }), r = o / Math.max(1e-4, hb.base);
+        if (r > .7 && r < 1.12) hb.base += (o - hb.base) * .02;   // ton habitude (pas pendant un clignement ni quand tu écarquilles)
+        w = Math.max(w, (r - 1.18) / .35);
+      }
+    }
+    w = Math.max(0, Math.min(1, w)); fx.yg = { t:now, w }; return w;
+  };
   const exagereDyn = b => {
     const v = n => b[n] || 0, avg = (a, c) => (v(a) + v(c)) / 2;
     const j = Math.max(v('jawOpen'), .6 * avg('mouthLowerDownLeft', 'mouthLowerDownRight'));
@@ -301,9 +318,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
     const bulge = FX.exagere.bulge.slice();
     if (j > .03) bulge.push([[13, 14], .95 + .2 * j, .6 + .42 * j, .86 * Math.min(1, j * 1.15)]);   // bouche ouverte → énorme
-    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (jusqu'à ×4), ils débordent sur ton front et tes cheveux
+    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (jusqu'à ×4, écartés), ils débordent sur ton front et tes cheveux
        · plissés → minuscules */
-    const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));   // 0 = normal · 1 = yeux écarquillés à fond
+    const wo = yeuxGrands();                              // 0 = normal · 1 = yeux écarquillés à fond (même de profil)
     const eb = Math.max(-.65, Math.min(.6, .12 + .25 * bu - .6 * sq + .35 * wo)), er = .5 + .25 * wo, eh = .45 + .25 * wo;   // loupe modérée : le reste, ce sont tes yeux « détachés » (STK exagere)
     if (Math.abs(eb) > .03) bulge.push([EYE_R, er, eh, eb], [EYE_L, er, eh, eb]);
     return { pts, bulge };
@@ -783,9 +800,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     g.fillStyle = 'rgba(199,53,41,.55)'; for (let i = 0; i < 22; i++) g.fillRect(rnd(16, 48), rnd(20, 100), 1.6, 1.6);
   });
   /* Paatrice dessinée dans le repère courant (0..512), regard (look : -1 gauche · 0 face · 1 droite) + clignement */
-  const paatDraw = (g, S, look, blink) => {
+  const paatDraw = (g, S, look, blinkIn) => {          // blinkIn : les deux yeux (nombre) ou chacun ([gauche, droite] : clin d'œil)
     g.drawImage(S.paat, 0, 0);
+    let ei = 0;
     for (const [x, y, rx, ry, tilt] of P_EYES) {
+      const blink = Array.isArray(blinkIn) ? blinkIn[ei++] : blinkIn;
       g.save(); g.beginPath(); g.ellipse(x, y, rx + 2, ry + 2, 0, 0, 6.2832); g.clip();
       if (blink > 0) {                                       // paupière qui se ferme
         g.fillStyle = P_RED; g.fillRect(x - rx - 4, y - ry - 4, 2 * rx + 8, (2 * ry + 8) * blink);
@@ -1426,7 +1445,6 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   /* La scène Paatrice quand tu es à l'image.
      erase = true : calque transparent, on gomme là où tu es · false : image entière + toi détouré par-dessus (ancienne méthode) */
   const PAAT_RATIO = 2;                                  // hauteur du visage (front → menton) ≈ 2 écarts d'yeux (mesuré sur la cam bureau)
-  const MAIN2 = [1.3, .45];                              // derrière : sa 2e main, à côté de la 1re (écarts d'yeux vers l'extérieur, vers le bas)
   const PAAT_FACE = [1.35, -2.1, 1.6];                   // ton visage, cheveux compris (écarts d'yeux) : ±1,35 de large, de -2,1 à +1,6 → interdit aux mains, bulles…
   const paatScene = (g, P, a, el, dt, v, W, H, erase) => {
     const S = sprites();
@@ -1455,6 +1473,14 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const yawC = Math.max(0, Math.min(1, gy.yaw));
     gy.c0 += ((.5 - yawC) * C.PAAT_LACET - gy.c0) * kf;  // tête tournée : le centre de ta tête n'est plus entre tes yeux
     const G = (u, w) => [mx + (rx * (u + gy.c0) + dx * w) * U, my + (ry * (u + gy.c0) + dy * w) * U];   // repère de TON visage
+    /* … le même, « stabilisé » pour ses mains : lissé quand tu bouges peu (plus de tremblements du suivi), vif quand tu bouges vite */
+    const fs = gy.fs || (gy.fs = { mx, my, rx, ry, U, c0:gy.c0 });
+    { const vit = Math.hypot(mx - fs.mx, my - fs.my) / Math.max(1e-3, dt) / Math.max(1, U);   // ta vitesse, en écarts d'yeux par seconde
+      const kS = 1 - Math.exp(-dt / Math.max(.03, .18 - .05 * vit));
+      fs.mx += (mx - fs.mx) * kS; fs.my += (my - fs.my) * kS; fs.rx += (rx - fs.rx) * kS; fs.ry += (ry - fs.ry) * kS;
+      fs.U += (U - fs.U) * kS; fs.c0 += (gy.c0 - fs.c0) * kS;
+      const nn = Math.hypot(fs.rx, fs.ry) || 1; fs.rx /= nn; fs.ry /= nn; }
+    const Gs = (u, w) => [fs.mx + (fs.rx * (u + fs.c0) - fs.ry * w) * fs.U, fs.my + (fs.ry * (u + fs.c0) + fs.rx * w) * fs.U];
     const ta = Math.min(1, Math.abs(yawC - .5) * 2) * .45;   // tête tournée : ton nez et l'arrière de ta tête dépassent → on élargit
     const MX = C.PAAT_MAINS_X + ta, PF = PAAT_FACE, fx0 = PF[0] + ta;
     const face = rectOf([G(-fx0, PF[1]), G(fx0, PF[1]), G(-fx0, PF[2]), G(fx0, PF[2])]);
@@ -1474,7 +1500,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (rushing && !gy.rushSaid) { gy.rushSaid = true; gy.bub = { txt:RUSH_TXT, t0:el, dur:SD - 1.2 - se }; }
 
     /* --- de quel côté ? --- */
-    const TAI = C.PAAT_TAILLE * (1 + .15 * sk);
+    const TAI = C.PAAT_TAILLE * (1 + .15 * sk) * (1 - .2 * (gy.ec || 0));   // il s'écarte = il recule aussi un peu (plus petit)
     let R = 1.1 * U * TAI; const shrink = Math.min(1, H * .2 / R); R *= shrink;   // jamais énorme si tu es tout près
     const COTE = C.PAAT_COTE, HAUT = C.PAAT_HAUT - .45 * sk;
     const Zv = zonePx(W, H);                               // la partie visible de la caméra (fenêtre « masques et filtres »…)
@@ -1528,14 +1554,19 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const sd = gy.side;
 
     /* --- position : sa tête à côté de la tienne, plus haut ; son torse penché rentre dans ton dos --- */
-    const T = G(sd * COTE, HAUT + .1 * sk * Math.sin(el * 1.6));   // (le Stand flotte)
+    /* de temps en temps (toutes les 12 à 20 s, pendant 4 à 6 s) il s'écarte un peu de toi : il tend alors les deux bras vers toi */
+    if (gy.ecN == null) gy.ecN = el + 9 + Math.random() * 6;
+    if (el > gy.ecN && gy.st < 0 && !gy.sw) { gy.ecE = el + 4 + Math.random() * 2; gy.ecN = gy.ecE + 12 + Math.random() * 8; }
+    gy.ec = (gy.ec || 0) + ((gy.st < 0 && (el < (gy.ecE || 0) || gy.farKO) ? 1 : 0) - (gy.ec || 0)) * (1 - Math.exp(-dt * 2.5));   // (aussi quand l'autre côté de ta tête est hors de la fenêtre)
+    const ecX = MX + 2.95 * TAI * shrink + .2;             // assez loin pour tendre les bras (la fenêtre peut le retenir plus près)
+    const T = G(sd * (COTE + (ecX - COTE) * gy.ec), HAUT + 1.0 * gy.ec + .1 * sk * Math.sin(el * 1.6));   // (le Stand flotte)
     const inImg = () => { T[0] = Math.max(Zv[0] + R * 1.02, Math.min(Zv[2] - R * 1.02, T[0])); T[1] = Math.max(Zv[1] + R * 1.02, Math.min(Zv[3] - R * 1.02, T[1])); };
     inImg();                                               // sa tête reste toujours entière dans la partie visible
     {                                                      // … et ne passe jamais derrière sa propre main (ta tête trop haute dans l'image, etc.)
-      const hz = C.PAAT_MAINS * U * TAI * shrink, mg = R * .06;
-      const hrs = [handRect([G(sd * MX, C.PAAT_MAINS_Y), hz]), handRect([G(sd * (MX + MAIN2[0]), C.PAAT_MAINS_Y + MAIN2[1]), hz])];   // ses deux mains
+      const hz = C.PAAT_MAINS * U * TAI * shrink, mg = R * .06;   // ses mains de son côté (une, ou deux quand il tend les bras)
+      const hrs = gy.m === 1 ? [] : [handRect([Gs(sd * MX, C.PAAT_MAINS_Y), hz])];   // (bras tendus : ses mains sont devant lui, pas besoin)
       const hit = () => hrs.some(hr => { const cx = Math.max(hr[0] - mg, Math.min(hr[2] + mg, T[0])), cy = Math.max(hr[1] - mg, Math.min(hr[3] + mg, T[1])); return Math.hypot(T[0] - cx, T[1] - cy) < R; });
-      for (let i = 0; i < 20 && hit(); i++) { T[0] += (sd * rx * .08 - dx * .05) * R; T[1] += (sd * ry * .08 - dy * .05) * R; inImg(); }   // il s'écarte sur le côté (et un peu vers le haut)
+      for (let i = 0; i < 16 && hit(); i++) { T[0] += sd * rx * R * .1; T[1] += sd * ry * R * .1; inImg(); }   // il s'écarte sur le côté
     }
     if (!gy.init) { gy.x = T[0]; gy.y = T[1]; gy.ang = roll; gy.init = true; }
     gy.x += (T[0] - gy.x) * kf; gy.y += (T[1] - gy.y) * kf;
@@ -1550,7 +1581,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     gy.ang += (tgt - gy.ang) * kf;
     const lookT = sk > .5 ? 0 : (el % 5.2) < 3.8 ? -sd : 0;   // regard en coin vers toi… puis vers la caméra
     gy.look += (lookT - gy.look) * (1 - Math.exp(-dt * 7));
-    const bt = (el + .7) % 3.4, blink = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;   // clignement
+    const bt = (el + .7) % 3.4, bl0 = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;   // clignement
+    const wt = el % 20.8 - 19.65, wk = sk > .5 || wt < 0 || wt > .65 ? 0 : wt < .12 ? wt / .12 : wt < .45 ? 1 : 1 - (wt - .45) / .2;   // un regard aux viewers sur quatre (≈ toutes les 20 s) : clin d'œil
+    const blink = wk > 0 ? (sd > 0 ? [bl0, Math.max(bl0, wk)] : [Math.max(bl0, wk), bl0]) : bl0;
 
     let L2G = null;
     if (ps > .02) {
@@ -1560,7 +1593,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       L2G = paatFigure(g, S, hx, hy, gy.ang, k, gy.look, blink, stretch, sk > .5 ? 'stand' : 'soft');
       g.restore();
     }
-    /* deux bras : deux doigts d'honneur côte à côte, du même côté de ton visage que lui */
+    /* deux bras : un doigt de chaque côté de ton visage (le 2e bras passe derrière toi, ressort derrière ton autre épaule) */
     const hands = [];
     gy.armK = gy.sw ? 0 : Math.min(1, (gy.armK || 0) + dt / .35);   // après un changement de côté, il relève les bras
     const ap = (el < 1 ? 0 : backOut((el - 1) / .4)) * Math.min(1, a * 2) * up * backOut(gy.armK);
@@ -1573,20 +1606,58 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     };
     if (L2G && ap > .01) {
       const hh0 = C.PAAT_MAINS * U * TAI * shrink;
-      /* ses deux mains, du même côté de ton visage (le sien) : l'une contre ta tête (bras côté toi),
-         l'autre juste à côté, un peu plus bas (bras extérieur, tatoué). Épaules, poignets et coudes lissés : pas de sursauts. */
-      for (const j of [0, 1]) {
-        const ph = j ? 1.4 : 0, sh0 = j ? sd : -sd;          // sh0 : de quel côté de son corps part le bras
-        const pump = .05 * (.5 - .5 * Math.cos(el * 3.4 + ph)) * (1 + sk);   // il te les « pousse » en rythme, en douceur
-        const Wt = G(sd * (MX + MAIN2[0] * j), C.PAAT_MAINS_Y + MAIN2[1] * j - pump), mH = hh0 * .55;
-        Wt[0] = Math.max(Zv[0] + mH, Math.min(Zv[2] - mH, Wt[0])); Wt[1] = Math.max(Zv[1] + mH, Math.min(Zv[3] - mH, Wt[1]));   // dans la partie visible
-        const S0 = lisse('s' + j, L2G(256 + sh0 * 230, 600), .2), R0 = L2G(256 + sh0 * 120, 760);
-        const W0 = lisse('w' + j, [R0[0] + (Wt[0] - R0[0]) * ap, R0[1] + (Wt[1] - R0[1]) * ap], .12);
-        const Lseg = 1.15 * k * 512 / 2.2;                 // longueur bras / avant-bras : jamais de bras démesuré
-        const dn = j ? [dx + sd * rx * .6, dy + sd * ry * .6] : [dx - sd * rx * .15, dy - sd * ry * .15];   // coudes vers le bas
-        const E = lisse('c' + j, elbowIK(S0, W0, Lseg, Lseg, dn));
-        paatArm(g, S0, W0, k, [dx, dy], j ? C.PAAT_BRAS : 'muscle', el, false, { elbow:E, tat:!!j });
-        hands.push([W0, hh0 * (.4 + .6 * ap) * ps, roll + sd * (j ? .16 : .05) + .02 * Math.sin(el * 2.2 + ph), j ? sd > 0 : sd < 0, Math.min(1, ap * 3)]);
+      /* Ses doigts d'honneur, deux façons (bras aux proportions naturelles : bras = avant-bras, musclés, jamais étirés) :
+         · « autour » : un doigt de chaque côté de ta tête — un bras devant (son épaule extérieure, tatouée),
+           l'autre passe derrière ta tête (coude caché derrière ta tête) et un avant-bras normal ressort de l'autre côté ;
+         · « tendus » : quand il s'écarte de toi (ou que l'autre côté est hors d'atteinte / hors de la fenêtre),
+           il tend les deux bras vers toi, deux doigts côte à côte du même côté.
+         Pour passer de l'un à l'autre : il baisse les bras, puis les relève. Épaules, coudes et poignets lissés. */
+      const Lseg = 1.15 * k * 512 / 2.2, mH = hh0 * .55;   // longueur du bras = longueur de l'avant-bras
+      const So = lisse('so', L2G(256 + sd * 230, 600), .2), Si = lisse('si', L2G(256 - sd * 230, 600), .2);
+      const zcl = p => [Math.max(Zv[0] + mH, Math.min(Zv[2] - mH, p[0])), Math.max(Zv[1] + mH, Math.min(Zv[3] - mH, p[1]))];
+      let farT = null;                                     // l'autre côté de ta tête : à portée de son bras, et dans la partie visible ?
+      for (const uu of [MX, 1.8, 1.6]) { const p = Gs(-sd * uu, C.PAAT_MAINS_Y), q = zcl(p);
+        if (Math.hypot(q[0] - p[0], q[1] - p[1]) < hh0 * .2) { farT = p; break; } }
+      if (farT) gy.farT = farT;
+      gy.farKO = !farT;
+      const want = gy.ec > .5 || !farT ? 1 : 0;           // 0 = autour · 1 = tendus
+      if (gy.m == null) { gy.m = want; gy.mT = el; }
+      if (gy.swH == null && gy.swU == null && want !== gy.m && el - gy.mT > 1.2) { gy.swH = el; gy.mW = want; }
+      let apM = 1;
+      if (gy.swH != null) {                                // il baisse les bras…
+        const q = (el - gy.swH) / .25;
+        if (q < 1) apM = 1 - q * q;
+        else { gy.m = gy.mW; gy.mT = el; gy.swH = null; gy.swU = el; apM = 0; for (const kk of ['wO', 'wI', 'cO', 'cI']) delete lis[kk]; }
+      } else if (gy.swU != null) {                         // … et les relève dans l'autre position
+        const q = (el - gy.swU) / .35;
+        if (q < 1) apM = backOut(q); else gy.swU = null;
+      }
+      const apH = ap * apM, farP = farT || gy.farT || Gs(-sd * 1.6, C.PAAT_MAINS_Y);
+      const tend = (S, P) => {                             // bras tendu de l'épaule S vers P (jamais plus loin que ta tête), presque droit
+        const vx = P[0] - S[0], vy = P[1] - S[1], d = Math.hypot(vx, vy) || 1, L = Math.min(d, 1.8 * Lseg);
+        return [S[0] + vx / d * L, S[1] + vy / d * L];
+      };
+      let arms;
+      if (gy.m === 0) arms = [[So, Gs(sd * MX, C.PAAT_MAINS_Y), 'O'], [Si, farP, 'I']];
+      else {                                               // tendus : la main côté toi vise ta tête, l'autre juste à côté (un peu plus bas)
+        const hI = tend(Si, Gs(sd * MX, C.PAAT_MAINS_Y - .1)), u2 = fs.U;
+        arms = [[Si, hI, 'I'], [So, tend(So, [hI[0] + (fs.rx * sd * .55 - fs.ry * .4) * u2, hI[1] + (fs.ry * sd * .55 + fs.rx * .4) * u2]), 'O']];
+      }
+      for (const [S0, tgt, who] of arms) {
+        const outer = who === 'O', Wt = zcl(tgt), R0 = L2G(256 + (outer ? sd : -sd) * 120, 760);
+        let W0 = [R0[0] + (Wt[0] - R0[0]) * apH, R0[1] + (Wt[1] - R0[1]) * apH];
+        const behind = gy.m === 0 && !outer;               // le bras qui passe derrière ta tête
+        const dd = Math.hypot(W0[0] - S0[0], W0[1] - S0[1]), dm = 1.97 * Lseg;   // les bras visibles : jamais plus longs qu'un bras normal
+        if (!behind && dd > dm) W0 = [S0[0] + (W0[0] - S0[0]) * dm / dd, S0[1] + (W0[1] - S0[1]) * dm / dd];
+        W0 = lisse('w' + who, W0, .08);
+        const dn = outer ? [dx + sd * rx * .6, dy + sd * ry * .6] : [dx - sd * rx * .2, dy - sd * ry * .2];
+        /* derrière ta tête : le coude est caché derrière ta tête, à une longueur d'avant-bras de sa main (vers toi, un peu plus haut) :
+           on voit son bras partir de son épaule et disparaître derrière ta tête, puis un avant-bras normal ressortir de l'autre côté */
+        const E = lisse('c' + who, behind ? [W0[0] + (fs.rx * sd * .94 + fs.ry * .34) * Lseg, W0[1] + (fs.ry * sd * .94 - fs.rx * .34) * Lseg]
+                                          : elbowIK(S0, W0, Lseg, Lseg, dn));
+        paatArm(g, S0, W0, k, [dx, dy], outer ? C.PAAT_BRAS : 'muscle', el, false, { elbow:E, tat:outer });
+        const cote = gy.m === 1 || outer ? sd : -sd;       // côté de ta tête où est cette main : penchée vers toi
+        hands.push([W0, hh0 * (.4 + .6 * apH) * ps, roll - cote * .2, outer ? sd > 0 : sd < 0, Math.min(1, apH * 3)]);
       }
     }
     if (L2G && sk > .01) menacing(g, hx, hy + R * .6, R * .75, el, sk * up);   // ゴゴゴ (derrière toi aussi)
@@ -1633,7 +1704,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const ap = up * backOut(Math.min(1, Math.max(0, (el - .5) / .4)));
     const hands = [];
     if (ap > .01) for (const s of [-1, 1]) {               // deux bras levés, un doigt de chaque côté de sa tête
-      const ph = s > 0 ? 0 : 1.3, pump = .05 * Math.abs(Math.sin(el * 3.4 + ph));
+      const ph = s > 0 ? 0 : 1.3, pump = .04 * (.5 - .5 * Math.cos(el * 3.4 + ph));   // (en douceur : pas d'à-coups)
       const S0 = L2G(256 + s * 230, 600), Wt = L2G(256 + s * 500, 330 - pump * 300), R0 = L2G(256 + s * 150, 760);
       const E = L2G(256 + s * (300 + 150 * ap), 800 + 60 * ap);   // coude bien écarté : l'avant-bras ne cache pas l'épaule
       const W0 = [R0[0] + (Wt[0] - R0[0]) * ap, R0[1] + (Wt[1] - R0[1]) * ap];
@@ -1933,15 +2004,16 @@ const paatBeauEyes = (g, S) => {
     const doux = (t, p) => (Math.sin(t * .31 + p) + Math.sin(t * .53 + p * 1.7) * .7 + Math.sin(t * .97 + p * 2.3) * .4) / 2.1;   // bruit doux (-1 → 1)
     const pousse = (fx2, fy2, max) => { const m = Math.hypot(fx2, fy2); if (m > max) { fx2 *= max / m; fy2 *= max / m; } ax += fx2; ay += fy2; };
     vmax = (110 + 70 * doux(el, sp.np[0])) * sc * V;       // sa vitesse varie toute seule (changements de rythme)
-    if (sp.tB == null) sp.tB = el + u(2, 5) / V;            // + des petits coups d'accélérateur, au hasard (0,4 à 0,8 s, ×1,7 à ×2,5)
-    if (el > sp.tB) { sp.b0 = el; sp.bD = u(.4, .8); sp.bK = u(1.7, 2.5); sp.tB = el + u(2.5, 7) / V; }
-    const bt = sp.bD ? (el - sp.b0) / sp.bD : 1, bo = bt >= 0 && bt < 1 ? Math.sin(Math.PI * bt) : 0;
+    if (sp.tB == null) sp.tB = el + u(1.5, 4) / V;          // + des coups d'accélérateur bien visibles, au hasard (0,5 à 0,9 s, ×2,8 à ×3,8)
+    if (el > sp.tB) { sp.b0 = el; sp.bD = u(.5, .9); sp.bK = u(2.8, 3.8); sp.tB = el + u(2.5, 6) / V; }
+    const bt = sp.bD ? (el - sp.b0) / sp.bD : 1;              // départ sec (0,15 du temps), puis elle ralentit en douceur
+    const bo = bt >= 0 && bt < 1 ? (bt < .15 ? bt / .15 : Math.pow(1 - (bt - .15) / .85, 2)) : 0;
     if (bo > 0) vmax *= 1 + (sp.bK - 1) * bo;
     sp.wa += u(-1, 1) * 2.4 * h1;                          // errance (Reynolds) : un point qui se promène sur un cercle devant elle
     const sv = Math.hypot(sp.vx, sp.vy) || 1, hx = sp.vx / sv, hy = sp.vy / sv;
     const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1;
     pousse(tx / tm * vmax - sp.vx, ty / tm * vmax - sp.vy, 160 * sc);
-    if (bo > 0) { ax += hx * 420 * sc * bo; ay += hy * 420 * sc * bo; }   // le coup d'accélérateur : elle fonce droit devant
+    if (bo > 0) { ax += hx * 1100 * sc * bo; ay += hy * 1100 * sc * bo; }   // le coup d'accélérateur : elle fonce droit devant
     if (!sp.cible || el > sp.tC || Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) {   // exploration : une autre région, loin d'elle
       const zn = sp.zone === 'haut' ? ['bas', 'bas', 'cote'] : sp.zone === 'bas' ? ['haut', 'haut', 'cote'] : ['haut', 'haut', 'bas'];
       const z0 = zn[Math.floor(Math.random() * zn.length)], essais = [z0, z0 === 'haut' ? 'bas' : 'haut', 'cote'];
@@ -1994,7 +2066,9 @@ const paatBeauEyes = (g, S) => {
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
     const alpha = Math.min(ap, amt);                         // opaque : transparente seulement en apparaissant et en disparaissant
     if (alpha > .01) {
-      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el))); g.scale(pz, pz);   // Chad : il penche la tête en levant le sourcil
+      g.save(); g.globalAlpha = alpha; g.translate(x, y);
+      if (bo > .02) { const va = Math.atan2(sp.vy, sp.vx); g.rotate(va); g.scale(1 + .18 * bo, 1 - .12 * bo); g.rotate(-va); }   // étirée dans le sens où elle fonce
+      g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el))); g.scale(pz, pz);   // Chad : il penche la tête en levant le sourcil
       if (tk) {                                              // tête du filtre : composée à part (animations comprises), posée en une fois
         const L = Math.max(2, Math.ceil((512 + 2 * T_PAD) * k)), lc = teteLayer(L), lg = lc.getContext('2d');
         lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalAlpha = 1; lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, lc.width, lc.height);
@@ -2879,10 +2953,10 @@ const paatBeauEyes = (g, S) => {
   let EYE_CUT = null;                                       // exagéré : toile où l'on découpe tes yeux
   const STK = {
     /* 🤯 exagéré : yeux grands ouverts → tes yeux se « détachent » : chacun est découpé dans l'image de la caméra (bords fondus)
-       et reposé par-dessus, agrandi jusqu'à ×2 ; en grandissant ils s'écartent l'un de l'autre (jamais l'un sur l'autre : ton regard reste lisible) */
+       et reposé par-dessus, agrandi jusqu'à ×4 ; en grandissant ils s'écartent nettement l'un de l'autre (jamais l'un sur l'autre :
+       ton regard reste lisible). Marche aussi quand tu n'es pas de face (yeuxGrands). */
     exagere: (g, P, a, el, dt, v) => {
-      const b = fx.bs || {}, ew = ((b.eyeWideLeft || 0) + (b.eyeWideRight || 0)) / 2, bu = b.browInnerUp || 0;
-      const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));
+      const wo = yeuxGrands();
       fx.yeuxO = (fx.yeuxO || 0) + (wo - (fx.yeuxO || 0)) * Math.min(1, dt * 7);   // lissé (ça ne clignote pas)
       const o = fx.yeuxO; if (o < .04 || !v || !v.videoWidth) return;
       const sx = v.videoWidth / g.canvas.width, sy = v.videoHeight / g.canvas.height, e = o * o * (3 - 2 * o);
@@ -2893,12 +2967,12 @@ const paatBeauEyes = (g, S) => {
         let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; src.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
         const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rw = (x1 - x0) * .8, rh = Math.max((y1 - y0) * 1.25, rw * .64);   // l'œil + un peu de paupière
         let d0 = 1e9, d1 = -1e9; ring.forEach(i => { const q = warpPos(fx.sm[i]); d0 = Math.min(d0, q[0]); d1 = Math.max(d1, q[0]); });
-        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0)) * (1 + e);   // toujours plus grand que l'œil déjà grossi (×2 de plus au max)
+        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0)) * (1 + 3 * e);   // toujours plus grand que l'œil déjà grossi (×4 de plus au max)
         yeux.push({ cx, cy, rw, rh, c, kd });
       }
       if (yeux.length === 2) {                               // trop gros pour leur écart → ils s'écartent (chacun de son côté)
         const [A, B] = yeux, vx = B.c[0] - A.c[0], vy = B.c[1] - A.c[1], d = Math.hypot(vx, vy) || 1;
-        const need = (A.rw * A.kd + B.rw * B.kd) * .62;      // (le bord fondu commence à la moitié du rayon)
+        const need = (A.rw * A.kd + B.rw * B.kd) * .8;       // bien écartés (le bord fondu commence à la moitié du rayon)
         if (need > d) { const p = (need - d) / 2; A.c = [A.c[0] - vx / d * p, A.c[1] - vy / d * p]; B.c = [B.c[0] + vx / d * p, B.c[1] + vy / d * p]; }
       }
       for (const { cx, cy, rw, rh, c, kd } of yeux) {
