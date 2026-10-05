@@ -1474,9 +1474,7 @@ body.live #go { display:none; }
       [EYE_R, .55, .50, .72], [EYE_L, .55, .50, .72],   // gros yeux…
       [MOUTH, .92, .55, .70],                           // … et grande bouche
       [NOSE,  .28, .24, -.30]
-    ], inv:true, stk:'benet', pts:[                      // regard vide : tes iris partent chacun de leur côté (l'un un peu plus haut, l'autre plus bas)
-      [468, -.03, -.16, .26], [473, .03, -.16, .26]
-    ]},
+    ], stk:'benet' },                                   // + bave qui déborde de ta lèvre du bas
     pleure: { name:'😢 Pleure', stk:'pleure', pts:[      // gros chagrin + larmes
       [107, -.13, .05, .19], [336, -.13, .05, .19],     // sourcils intérieurs relevés et froncés
       [55,  -.07, .04, .11], [285, -.07, .04, .11],
@@ -1536,7 +1534,7 @@ body.live #go { display:none; }
       return [[1, .011 * Math.sin(el * 91), .011 * Math.sin(el * 67 + 1), 1.5]];
     }},
     /* 🤯 Exagéré : tête gonflée + TES expressions exagérées en direct (bouche ouverte → énorme, sourire → jusqu'aux oreilles…) */
-    exagere: { name:'🤯 Exagéré', dyn:true, bulge:[
+    exagere: { name:'🤯 Exagéré', dyn:true, stk:'exagere', bulge:[
       [[1, 4, 6], 1.3, 1.6, .14]                          // tête un peu gonflée (une seule loupe : pas de plis)
     ]},
     chat: { name:'🐱 Kawai', stk:'chat', bulge:[
@@ -1575,10 +1573,10 @@ body.live #go { display:none; }
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
     const bulge = FX.exagere.bulge.slice();
     if (j > .03) bulge.push([[13, 14], .95 + .2 * j, .6 + .42 * j, .86 * Math.min(1, j * 1.15)]);   // bouche ouverte → énorme
-    /* yeux : grands ouverts → ils grossissent fort et la loupe s'élargit (comme pour la bouche) : ils débordent de ton visage
+    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (jusqu'à ×4), ils débordent sur ton front et tes cheveux
        · plissés → minuscules */
     const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));   // 0 = normal · 1 = yeux écarquillés à fond
-    const eb = Math.max(-.65, Math.min(.88, .12 + .25 * bu - .6 * sq + .7 * wo)), er = .5 + .6 * wo, eh = .45 + .55 * wo;
+    const eb = Math.max(-.65, Math.min(.6, .12 + .25 * bu - .6 * sq + .35 * wo)), er = .5 + .25 * wo, eh = .45 + .25 * wo;   // loupe modérée : le reste, ce sont tes yeux « détachés » (STK exagere)
     if (Math.abs(eb) > .03) bulge.push([EYE_R, er, eh, eb], [EYE_L, er, eh, eb]);
     return { pts, bulge };
   };
@@ -1588,7 +1586,7 @@ body.live #go { display:none; }
                      152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];   // tour du visage
   const EYE_RING = [[33, 246, 161, 160, 159, 158, 157, 173, 133, 155, 154, 153, 145, 144, 163, 7],
                     [263, 466, 388, 387, 386, 385, 384, 398, 362, 382, 381, 380, 374, 373, 390, 249]];   // contour des yeux
-  const STK_PTS = { benet:[84, 17, 314, 405, 321, 61, 291], chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
+  const STK_PTS = { exagere:EYE_RING[0].concat(EYE_RING[1]), benet:[84, 17, 314, 405, 321, 87, 14, 317, 402, 318, 61, 291], chat:[10, 1, 205, 425], pleure:[145, 374, 133, 362], derriere:[10, 152, 1, 234, 454],
                     content:[468, 473].concat(EYE_R, EYE_L), fache:[468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 9, 297, 332].concat(EYE_RING[0], EYE_RING[1], FACE_OVAL) };
   Object.values(FX).forEach(f => {
     const need = new Set([33, 263]);
@@ -2330,38 +2328,67 @@ body.live #go { display:none; }
     return best;
   };
 
+  let EYE_CUT = null;                                       // exagéré : toile où l'on découpe tes yeux
   const STK = {
+    /* 🤯 exagéré : yeux grands ouverts → tes yeux se « détachent » : chacun est découpé dans l'image de la caméra (bords fondus)
+       et reposé par-dessus, agrandi jusqu'à ×4 : ils débordent sur ton front, tes cheveux, ta barbe */
+    exagere: (g, P, a, el, dt, v) => {
+      const b = fx.bs || {}, ew = ((b.eyeWideLeft || 0) + (b.eyeWideRight || 0)) / 2, bu = b.browInnerUp || 0;
+      const wo = Math.max(0, Math.min(1, (ew - .05) / .3 + .4 * Math.max(0, bu - .35)));
+      fx.yeuxO = (fx.yeuxO || 0) + (wo - (fx.yeuxO || 0)) * Math.min(1, dt * 7);   // lissé (ça ne clignote pas)
+      const o = fx.yeuxO; if (o < .04 || !v || !v.videoWidth) return;
+      const sx = v.videoWidth / g.canvas.width, sy = v.videoHeight / g.canvas.height, e = o * o * (3 - 2 * o);
+      const cut = EYE_CUT || (EYE_CUT = document.createElement('canvas')), cg = cut.getContext('2d');
+      for (const ring of EYE_RING) {
+        const src = ring.map(i => fx.sm[i]); if (src.some(q => !q)) continue;
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; src.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rw = (x1 - x0) * .8, rh = Math.max((y1 - y0) * 1.25, rw * .64);   // l'œil + un peu de paupière
+        let d0 = 1e9, d1 = -1e9; ring.forEach(i => { const q = warpPos(fx.sm[i]); d0 = Math.min(d0, q[0]); d1 = Math.max(d1, q[0]); });
+        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0)) * (1 + 3 * e);   // toujours plus grand que l'œil déjà grossi
+        const W2 = Math.ceil(rw * 2), H2 = Math.ceil(rh * 2);
+        if (cut.width < W2 || cut.height < H2) { cut.width = Math.max(cut.width, W2); cut.height = Math.max(cut.height, H2); }
+        cg.setTransform(1, 0, 0, 1, 0, 0); cg.globalCompositeOperation = 'source-over'; cg.clearRect(0, 0, cut.width, cut.height);
+        cg.drawImage(v, (cx - rw) * sx, (cy - rh) * sy, rw * 2 * sx, rh * 2 * sy, 0, 0, W2, H2);   // ton œil, tel que la caméra le voit
+        cg.globalCompositeOperation = 'destination-in';                                           // bords fondus (ovale)
+        cg.translate(rw, rh); cg.scale(1, rh / rw);
+        const mg = cg.createRadialGradient(0, 0, rw * .5, 0, 0, rw); mg.addColorStop(0, 'rgba(0,0,0,1)'); mg.addColorStop(1, 'rgba(0,0,0,0)');
+        cg.fillStyle = mg; cg.beginPath(); cg.arc(0, 0, rw, 0, 6.2832); cg.fill();
+        g.save(); g.globalAlpha = a * Math.min(1, o / .18);
+        g.drawImage(cut, 0, 0, W2, H2, c[0] - rw * kd, c[1] - rh * kd, rw * 2 * kd, rh * 2 * kd);
+        g.restore();
+      }
+    },
     /* 🤪 benêt : de la bave bleue qui déborde de ta lèvre du bas (au milieu, un peu à droite) et pend en coulures aux bouts ronds ;
        la plus longue s'allonge puis lâche une goutte, toutes les 2,8 s (même dessin que la tête de Paatrice benêt) */
     benet: (g, P, a, el) => {
-      const { dx, dy } = P, L = [84, 17, 314, 405, 321].map(i => fx.sm[i] && warpPos(fx.sm[i]));
+      const { dx, dy } = P, pick = ids => ids.map(i => fx.sm[i] && warpPos(fx.sm[i]));
+      const O = pick([84, 17, 314, 405, 321]), I = pick([87, 14, 317, 402, 318]);   // ta lèvre du bas : bord extérieur · bord intérieur (côté bouche)
       const c1 = fx.sm[61] && warpPos(fx.sm[61]), c2 = fx.sm[291] && warpPos(fx.sm[291]);
-      if (L.some(q => !q) || !c1 || !c2) return;
+      if (O.concat(I).some(q => !q) || !c1 || !c2) return;
       const s = Math.hypot(c2[0] - c1[0], c2[1] - c1[1]) / 344;   // le dessin de Paatrice, à l'échelle de ta bouche
-      const seg = [0]; for (let i = 1; i < L.length; i++) seg.push(seg[i - 1] + Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]));
-      const lip = u => {                                     // un point le long de ta lèvre du bas (u = 0 → 1)
-        const d = u * seg[seg.length - 1]; let i = 1; while (i < seg.length - 1 && seg[i] < d) i++;
-        const f = (d - seg[i - 1]) / Math.max(1e-6, seg[i] - seg[i - 1]);
-        return [L[i - 1][0] + (L[i][0] - L[i - 1][0]) * f, L[i - 1][1] + (L[i][1] - L[i - 1][1]) * f];
+      const along = L => {                                   // un point le long d'une ligne de la lèvre (u = 0 → 1)
+        const seg = [0]; for (let i = 1; i < L.length; i++) seg.push(seg[i - 1] + Math.hypot(L[i][0] - L[i - 1][0], L[i][1] - L[i - 1][1]));
+        return u => { const d = u * seg[seg.length - 1]; let i = 1; while (i < seg.length - 1 && seg[i] < d) i++;
+          const f = (d - seg[i - 1]) / Math.max(1e-6, seg[i] - seg[i - 1]); return [L[i - 1][0] + (L[i][0] - L[i - 1][0]) * f, L[i - 1][1] + (L[i][1] - L[i - 1][1]) * f]; };
       };
-      const X0 = 252, X1 = 372, t = (el % 2.8) / 2.8, U = x => .15 + .8 * (x - X0) / (X1 - X0);
+      const lo = along(O), li = along(I);
+      const X0 = 252, X1 = 372, t = (el % 2.8) / 2.8, U = x => .1 + .75 * (x - X0) / (X1 - X0);   // du milieu de ta bouche vers la droite
       const lg = t < .85 ? 64 + 40 * Math.pow(t / .85, 1.5) : 64 + 40 * Math.pow(1 - (t - .85) / .15, 2);
       const D = [[270, 19, 34, 0], [303, 23, lg, 0], [334, 18, 22, 2.1], [357, 16, 44, 3.4]]
         .map(([x, w, Lg, ph], i) => [x, w, i === 1 ? Lg : Lg * (1 + .12 * Math.sin(el * 1.7 + ph))]);
-      const th = x => 24 * Math.pow(Math.max(0, Math.sin(Math.PI * (x - X0) / (X1 - X0))), .5);
-      const bas = x => { let m = 0; for (const [cx, w, Lg] of D) { const q = (x - cx) / w; if (q * q < 1) m = Math.max(m, Math.max(0, Lg - w) + w * Math.sqrt(1 - q * q)); } return th(x) + m * Math.min(1, th(x) / 12); };
-      const at = (x, down) => { const p = lip(U(x)); return [p[0] + dx * down * s, p[1] + dy * down * s]; };
-      const p = new Path2D();
-      for (let x = X0; x <= X1; x += 2) { const q = at(x, -4); x === X0 ? p.moveTo(q[0], q[1]) : p.lineTo(q[0], q[1]); }
-      for (let x = X1; x >= X0; x -= 1.5) { const q = at(x, bas(x)); p.lineTo(q[0], q[1]); }
+      const env = x => Math.pow(Math.max(0, Math.sin(Math.PI * (x - X0) / (X1 - X0))), .5);
+      const bas = x => { let m = 0; for (const [cx, w, Lg] of D) { const q = (x - cx) / w; if (q * q < 1) m = Math.max(m, Math.max(0, Lg - w) + w * Math.sqrt(1 - q * q)); } return 14 * env(x) + m * Math.min(1, env(x) * 2); };
+      const p = new Path2D();                                // la nappe part de l'intérieur de ta bouche, recouvre ta lèvre du bas, puis pend
+      for (let x = X0; x <= X1; x += 2) { const q = li(U(x)); const r = [q[0] - dx * 6 * s, q[1] - dy * 6 * s]; x === X0 ? p.moveTo(r[0], r[1]) : p.lineTo(r[0], r[1]); }
+      for (let x = X1; x >= X0; x -= 1.5) { const q = lo(U(x)), dd = bas(x) * s; p.lineTo(q[0] + dx * dd, q[1] + dy * dd); }
       p.closePath();
       g.save(); g.globalAlpha = a;
-      const q0 = at(300, 0), q1 = at(300, 120), fg = g.createLinearGradient(q0[0], q0[1], q1[0], q1[1]);
+      const q0 = li(U(300)), fg = g.createLinearGradient(q0[0], q0[1], q0[0] + dx * 140 * s, q0[1] + dy * 140 * s);
       fg.addColorStop(0, '#7cc4f2'); fg.addColorStop(1, '#47a9eb');
       g.fillStyle = fg; g.fill(p);
       if (t >= .85) {                                        // la goutte tombe et s'efface
-        const f = (t - .85) / .15, r = 12 * s, c = at(303, th(303) + 110 + 110 * f * f);
-        g.globalAlpha = a * (1 - f); g.beginPath(); g.ellipse(c[0], c[1], r * .85, r, Math.atan2(-dx, dy), 0, 6.2832); g.fill();
+        const f = (t - .85) / .15, r = 12 * s, q = lo(U(303)), dd = (14 + 110 + 110 * f * f) * s;
+        g.globalAlpha = a * (1 - f); g.beginPath(); g.ellipse(q[0] + dx * dd, q[1] + dy * dd, r * .85, r, Math.atan2(-dx, dy), 0, 6.2832); g.fill();
       }
       g.restore();
     },
@@ -2465,10 +2492,10 @@ body.live #go { display:none; }
       /* 4. veine de colère 💢 sur le front, qui palpite */
       const fh = fx.sm[297];
       if (fh) {
-        const c0 = at(warpPos(fh), -.04, .05), sz = .19 * fw * backOut((el - .6) / .4) * (1 + .14 * beat);
+        const pz = Math.pow(beat, 2.5), c0 = at(warpPos(fh), -.04, .05), sz = .19 * fw * backOut((el - .6) / .4) * (1 + .38 * pz);
         if (sz > 1) {
           g.save(); g.translate(c0[0], c0[1]); g.rotate(roll + .35); g.scale(sz, sz); g.lineCap = 'round';
-          for (const [lw, st] of [[.2, 'rgba(110,0,10,.9)'], [.12, '#ff2a2a']]) {
+          for (const [lw, st] of [[.46, 'rgba(255,30,30,' + .38 * pz + ')'], [.2, 'rgba(110,0,10,.9)'], [.12, '#ff2a2a']]) {   // (1er trait : lueur rouge au battement)
             g.lineWidth = lw; g.strokeStyle = st; g.globalAlpha = a;
             for (let k = 0; k < 4; k++) {
               g.save(); g.rotate(k * Math.PI / 2);
@@ -2511,6 +2538,12 @@ body.live #go { display:none; }
       if (!top || !nose) return;
       const { fw, rx, ry, dx, dy } = P, roll = Math.atan2(ry, rx);
       const at = (b, u, v) => [b[0] + (rx * u + dx * v) * fw, b[1] + (ry * u + dy * v) * fw];
+      for (const i of [205, 425]) {                          // petits ronds roses sur tes joues (sous les moustaches)
+        const c = fx.sm[i] && warpPos(fx.sm[i]); if (!c) continue;
+        const rr = .3 * fw, jg = g.createRadialGradient(c[0], c[1], rr * .1, c[0], c[1], rr);
+        jg.addColorStop(0, 'rgba(255,120,160,.62)'); jg.addColorStop(.6, 'rgba(255,120,160,.38)'); jg.addColorStop(1, 'rgba(255,120,160,0)');
+        g.save(); g.globalAlpha = a; g.fillStyle = jg; g.beginPath(); g.arc(c[0], c[1], rr, 0, 6.2832); g.fill(); g.restore();
+      }
       const put = (spr, p, w, rot, alpha) => {
         const h = w * spr.height / spr.width;
         g.save(); g.globalAlpha = alpha; g.translate(p[0], p[1]); g.rotate(rot); g.drawImage(spr, -w / 2, -h / 2, w, h); g.restore();
