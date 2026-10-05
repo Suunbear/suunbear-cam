@@ -32,8 +32,9 @@
      &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
                    = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
                      angle de tête/corps qui le fait changer de côté, sans suivi du corps
-     &mouv=1 · &mouv=2 = mouvement des têtes : 1 « libre » (erre et explore) · 2 « flotte » (légère ↔ lourde, petits élans)
-     &paat=0       = sans les têtes de Paatrice (les 8 filtres, Chad compris)
+     &paat=0       = sans les têtes de Paatrice
+     &zone=0       = têtes sur toute l'image (sans lire le rognage de la caméra dans OBS)
+     &obs=…        = mot de passe du serveur WebSocket d'OBS (seulement si tu en mets un) (les 8 filtres, Chad compris)
      &brut         = diagnostic (image telle qu'elle arrive, SÉCURITÉS COUPÉES : jamais en live)
 
    SAMMI, un bouton par filtre :
@@ -75,9 +76,12 @@ const CONFIG = {
   BEAU_TAILLE      : 0.2,   // Paatrice beau gosse : hauteur de sa tête (part de la hauteur de l'image), à mi-profondeur
   BEAU_LOIN        : 0.6,   // … × ça quand elle est petite
   BEAU_PRES        : 1.6,   // … × ça quand elle est grande (la taille change au hasard, n'importe où autour de toi)
-  TETES_MOUVEMENT  : 'libre', // têtes de Paatrice : 'libre' (erre et explore tout l'écran) · 'flotte' (légère ↔ lourde, petits élans) · ou &mouv=1 / &mouv=2
-  TETES_VITESSE    : 1,     // … vitesse moyenne (1 = tranquille · 0.7 = plus lent · 1.4 = plus vif), le rythme varie tout seul
+  TETES_VITESSE    : 1,     // têtes de Paatrice : vitesse moyenne (1 = tranquille · 0.7 = plus lent · 1.4 = plus vif), le rythme varie tout seul
   TETES_TAILLE_RYTHME : 7,  // … s en moyenne entre deux changements de taille (petite ↔ grande, n'importe où dans le cadre)
+  OBS_ZONE         : true,  // … seulement dans la partie visible de la caméra (rognage des filtres « move », lu dans OBS) · false = toute l'image
+  OBS_WS           : 'ws://127.0.0.1:4455',   // serveur WebSocket d'OBS (Outils → Paramètres du serveur WebSocket, celui de SAMMI)
+  OBS_SCENE        : "Source d'origine",      // la scène où les filtres « move » déplacent la caméra…
+  OBS_SOURCE       : 'WEB CAM clone',         // … et la source qu'ils déplacent (le clone de « sc webcam », qui contient cette page)
   BEAU_APPARITION  : 1.4,   // s de fondu à l'apparition
   BEAU_ETOILES     : 2.4,   // s de la pluie d'étoiles multicolores de l'apparition
   CHAD_PAATRICE_ETOILES : 7, // Chad : étoiles qui scintillent EN PERMANENCE autour de la tête de Paatrice beau gosse
@@ -164,8 +168,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   if (get('marge') !== '') C.PAAT_MARGE = +get('marge') || 0;            // Paatrice : &marge=2 (gommage plus large autour de toi)
   if (get('haut') !== '') C.PAAT_HAUT = +get('haut');                    // Paatrice : &haut=-1.8 (sa tête plus haut)
   if (+get('mains') > 0) C.PAAT_MAINS = +get('mains');                   // Paatrice : &mains=1.2 (mains plus grandes)
-  if (get('mouv'))       C.TETES_MOUVEMENT = ['2', 'flotte'].includes(get('mouv')) ? 'flotte' : 'libre';   // têtes : &mouv=1 (libre) · &mouv=2 (flotte)
-  if (has('paat'))       C.FILTER_PAATRICE = get('paat') !== '0';        // têtes de Paatrice des 8 filtres : &paat=0 (coupées)
+  if (has('paat'))       C.FILTER_PAATRICE = get('paat') !== '0';
+  if (has('zone'))       C.OBS_ZONE = get('zone') !== '0';   // &zone=0 : têtes sur toute l'image (sans lire OBS)
+  C.OBS_PASS = get('obs');                                   // &obs=… : mot de passe du serveur WebSocket d'OBS (seulement s'il y en a un)        // têtes de Paatrice des 8 filtres : &paat=0 (coupées)
 
   const $ = s => document.querySelector(s);
   const cv = $('#fx'), vid = $('#src'), hud = $('#hud'), md = navigator.mediaDevices;
@@ -1848,24 +1853,28 @@ const paatBeauEyes = (g, S) => {
   /* Tête de Paatrice qui se balade : beau gosse (Chad) ou la tête du filtre en cours (tk).
      Elle se déplace comme un petit personnage autonome : une position, une vitesse, et des « forces » qui la poussent
      (principe des comportements de pilotage de Craig Reynolds : errance, exploration, évitement, rester dans l'image).
-     Deux façons de bouger (réglage TETES_MOUVEMENT, ou &mouv=1 / &mouv=2 dans l'adresse) :
-       1 « libre »  : elle erre de façon imprévisible (errance de Reynolds) et part explorer une autre région de l'écran,
-                      à tour de rôle tout en haut, tout en bas ou sur les côtés, loin d'elle ; elle ralentit en arrivant ;
-                      sa vitesse varie toute seule (changements de rythme) ;
-       2 « flotte » : légère comme un ballon, elle monte doucement en ondulant jusqu'en haut de l'image… puis devient
-                      lourde et tombe jusqu'en bas en prenant de la vitesse (petit rebond) ; de temps en temps une petite
-                      accélération (un élan) dans une direction au hasard.
-     Dans les deux cas : jamais sur ton visage (cheveux et barbe compris : elle est repoussée, et ne peut pas y entrer),
+     Elle erre de façon imprévisible (errance de Reynolds) et part explorer une autre région de l'écran, à tour de rôle
+     tout en haut, tout en bas ou sur les côtés, loin d'elle ; elle ralentit en arrivant ; sa vitesse varie toute seule.
+     Seulement dans la partie visible de la caméra : si un filtre « move » d'OBS la rogne en fenêtre (ex. « masques et filtres »),
+     la page lit ce rognage (OBSZ, plus bas) et elle reste dans la fenêtre, un peu plus petite.
+     Jamais sur ton visage (cheveux et barbe compris : elle est repoussée, et ne peut pas y entrer),
      elle va jusqu'aux bords de l'image (haut et bas compris) ; pour passer au-dessus ou en dessous de toi, elle rapetisse
      (elle s'éloigne) ; elle suit ta tête (le dernier endroit vu si tu disparais), sa taille change au hasard,
      elle penche dans le sens où elle va. Opaque : transparente seulement en apparaissant et en disparaissant.
      Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
+  const OBSZ = { ok:false, rect:null, err:'' };             // partie visible de la caméra, lue dans OBS (voir « Zone visible » plus bas)
   const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage · tk = tête du filtre (sinon beau gosse)
     const u = (a, b) => a + Math.random() * (b - a), V = Math.max(.2, C.TETES_VITESSE || 1), cl = (v, a, b) => Math.max(a, Math.min(b, v));
-    const mode = ['flotte', '2'].includes(String(C.TETES_MOUVEMENT)) ? 2 : 1;
-    const sc = W / 1920, h1 = Math.min(dt, .05);             // forces à l'échelle de l'image · pas de temps borné
+    const h1 = Math.min(dt, .05);                            // pas de temps borné
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, tz:[],
-                                       ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, tC:0, phase:1, tP:u(2, 4), tE:u(1.5, 4) });
+                                       ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, tC:0 });
+    /* la partie visible de l'image (rognage du filtre « move » d'OBS) : [gauche, haut, droite, bas] en pixels, qui glisse en douceur */
+    const zr = (C.OBS_ZONE && OBSZ.rect) || [0, 0, 1, 1];
+    sp.zv = sp.zv ? sp.zv.map((v, i) => v + (zr[i] - v) * Math.min(1, h1 * 5)) : zr.slice();
+    const Z = [sp.zv[0] * W, sp.zv[1] * H, sp.zv[2] * W, sp.zv[3] * H];
+    const kz = Math.pow(cl(Math.min((Z[2] - Z[0]) / W, (Z[3] - Z[1]) / H), .2, 1), .3);   // fenêtre plus petite → têtes et vitesses un peu plus petites
+    sp.kf = (sp.kf || 1) + ((sp.kfT || 1) - (sp.kf || 1)) * Math.min(1, h1 * 1.5);       // (encore plus petites s'il n'y a plus de place libre)
+    const sc = W / 1920 * kz;                                // forces à l'échelle de l'image
     if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu)
     const F0 = sp.f || { x:W * .5, y:H * .42, fw:H * .1 };
     /* taille : petite ↔ grande, au hasard, n'importe où */
@@ -1883,18 +1892,19 @@ const paatBeauEyes = (g, S) => {
     while (sp.tz.length > 4 && sp.tz[2].t <= el) sp.tz.shift();
     const colK = x => 1 - .5 * cl(1 - (Math.abs(x - F0.x) - 1.1 * F0.fw) / (1.3 * F0.fw), 0, 1);   // au-dessus / en dessous de toi : plus petite
     sp.kp = (sp.kp || 1) + (colK(sp.x == null ? -1e4 : sp.x) - (sp.kp || 1)) * Math.min(1, h1 * 2.5);
-    const z = cl(herm(sp.tz, 'z'), 0, 1), hh = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp;
+    const z = cl(herm(sp.tz, 'z'), 0, 1), hh = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp * kz * sp.kf;
     const spr = tk ? null : beauSprite(), k = tk ? hh / 442 : hh / 670;
     const sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;   // même encombrement que beau gosse (halo compris)
     const mx = tk ? .42 : .32, mt = tk ? .3 : .28, mb = tk ? .3 : .3;   // marges : elle peut aller jusqu'au bord de l'image (haut et bas compris)
-    const X0 = sw * mx, X1 = W - sw * mx, Y0 = sh * mt, Y1 = H - sh * mb;
+    let X0 = Z[0] + sw * mx, X1 = Z[2] - sw * mx, Y0 = Z[1] + sh * mt, Y1 = Z[3] - sh * mb;
+    if (X1 < X0) X0 = X1 = (Z[0] + Z[2]) / 2; if (Y1 < Y0) Y0 = Y1 = (Z[1] + Z[3]) / 2;   // fenêtre plus étroite que sa tête
     /* ton visage (+ cheveux, barbe) + sa tête : un rectangle aux coins arrondis où elle n'entre jamais */
     const zA = ks => 1.35 * F0.fw + .42 * sw * ks, zT = ks => 1.85 * F0.fw + .4 * sh * ks, zB = ks => 1.55 * F0.fw + .4 * sh * ks;
     const iA = zA(1), iT = zT(1), iB = zB(1);
     const fz = (x, y, ks = 1) => { const dx = x - F0.x, dy = y - F0.y, b = dy < 0 ? zT(ks) : zB(ks);   // 1 = au bord de la zone interdite · < 1 = dedans
       return Math.pow(Math.pow(Math.abs(dx) / zA(ks), 4) + Math.pow(Math.abs(dy) / b, 4), .25); };
     const libre = (x, y) => { const ks = colK(x) / sp.kp;     // (avec la taille qu'elle aura là-bas)
-      return x > X0 && x < X1 && y > sh * ks * mt && y < H - sh * ks * mb && fz(x, y, ks) > 1.15; };
+      return x > Z[0] + sw * ks * mx && x < Z[2] - sw * ks * mx && y > Z[1] + sh * ks * mt && y < Z[3] - sh * ks * mb && fz(x, y, ks) > 1.15; };
     if (sp.x == null) {                                      // départ : un endroit libre au hasard, déjà en mouvement
       let x, y, n = 0; do { x = u(X0, X1); y = u(Y0, Y1); } while (!libre(x, y) && ++n < 80);
       const a0 = u(0, 6.2832); Object.assign(sp, { x, y, vx:Math.cos(a0) * 60 * sc, vy:Math.sin(a0) * 60 * sc });
@@ -1903,64 +1913,41 @@ const paatBeauEyes = (g, S) => {
     let ax = 0, ay = 0, vmax;
     const doux = (t, p) => (Math.sin(t * .31 + p) + Math.sin(t * .53 + p * 1.7) * .7 + Math.sin(t * .97 + p * 2.3) * .4) / 2.1;   // bruit doux (-1 → 1)
     const pousse = (fx2, fy2, max) => { const m = Math.hypot(fx2, fy2); if (m > max) { fx2 *= max / m; fy2 *= max / m; } ax += fx2; ay += fy2; };
-    if (mode === 1) {
-      vmax = (110 + 70 * doux(el, sp.np[0])) * sc * V;       // sa vitesse varie toute seule (changements de rythme)
-      sp.wa += u(-1, 1) * 2.4 * h1;                          // errance (Reynolds) : un point qui se promène sur un cercle devant elle
-      const sv = Math.hypot(sp.vx, sp.vy) || 1, hx = sp.vx / sv, hy = sp.vy / sv;
-      const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1;
-      pousse(tx / tm * vmax - sp.vx, ty / tm * vmax - sp.vy, 160 * sc);
-      if (!sp.cible || el > sp.tC || Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) {   // exploration : une autre région, loin d'elle
-        const zn = sp.zone === 'haut' ? ['bas', 'bas', 'cote'] : sp.zone === 'bas' ? ['haut', 'haut', 'cote'] : ['haut', 'haut', 'bas'];
-        const z0 = zn[Math.floor(Math.random() * zn.length)], essais = [z0, z0 === 'haut' ? 'bas' : 'haut', 'cote'];
-        let best = null, bd = -1, zb = null;
-        for (const zo of essais) { if (best) break;
-          for (let n = 0; n < 40; n++) {
-            const yt = Y0 + (Y1 - Y0) * (zo === 'haut' ? u(-.25, .12) : zo === 'bas' ? u(.88, 1.25) : u(.15, .85));   // tout en haut · tout en bas · sur les côtés
-            const x = u(X0, X1), y = cl(yt, 0, H); if (!libre(x, y)) continue;
-            const d = Math.hypot(x - sp.x, y - sp.y) * u(.7, 1.3); if (d > bd) { bd = d; best = [x, y]; zb = zo; } } }
-        sp.cible = best; sp.zone = zb;           // le temps d'y arriver (selon la distance), puis elle repart
-        sp.tC = el + (best ? Math.hypot(best[0] - sp.x, best[1] - sp.y) / (85 * sc) : 0) / V + u(2, 5) / V;
-      }
-      if (sp.cible) {                                         // elle y va et ralentit en arrivant
-        const dx = sp.cible[0] - sp.x, dy = sp.cible[1] - sp.y, d = Math.hypot(dx, dy) || 1, vs = vmax * Math.min(1, d / (220 * sc));
-        pousse((dx / d * vs - sp.vx) * .8, (dy / d * vs - sp.vy) * .8, 120 * sc);
-      }
-    } else {
-      vmax = 300 * sc * V;
-      const hn = (sp.y - Y0) / Math.max(1, Y1 - Y0);          // 0 = tout en haut · 1 = tout en bas
-      if (sp.phase === 1 ? (hn < .12 || el > sp.tP) : (hn > .86 || el > sp.tP)) {   // légère jusqu'en haut, puis lourde jusqu'en bas
-        sp.phase = -sp.phase; sp.tP = el + (sp.phase === 1 ? u(7, 11) : u(2.5, 4.5)) / V;
-        sp.cx = u(X0, X1);                                    // et elle dérive vers un autre endroit de l'écran
-      }
-      const dxc = (sp.cx == null ? sp.x : sp.cx) - sp.x;
-      if (sp.phase === 1) {                                   // légère : elle monte doucement en ondulant, l'air la freine beaucoup
-        ay -= 150 * sc * V; ay += 55 * sc * Math.sin(el * 1.9 + sp.ph);
-        ax += cl(dxc * .4, -90 * sc, 90 * sc) + 45 * sc * doux(el, sp.np[1]);
-        const tr = Math.exp(-1.6 * h1); sp.vx *= tr; sp.vy *= tr;
-      } else {                                                // lourde : son poids l'emporte, elle tombe de plus en plus vite
-        ay += 330 * sc * V; ax += cl(dxc * .2, -40 * sc, 40 * sc);
-        const tr = Math.exp(-.35 * h1); sp.vx *= tr; sp.vy *= tr;
-      }
-      if (el > sp.tE) {                                       // petite accélération : un élan bref dans une direction au hasard
-        sp.ea = sp.phase === 1 ? u(-3, -.15) : u(0, 6.2832); sp.ef = u(650, 1050) * sc * V; sp.eT = el + u(.18, .32);
-        sp.tE = el + u(1.2, 3.4) / V;
-      }
-      if (el < (sp.eT || 0)) { ax += Math.cos(sp.ea) * sp.ef; ay += Math.sin(sp.ea) * sp.ef; }
+    vmax = (110 + 70 * doux(el, sp.np[0])) * sc * V;       // sa vitesse varie toute seule (changements de rythme)
+    sp.wa += u(-1, 1) * 2.4 * h1;                          // errance (Reynolds) : un point qui se promène sur un cercle devant elle
+    const sv = Math.hypot(sp.vx, sp.vy) || 1, hx = sp.vx / sv, hy = sp.vy / sv;
+    const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1;
+    pousse(tx / tm * vmax - sp.vx, ty / tm * vmax - sp.vy, 160 * sc);
+    if (!sp.cible || el > sp.tC || Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) {   // exploration : une autre région, loin d'elle
+      const zn = sp.zone === 'haut' ? ['bas', 'bas', 'cote'] : sp.zone === 'bas' ? ['haut', 'haut', 'cote'] : ['haut', 'haut', 'bas'];
+      const z0 = zn[Math.floor(Math.random() * zn.length)], essais = [z0, z0 === 'haut' ? 'bas' : 'haut', 'cote'];
+      let best = null, bd = -1, zb = null;
+      for (const zo of essais) { if (best) break;
+        for (let n = 0; n < 40; n++) {
+          const yt = Y0 + (Y1 - Y0) * (zo === 'haut' ? u(-.25, .12) : zo === 'bas' ? u(.88, 1.25) : u(.15, .85));   // tout en haut · tout en bas · sur les côtés
+          const x = u(X0, X1), y = cl(yt, 0, H); if (!libre(x, y)) continue;
+          const d = Math.hypot(x - sp.x, y - sp.y) * u(.7, 1.3); if (d > bd) { bd = d; best = [x, y]; zb = zo; } } }
+      sp.cible = best; sp.zone = zb;           // le temps d'y arriver (selon la distance), puis elle repart
+      sp.kfT = best ? Math.min(1, (sp.kfT || 1) + .04) : Math.max(.5, (sp.kfT || 1) * .85);   // plus aucune place libre (petite fenêtre) → elle rapetisse
+      sp.tC = el + (best ? Math.hypot(best[0] - sp.x, best[1] - sp.y) / (85 * sc) : 0) / V + u(2, 5) / V;
+    }
+    if (sp.cible) {                                         // elle y va et ralentit en arrivant
+      const dx = sp.cible[0] - sp.x, dy = sp.cible[1] - sp.y, d = Math.hypot(dx, dy) || 1, vs = vmax * Math.min(1, d / (220 * sc));
+      pousse((dx / d * vs - sp.vx) * .8, (dy / d * vs - sp.vy) * .8, 120 * sc);
     }
     { const f = fz(sp.x, sp.y);                              // ton visage : plus elle s'approche, plus elle est repoussée
       if (f < 1.15) {
         const dx = sp.x - F0.x, dy = sp.y - F0.y, b = dy < 0 ? iT : iB;
         const gx = Math.sign(dx) * Math.pow(Math.abs(dx) / iA, 3) / iA, gy = Math.sign(dy) * Math.pow(Math.abs(dy) / b, 3) / b, gm = Math.hypot(gx, gy) || 1;
         const st = 1100 * sc * Math.pow((1.15 - f) / .15, 2); ax += gx / gm * st; ay += gy / gm * st;
-        if (mode === 2 && (dy < 0) === (sp.phase === -1)) ax += Math.sign(dx || 1) * st * .4;   // elle tombe sur ta tête / monte sous ton menton : elle glisse sur le côté
       } }
     const bord = 120 * sc, kb = 650 * sc;                    // les bords de l'image : poussée douce vers l'intérieur
     if (sp.x < X0 + bord) ax += kb * Math.pow(1 - (sp.x - X0) / bord, 2);
     if (sp.x > X1 - bord) ax -= kb * Math.pow(1 - (X1 - sp.x) / bord, 2);
     if (sp.y < Y0 + bord) ay += kb * Math.pow(1 - (sp.y - Y0) / bord, 2);
-    if (sp.y > Y1 - bord) ay -= kb * (mode === 2 ? .35 : 1) * Math.pow(1 - (Y1 - sp.y) / bord, 2);
+    if (sp.y > Y1 - bord) ay -= kb * Math.pow(1 - (Y1 - sp.y) / bord, 2);
     sp.vx += ax * h1; sp.vy += ay * h1;                      // le mouvement
-    const vv = Math.hypot(sp.vx, sp.vy), vl = vmax * (mode === 1 ? 1.25 : 1.4); if (vv > vl) { sp.vx *= vl / vv; sp.vy *= vl / vv; }
+    const vv = Math.hypot(sp.vx, sp.vy), vl = vmax * 1.25; if (vv > vl) { sp.vx *= vl / vv; sp.vy *= vl / vv; }
     sp.x += sp.vx * h1; sp.y += sp.vy * h1;
     if (sp.x < X0) { sp.x = X0; sp.vx = Math.abs(sp.vx) * .4; } if (sp.x > X1) { sp.x = X1; sp.vx = -Math.abs(sp.vx) * .4; }
     if (sp.y < Y0) { sp.y = Y0; sp.vy = Math.abs(sp.vy) * .4; } if (sp.y > Y1) { sp.y = Y1; sp.vy = -Math.abs(sp.vy) * .4; }
@@ -3403,6 +3390,72 @@ const paatBeauEyes = (g, S) => {
     connect();
   }
 
+  /* ---------- Zone visible de la caméra (OBS) ----------
+     Les filtres « move » de la scène « Source d'origine » rognent et réduisent « WEB CAM clone » (le clone de « sc webcam »,
+     qui contient cette page) : plein écran (« cam chat ») ou fenêtre (« masques et filtres »)…
+     La page se connecte au serveur WebSocket d'OBS (le même que SAMMI), lit chaque seconde pendant un filtre le rognage réel
+     de cette source, et les têtes de Paatrice ne se baladent que dans la partie visible. Rien à régler si tu changes tes zones.
+     Pas de connexion → toute l'image, comme avant. */
+  const zoneVisible = (t, base) => {                       // [gauche, haut, droite, bas] en fractions de l'image de la caméra
+    const sw = t.sourceWidth, sh = t.sourceHeight; if (!sw || !sh) return null;
+    let x0 = t.cropLeft || 0, x1 = sw - (t.cropRight || 0), y0 = t.cropTop || 0, y1 = sh - (t.cropBottom || 0);
+    if (base && !t.rotation && (!t.boundsType || t.boundsType === 'OBS_BOUNDS_NONE') && t.scaleX > 0 && t.scaleY > 0) {   // ce qui dépasse de l'écran
+      const w = (x1 - x0) * t.scaleX, h = (y1 - y0) * t.scaleY, al = t.alignment == null ? 5 : t.alignment;
+      const L = t.positionX - (al & 1 ? 0 : al & 2 ? w : w / 2), T = t.positionY - (al & 4 ? 0 : al & 8 ? h : h / 2);
+      x0 += Math.max(0, -L) / t.scaleX; x1 -= Math.max(0, L + w - base[0]) / t.scaleX;
+      y0 += Math.max(0, -T) / t.scaleY; y1 -= Math.max(0, T + h - base[1]) / t.scaleY;
+    }
+    if (x1 - x0 < sw * .1 || y1 - y0 < sh * .1) return null;
+    return [x0 / sw, y0 / sh, x1 / sw, y1 / sh];
+  };
+  if (C.OBS_ZONE) {
+    let ws = null, n = 0, itemId = null, base = null, retry = null, attente = 5000;
+    const pend = {};
+    const req = (type, data) => new Promise((ok, ko) => {
+      if (!ws || ws.readyState !== 1 || !OBSZ.ok) return ko(new Error('pas connecté'));
+      const id = 'zone' + (++n);
+      pend[id] = { ok, ko, t:setTimeout(() => { delete pend[id]; ko(new Error('OBS ne répond pas')); }, 3000) };
+      ws.send(JSON.stringify({ op:6, d:{ requestType:type, requestId:id, requestData:data || {} } }));
+    });
+    const sha = async x => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(x)))));
+    let lecture = false;
+    const lire = async () => {
+      if (lecture) return; lecture = true;
+      try {
+        if (itemId == null) itemId = (await req('GetSceneItemId', { sceneName:C.OBS_SCENE, sourceName:C.OBS_SOURCE })).sceneItemId;
+        if (!base) { const v = await req('GetVideoSettings'); base = v.baseWidth ? [v.baseWidth, v.baseHeight] : null; }
+        const t = (await req('GetSceneItemTransform', { sceneName:C.OBS_SCENE, sceneItemId:itemId })).sceneItemTransform || {};
+        OBSZ.rect = zoneVisible(t, base); OBSZ.err = OBSZ.rect ? '' : 'rognage illisible';
+      } catch (e) { OBSZ.err = e.message; itemId = null; }
+      lecture = false;
+    };
+    const connect = () => {
+      clearTimeout(retry);
+      try { ws = new WebSocket(C.OBS_WS); } catch (_) { retry = setTimeout(connect, attente); return; }
+      ws.onmessage = async ev => {
+        let m; try { m = JSON.parse(ev.data); } catch (_) { return; }
+        const d = m.d || {};
+        if (m.op === 0) {                                     // « Hello » d'OBS → on se présente (mot de passe seulement s'il en demande un)
+          const id = { rpcVersion:1, eventSubscriptions:0 }, a = d.authentication;
+          if (a) {
+            if (!C.OBS_PASS || !(window.crypto && crypto.subtle)) { OBSZ.err = 'OBS demande un mot de passe (&obs=…)'; attente = 60000; ws.close(); return; }
+            id.authentication = await sha(await sha(C.OBS_PASS + a.salt) + a.challenge);
+          }
+          ws.send(JSON.stringify({ op:1, d:id }));
+        } else if (m.op === 2) { OBSZ.ok = true; OBSZ.err = ''; attente = 5000; itemId = null; base = null; lire(); }
+        else if (m.op === 7) {
+          const p = pend[d.requestId]; if (!p) return; delete pend[d.requestId]; clearTimeout(p.t);
+          const r = d.requestStatus || {};
+          r.result ? p.ok(d.responseData || {}) : p.ko(new Error(r.comment || ('refusé (' + r.code + ')')));
+        }
+      };
+      ws.onclose = () => { OBSZ.ok = false; retry = setTimeout(connect, attente); attente = Math.min(60000, attente * 2); };
+      ws.onerror = () => { try { ws.close(); } catch (_) {} };
+    };
+    connect();
+    setInterval(() => { if (OBSZ.ok && (fx.on || !OBSZ.rect)) lire(); }, 1000);
+  }
+
   /* ---------- Panneau de mesures (&stats) ---------- */
   const f1 = x => x.toFixed(1).replace('.', ',');
   const hudPaint = () => {
@@ -3413,6 +3466,9 @@ const paatBeauEyes = (g, S) => {
       'Moteur : ' + ({ ok:'prêt ✅ ' + (lmGpu ? 'GPU' : 'CPU ⚠️'), load:'préparation…', err:'erreur ⚠️', off:'en attente' }[lmState])
                   + (seg ? ' · détourage prêt' : ''),
       'SSN    : ' + (!SESSION ? 'pas de #chat= ⚠️' : ST.ws ? 'connecté ✅' : 'connexion…'),
+      'Zone OBS : ' + (!C.OBS_ZONE ? 'coupée (toute l\'image)' : !OBSZ.ok ? 'pas connecté (toute l\'image)' + (OBSZ.err ? ' · ' + OBSZ.err : '') + ' ⚠️'
+                  : !OBSZ.rect ? 'lecture…' + (OBSZ.err ? ' ' + OBSZ.err + ' ⚠️' : '')
+                  : 'connecté ✅ · visible ' + Math.round((OBSZ.rect[2] - OBSZ.rect[0]) * 100) + ' % × ' + Math.round((OBSZ.rect[3] - OBSZ.rect[1]) * 100) + ' %'),
       'Cam virtuelle : ' + (ST.vcam == null ? 'état inconnu' : ST.vcam ? 'allumée' : 'éteinte')
                   + (!C.VCAM_AUTO ? ' (gérée par SAMMI)' : vcamCan() ? ' (auto ✅)' : ' (auto impossible : « Accès complet à OBS » ?) ⚠️'),
       'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + (vid.videoWidth || s.width) + '×' + (vid.videoHeight || s.height) + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
