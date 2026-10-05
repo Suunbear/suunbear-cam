@@ -27,7 +27,7 @@
    Options à ajouter après le # :
      &stats        = panneau de mesures (VISIBLE À L'ANTENNE : tests hors live)
      &test=benet   = lance ce filtre 5 s après le chargement (Actualiser la source = relancer)
-     &dur=30       = durée du filtre en secondes
+     &dur=30       = durée du filtre en secondes (tous les filtres, le farceur compris)
      &fps=30 · &det=30 · &scale=0.667 = réglages de charge sans renvoyer le fichier
      &taille=1.5 · &cote=3.1 · &haut=-1.6 · &mains=1 · &marge=1.5 · &detour=1 · &calque=0 · &regard=40 · &corps=0
                    = Paatrice (« derriere ») : taille, écart, hauteur, mains, gommage, détourage, ancienne méthode,
@@ -40,11 +40,12 @@
    SAMMI, un bouton par filtre :
      1. démarrer la caméra virtuelle · 2. attendre 1500 ms ·
      3. HTTP Request GET https://io.socialstream.ninja/<SESSION>/content/null/{"event":"filtre_bureau","meta":{"nom":"benet"}}
-     4. attendre 95000 ms · 5. arrêter la caméra virtuelle
+     4. attendre 65000 ms (= durée du filtre + 5 s) · 5. arrêter la caméra virtuelle
    noms : content · benet · mini · pleure · kawai · exagere · colere · chad · derriere (sans accents)
           Pendant chaque filtre, la tête de Paatrice qui va avec se balade autour de toi (Chad : Paatrice beau gosse).
-          Paatrice cam bureau = le farceur : derriere (Stand de temps en temps)
-          (anciens noms acceptés : stand · jojo · derriere2 · farceur · bouche → derriere · chat · kawaii → kawai ·
+          Paatrice cam bureau = le farceur : derriere (1 min, 1 gag au hasard : Stand, Super Saiyan ou bras élastique)
+          stand · kamehameha · gomu = le farceur, avec ce gag-là
+          (anciens noms acceptés : jojo · derriere2 · farceur · bouche → derriere · chat · kawaii → kawai ·
            fache · mad → colere · idee → pleure · yeux → mini · zinzin → benet)
    La cam tel écoute "filtre", la cam bureau "filtre_bureau" : chacune ignore l'autre.
 
@@ -66,9 +67,10 @@ const CONFIG = {
   FACE_HOLD        : 1.5,   // s sans visage avant que le calque s'efface (la cam normale revient)
 
   FILTERS          : true,
-  FILTER_DURATION  : 90,    // secondes par filtre (1 min 30)
+  FILTER_DURATION  : 60,    // secondes par filtre (1 min) · si tu changes, SAMMI : attendre ces secondes + 5 s
   FILTER_STRENGTH  : 1,     // intensité de TOUS les filtres : 0.5 = discret · 1 = normal · 1.5 = très caricatural
   FILTER_LEVELS    : { content:1, derriere:1, mini:1, benet:1, pleure:1, chat:1, chad:1, exagere:1, fache:1 },   // filtre par filtre (chat = Kawai, fache = Colère)
+  EXA_YEUX         : 1.8,   // Exagéré : taille de tes yeux grands ouverts (1.8 = ×1,8), même de profil
   FILTER_FADE      : 0.5,   // montée / descente de la déformation (s)
   CHAD_SOURCIL     : 'auto',  // Chad : 'auto' = ton sourcil gauche en priorité, l'autre si tu tournes franchement la tête
                               //        · 'droite' = toujours ton sourcil gauche (à droite à l'écran) · 'gauche' = toujours l'autre
@@ -78,6 +80,7 @@ const CONFIG = {
   BEAU_PRES        : 1.6,   // … × ça quand elle est grande (la taille change au hasard, n'importe où autour de toi)
   TETES_VITESSE    : 1,     // têtes de Paatrice : vitesse moyenne (1 = tranquille · 0.7 = plus lent · 1.4 = plus vif), le rythme varie tout seul
   TETES_TAILLE_RYTHME : 7,  // … s en moyenne entre deux changements de taille (petite ↔ grande, n'importe où dans le cadre)
+  TETES_TRAIT      : [20, 45],  // … s entre deux petits traits droits et rapides (au hasard entre ces deux valeurs)
   OBS_ZONE         : true,  // … seulement dans la partie visible de la caméra (rognage des filtres « move », lu dans OBS) · false = toute l'image
   OBS_WS           : 'ws://127.0.0.1:4455',   // serveur WebSocket d'OBS (Outils → Paramètres du serveur WebSocket, celui de SAMMI)
   OBS_SCENE        : "Source d'origine",      // la scène où les filtres « move » déplacent la caméra…
@@ -100,8 +103,8 @@ const CONFIG = {
                             //        en direct (pas de fantôme, moins de GPU) · false = ancienne méthode (image entière recopiée)
   PAAT_DETOURAGE   : true,  // true = il passe DERRIÈRE toi (détourage) · false = à côté, sans détourage
   PAAT_MARGE       : 1.5,   // gommage un peu plus large que toi (cache le retard du détourage quand tu bouges vite) · 0 = pile
-  PAAT_TAILLE      : 1.5,   // taille de Paatrice (1 = comme la cam tel) : tu es plus loin de la cam bureau
-  PAAT_COTE        : 3.1,   // sa tête : écart sur le côté, en « largeurs d'yeux » (tes yeux, d'un coin à l'autre)
+  PAAT_TAILLE      : 1.2,   // taille de Paatrice (1 = comme la cam tel) : tu es plus loin de la cam bureau
+  PAAT_COTE        : 2.7,   // sa tête : écart sur le côté, en « largeurs d'yeux » (tes yeux, d'un coin à l'autre)
   PAAT_HAUT        : -1.6,  // … et hauteur (négatif = au-dessus de tes yeux)
   PAAT_DOS_X       : 1.2,   // point de ton dos d'où il « sort » (épaule) : écart sur le côté…
   PAAT_DOS_Y       : 2.4,   // … et hauteur sous tes yeux
@@ -119,9 +122,14 @@ const CONFIG = {
   PAAT_TOURNE      : 0.2,   // sans suivi du corps : tu tournes la tête vers lui de ça (0 → 1 = profil) → il change de côté
   PAAT_LACET       : 1.3,   // tête tournée : décalage du centre de ta tête (mains et Paatrice suivent ta vraie tête)
   PAAT_BLABLA      : 6,     // s de silence max avant qu'il reparle
-  PAAT_STAND_1     : 14,    // s avant le 1er Stand (+ 0 à 6 s au hasard) · nom SAMMI « stand » = Stand dès le début
-  PAAT_STAND_ECART : 30,    // s entre deux Stands (± 25 %)
+  PAAT_DUREE       : 60,    // s : durée du farceur (1 min) · si tu changes, SAMMI : attendre ces secondes + 5 s
+  PAAT_GAGS        : 1,     // gags par passage (1 à 3) : Stand, Super Saiyan, bras élastique, au hasard (jamais le même qu'au passage d'avant)
+  PAAT_GAG_1       : 30,    // s avant le 1er gag (+ 0 à 15 s au hasard)
+  PAAT_GAG_ECART   : 35,    // s entre deux gags (± 15 %), s'il y en a plusieurs
+                            // noms SAMMI « stand » · « kamehameha » · « gomu » = le farceur, avec ce gag-là (dès le début)
   PAAT_STAND_DUREE : 6,     // durée d'un Stand (rafale « PAA PAA PAA » au milieu)
+  PAAT_SAIYAN_DUREE: 8,     // durée du Super Saiyan (transformation, charge, rayon « PAATRICE-MÉ-HA-MÉ-HAAA ! »)
+  PAAT_GOMU_DUREE  : 5.5,   // durée du bras élastique (« PAATRICE PAATRICE NO… POING !!! »)
   PAAT_MARIONNETTE : 1,     // taille de la marionnette (tu n'es pas à l'image)
   PAAT_ABSENT      : 1.5,   // s sans toi à l'image → il passe au milieu de l'écran, en marionnette
   PAAT_BODY_MIN    : 0.04,  // part de l'image où le détourage te voit encore (de profil, de dos) → tu es « là »
@@ -269,6 +277,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       [EYE_R, .52, .47, .68], [EYE_L, .52, .47, .68]    // yeux globuleux
     ]}
   };
+  const durOf = key => Math.max(3, key === 'derriere' && !has('dur') ? C.PAAT_DUREE : C.FILTER_DURATION);   // durée d'un filtre (s)
   /* Exagéré : déformations recalculées à chaque image d'après tes expressions (0 → 1), amplifiées */
   const EXA_IDS = [152, 148, 377, 176, 400, 17, 14, 13, 84, 314, 61, 291, 50, 280, 145, 374, 159, 386, 107, 336, 105, 334, 70, 300, 1, 132, 361, 58, 288];
   /* exagéré : yeux écarquillés (0 → 1), même quand tu n'es pas de face : le plus ouvert des deux yeux (blendshapes),
@@ -287,6 +296,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       }
     }
     w = Math.max(0, Math.min(1, w)); fx.yg = { t:now, w }; return w;
+  };
+  /* chaque œil est-il bien visible ? (de profil, l'œil du côté caché devient étroit) → [œil droit, œil gauche], 0 → 1 */
+  const oeilVis = () => {
+    const L = fx.sm || {}, w = ring => { let a = 1e9, c = -1e9; for (const i of ring) { const q = L[i]; if (!q) return 0; a = Math.min(a, q[0]); c = Math.max(c, q[0]); } return c - a; };
+    const r = w(EYE_RING[0]), l = w(EYE_RING[1]), m = Math.max(r, l, 1e-3), v = x => Math.max(0, Math.min(1, (x / m - .45) / .25));
+    return [v(r), v(l)];
   };
   const exagereDyn = b => {
     const v = n => b[n] || 0, avg = (a, c) => (v(a) + v(c)) / 2;
@@ -318,11 +333,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     for (const i in P) { const q = P[i]; if (Math.abs(q[0]) + Math.abs(q[1]) > .004) pts.push([+i, q[0], q[1], q[2]]); }
     const bulge = FX.exagere.bulge.slice();
     if (j > .03) bulge.push([[13, 14], .95 + .2 * j, .6 + .42 * j, .86 * Math.min(1, j * 1.15)]);   // bouche ouverte → énorme
-    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (jusqu'à ×4, écartés), ils débordent sur ton front et tes cheveux
+    /* yeux : grands ouverts → loupe modérée ici ; en plus, tes yeux sont découpés et agrandis par-dessus (×EXA_YEUX en tout, écartés)
        · plissés → minuscules */
     const wo = yeuxGrands();                              // 0 = normal · 1 = yeux écarquillés à fond (même de profil)
-    const eb = Math.max(-.65, Math.min(.6, .12 + .25 * bu - .6 * sq + .35 * wo)), er = .5 + .25 * wo, eh = .45 + .25 * wo;   // loupe modérée : le reste, ce sont tes yeux « détachés » (STK exagere)
-    if (Math.abs(eb) > .03) bulge.push([EYE_R, er, eh, eb], [EYE_L, er, eh, eb]);
+    const eb = Math.max(-.65, Math.min(.4, .12 + .25 * bu - .6 * sq + .2 * wo)), er = .5 + .25 * wo, eh = .45 + .25 * wo;   // loupe modérée (≤ ×1,7) : le reste, ce sont tes yeux « détachés » (STK exagere)
+    const vis = oeilVis();                                    // de profil : pas de loupe sur l'œil caché (elle gonflerait ton nez)
+    if (Math.abs(eb) > .03) { if (vis[0] > .05) bulge.push([EYE_R, er, eh, eb * vis[0]]); if (vis[1] > .05) bulge.push([EYE_L, er, eh, eb * vis[1]]); }
     return { pts, bulge };
   };
 
@@ -348,7 +364,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (f.side) [234, 454, 1].forEach(i => need.add(i));
     (f.bulge || []).forEach(b => b[0].forEach(i => need.add(i)));
     (STK_PTS[f.stk] || []).forEach(i => need.add(i));
-    if (f.dyn) EXA_IDS.concat([205, 187, 425, 411, 4, 6], MOUTH, EYE_R, EYE_L).forEach(i => need.add(i));
+    if (f.dyn) EXA_IDS.concat([10, 205, 187, 425, 411, 4, 6], MOUTH, EYE_R, EYE_L).forEach(i => need.add(i));   // (10 : haut du front, pour yeuxGrands)
     f.need = [...need];
   });
 
@@ -530,7 +546,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       }
 
       /* 2. Intensité : montée, maintien, descente */
-      const el = fx.t0 ? (t - fx.t0) / 1000 : 0, fd = Math.max(0.1, C.FILTER_FADE), D = Math.max(3, C.FILTER_DURATION);
+      const el = fx.t0 ? (t - fx.t0) / 1000 : 0, fd = Math.max(0.1, C.FILTER_FADE), D = durOf(fx.key);
       const amt = fx.t0 ? Math.max(0, Math.min(1, el / fd, (D - el) / fd)) : 0;
       if (fx.t0 && el >= D && !fx.ending) fxEnd();
       const lvl = (C.FILTER_LEVELS && C.FILTER_LEVELS[fx.key] != null) ? C.FILTER_LEVELS[fx.key] : 1;
@@ -1240,8 +1256,9 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const PAAT_FADES = {};
   /* Paatrice entier dans le repère de sa tête (0..512) : centre (hx, hy), rotation rot, échelle k.
      stretch = torse allongé (pour qu'il rejoigne ton dos) · fade = bas du torse qui s'efface ('soft' · 'stand').
+     deco(g) = dessiné par-dessus sa tête, dans le même repère (cheveux du Super Saiyan…).
      Renvoie la conversion repère de sa tête → écran. */
-  const paatFigure = (g, S, hx, hy, rot, k, look, blink, stretch, fade) => {
+  const paatFigure = (g, S, hx, hy, rot, k, look, blink, stretch, fade, deco) => {
     stretch = stretch || 1;
     g.save(); g.translate(hx, hy); g.rotate(rot); g.scale(k, k); g.translate(-256, -256);
     g.save(); g.translate(256, 480); g.scale(1, stretch); g.translate(-256, -480);
@@ -1256,6 +1273,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     } else g.drawImage(S.pbody, -144, 380);
     g.restore();
     paatDraw(g, S, look, blink);
+    if (deco) deco(g);
     g.restore();
     const cs = Math.cos(rot), sn = Math.sin(rot);
     return (lx, ly) => {
@@ -1282,7 +1300,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   };
   const RUSH_TXT = 'PAA PAA PAA PAA !';
   const BAG = {};
-  const pick = cat => {                                  // au hasard, sans répétition (sac mélangé, puis on recommence)
+  const pickB = cat => {                                 // au hasard, sans répétition (sac mélangé, puis on recommence)
     const L = BULLES[cat]; let b = BAG[cat];
     if (!b || !b.length) {
       b = BAG[cat] = L.map((_, i) => i).sort(() => Math.random() - .5);
@@ -1434,6 +1452,286 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     g.restore();
   };
 
+  /* ============================================================
+     Gags manga du farceur, en plus du Stand (dessinés au code, préparés une fois : aucun flou à chaque image)
+     · Super Saiyan : coiffure en flamme dorée qui ondule, aura dorée, éclairs, boule d'énergie, puis rayon « PAATRICE-MÉ-HA-MÉ-HAAA ! »
+     · bras élastique (bandana de pirate au soleil sur la tête) : il tire son bras en arrière, le bras s'allonge et un poing géant vient te frapper, « POING !!! »
+     ============================================================ */
+  /* le dernier gag joué (retenu d'un passage à l'autre, même si la source est rechargée) */
+  let GAG_DER = null;
+  const gagDernier = t => {
+    if (t) { GAG_DER = t; try { localStorage.setItem('paatGag', t); } catch (e) {} return t; }
+    if (GAG_DER == null) { try { GAG_DER = localStorage.getItem('paatGag') || ''; } catch (e) { GAG_DER = ''; } }
+    return GAG_DER;
+  };
+  const SAIYAN_TXT = ['AAAAAAAAAAH !!!', 'PAATRICE-MÉ-HA-\nMÉ-HAAA !'];
+  const GOMU_TXT = ['PAATRICE PAATRICE\nNO…', 'POING !!!'];
+  let GAG_SPR = null;
+  const gagSprites = () => GAG_SPR || (GAG_SPR = (() => {
+    const S = sprites();
+    const grain = mk(760, 640, g => {                         // grain doré de sa coiffure-flamme (repère de la tête décalé de 124, 380)
+      for (let i = 0; i < 2600; i++) { g.fillStyle = Math.random() < .6 ? 'rgba(200,110,0,' + rnd(0, .22) + ')' : 'rgba(255,255,225,' + rnd(0, .3) + ')'; g.fillRect(rnd(0, 760), rnd(0, 640), rnd(1, 3), rnd(1, 3)); }
+    });
+    const flame = mk(110, 220, g => {                        // langue de flamme dorée (aura)
+      const p = new Path2D(); p.moveTo(55, 0); p.bezierCurveTo(78, 60, 104, 118, 100, 158); p.arc(55, 160, 45, 0, Math.PI);
+      p.bezierCurveTo(6, 118, 32, 60, 55, 0); p.closePath();
+      const rg = g.createRadialGradient(55, 170, 4, 55, 140, 150);
+      rg.addColorStop(0, 'rgba(255,255,235,.95)'); rg.addColorStop(.35, 'rgba(255,226,90,.85)'); rg.addColorStop(.75, 'rgba(255,170,20,.45)'); rg.addColorStop(1, 'rgba(255,140,0,0)');
+      g.fillStyle = rg; g.fill(p);
+    });
+    const glow = mk(256, 256, g => {                         // halo doré
+      const rg = g.createRadialGradient(128, 128, 8, 128, 128, 128);
+      rg.addColorStop(0, 'rgba(255,240,150,.75)'); rg.addColorStop(.55, 'rgba(255,200,60,.35)'); rg.addColorStop(1, 'rgba(255,170,0,0)');
+      g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
+    });
+    const ball = mk(256, 256, g => {                         // boule d'énergie bleue
+      const rg = g.createRadialGradient(128, 128, 4, 128, 128, 128);
+      rg.addColorStop(0, '#ffffff'); rg.addColorStop(.28, '#e6fbff'); rg.addColorStop(.5, 'rgba(110,210,255,.95)'); rg.addColorStop(.75, 'rgba(50,140,255,.5)'); rg.addColorStop(1, 'rgba(40,110,255,0)');
+      g.fillStyle = rg; g.fillRect(0, 0, 256, 256);
+    });
+    const smoke = mk(64, 64, g => {                          // bouffée de fumée grise
+      const rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      rg.addColorStop(0, 'rgba(200,200,205,.95)'); rg.addColorStop(.6, 'rgba(150,150,158,.6)'); rg.addColorStop(1, 'rgba(120,120,128,0)');
+      g.fillStyle = rg; g.fillRect(0, 0, 64, 64);
+    });
+    const pupilT = mk(64, 120, g => {                        // pupille turquoise (yeux du Super Saiyan), contour noir gardé
+      g.drawImage(S.pupil, 0, 0);
+      g.drawImage(mk(64, 120, c => {
+        c.drawImage(S.pupil, 0, 0); c.globalCompositeOperation = 'source-in';
+        const lg = c.createLinearGradient(0, 10, 0, 110); lg.addColorStop(0, '#6ff5e0'); lg.addColorStop(1, '#0e9a8c');
+        c.fillStyle = lg; c.fillRect(0, 0, 64, 120);
+      }), 7, 12, 50, 96);
+    });
+    const fist = mk(300, 240, g => {                         // poing fermé, phalanges vers l'avant (+x), pouce au-dessus
+      const rr = (x, y, w, h, r) => { const p = new Path2D(); p.roundRect(x, y, w, h, r); return p; };
+      const ov = (x, y, a, b, t) => { const p = new Path2D(); p.ellipse(x, y, a, b, t || 0, 0, 6.2832); return p; };
+      const all = [rr(0, 84, 74, 80, 22), rr(40, 46, 192, 152, 54), ov(232, 70, 38, 24), ov(236, 108, 40, 24), ov(236, 146, 40, 24), ov(230, 182, 36, 23), ov(148, 54, 72, 26, -.06)];
+      g.lineJoin = 'round'; g.strokeStyle = P_INK; g.lineWidth = 22; all.forEach(p => g.stroke(p));
+      const gr = g.createLinearGradient(0, 28, 0, 212); gr.addColorStop(0, '#e24d3e'); gr.addColorStop(1, '#a3261c');
+      g.fillStyle = gr; all.forEach(p => g.fill(p));
+      const un = new Path2D(); all.forEach(p => un.addPath(p));
+      g.save(); g.clip(un);
+      for (let i = 0; i < 1400; i++) { g.fillStyle = Math.random() < .7 ? 'rgba(120,20,12,' + rnd(0, .18) + ')' : 'rgba(255,150,130,' + rnd(0, .12) + ')'; g.fillRect(rnd(0, 280), rnd(20, 220), rnd(1, 3), rnd(1, 3)); }
+      g.restore();
+      g.strokeStyle = P_INK; g.lineCap = 'round'; g.lineWidth = 7;
+      for (const y of [89, 127, 164]) { g.beginPath(); g.moveTo(196, y); g.quadraticCurveTo(234, y + 3, 266, y); g.stroke(); }
+      g.beginPath(); g.moveTo(90, 72); g.quadraticCurveTo(150, 86, 216, 68); g.stroke();   // le pli du pouce
+      g.fillStyle = 'rgba(255,195,175,.55)'; for (const y of [62, 100, 138, 174]) { g.beginPath(); g.ellipse(244, y, 13, 7, 0, 0, 6.2832); g.fill(); }
+    });
+    const band = mk(600, 200, g => {                          // bandana de pirate (bras élastique) : calotte en tissu noir, repère de la tête décalé de (44, 30)
+      g.translate(44, 30);
+      const p = bandanaPath(), gr = g.createLinearGradient(0, 10, 0, 130);
+      gr.addColorStop(0, '#3a3f52'); gr.addColorStop(.6, '#23263a'); gr.addColorStop(1, '#16172a');
+      g.lineJoin = 'round'; g.strokeStyle = P_INK; g.lineWidth = 22; g.stroke(p);
+      g.fillStyle = gr; g.fill(p);
+      g.save(); g.clip(p);
+      g.fillStyle = 'rgba(255,240,200,.16)';                 // petits pois discrets
+      for (let y = 20; y < 130; y += 26) for (let x = 20 + (y % 52 ? 13 : 0); x < 500; x += 26) { g.beginPath(); g.arc(x, y, 3.2, 0, 6.2832); g.fill(); }
+      for (let i = 0; i < 1500; i++) { g.fillStyle = Math.random() < .6 ? 'rgba(0,0,10,' + rnd(0, .3) + ')' : 'rgba(200,210,255,' + rnd(0, .1) + ')'; g.fillRect(rnd(0, 512), rnd(0, 140), rnd(1, 3), rnd(1, 3)); }
+      g.lineCap = 'round';
+      g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 6;    // plis du tissu (vers le nœud)
+      for (const [x0, y0, x1, y1, cx, cy] of [[120, 40, 470, 112, 300, 40], [70, 92, 480, 128, 280, 86], [190, 22, 460, 96, 340, 28]]) { g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke(); }
+      g.strokeStyle = 'rgba(190,200,255,.22)'; g.lineWidth = 8;   // reflet
+      g.beginPath(); g.ellipse(256, 150, 190, 125, 0, 3.75, 4.5); g.stroke();
+      g.restore();
+    });
+    return { grain, flame, glow, ball, smoke, pupilT, fist, band };
+  })());
+  /* bandana : la calotte suit le haut de sa tête, juste au-dessus de ses sourcils (bord un peu ondulé, comme du tissu) */
+  function bandanaPath() {
+    const yE = x => { const u = (x - 256) / 220; return 100 + 12 * u * u + 3 * Math.sin(x * .05); };
+    const cx = 256, cy = 250, r = 240, ins = x => (x - cx) ** 2 + (yE(x) - cy) ** 2 < r * r;
+    let xL = cx, xR = cx; while (ins(xL - 1)) xL--; while (ins(xR + 1)) xR++;
+    const p = new Path2D(); p.moveTo(xL, yE(xL));
+    for (let x = xL; x <= xR; x += 8) p.lineTo(x, yE(x));
+    p.lineTo(xR, yE(xR));
+    p.arc(cx, cy, r, Math.atan2(yE(xR) - cy, xR - cx), Math.atan2(yE(xL) - cy, xL - cx), true);
+    p.closePath(); return p;
+  }
+  /* bandana de pirate (bras élastique), repère de sa tête : il tombe sur sa tête, nœud derrière (côté kn = ±1, loin de toi),
+     deux pans qui flottent au vent, et le soleil des Soleils (celui de son épaule) sur le front */
+  const bandanaDraw = (g, hk, kn, el) => {
+    const A = gagSprites(), P_ = (x, y) => [x, y];
+    g.save(); g.globalAlpha = Math.min(1, hk * 3);
+    g.translate(0, -150 * (1 - backOut(hk)));
+    g.translate(256, 120); g.rotate(.08 * kn); g.translate(-256, -120);   // porté de travers, plus bas côté nœud
+    const K = P_(256 + kn * 226, 150);
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    [[1.05, 190, 0], [.62, 160, 1.9]].forEach(([dv, L, ph]) => {   // les deux pans (ondulent)
+      const d = [Math.sin(dv) * kn, Math.cos(dv)], n = [-d[1], d[0]], N = 9, left = [], right = [];
+      for (let i = 0; i <= N; i++) {
+        const t = i / N, w = (54 - 24 * t) / 2, wv = 22 * Math.pow(t, 1.3) * Math.sin(el * 7.5 - t * 4 + ph);
+        const c = [K[0] + d[0] * L * t + n[0] * wv, K[1] + d[1] * L * t + n[1] * wv];
+        left.push([c[0] + n[0] * w, c[1] + n[1] * w]); right.push([c[0] - n[0] * w, c[1] - n[1] * w]);
+      }
+      const e = left[N], f = right[N], m = [(e[0] + f[0]) / 2 - d[0] * 14, (e[1] + f[1]) / 2 - d[1] * 14];   // bout coupé en V
+      const pth = tPoly(left.concat([m], right.reverse()));
+      g.strokeStyle = P_INK; g.lineWidth = 16; g.stroke(pth); g.fillStyle = '#20233a'; g.fill(pth);
+      g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 4; g.beginPath(); g.moveTo(K[0], K[1]);
+      const q = left[Math.floor(N * .6)]; g.lineTo((q[0] + K[0]) / 2 + (m[0] - K[0]) * .3, (q[1] + K[1]) / 2 + (m[1] - K[1]) * .3); g.stroke();
+    });
+    g.drawImage(A.band, -44, -30);
+    g.save(); g.translate(K[0], K[1]); g.rotate(.5 * kn);   // le nœud
+    g.beginPath(); g.ellipse(0, 0, 38, 30, 0, 0, 6.2832); g.strokeStyle = P_INK; g.lineWidth = 14; g.stroke(); g.fillStyle = '#2a2e45'; g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.45)'; g.lineWidth = 5; g.beginPath(); g.moveTo(-12, -14); g.quadraticCurveTo(2, 0, -8, 16); g.stroke();
+    g.restore();
+    if (P_SUN.complete && P_SUN.naturalWidth) { const z = 116; g.save(); g.translate(256, 60); g.rotate(-.06 * kn + .05 * Math.sin(el * 2)); g.drawImage(P_SUN, -z / 2, -z / 2, z, z); g.restore(); }
+    g.restore();
+  };
+  /* Super Saiyan : une coiffure en flamme dorée géante qui ondule (5 langues de feu, celle du milieu la plus haute) */
+  const FLAMME = [[-160, 135, 3.9, 0], [-126, 220, 3.3, 1.9], [-90, 290, 2.8, 3.4], [-54, 220, 3.5, 5.1], [-20, 135, 4.2, 2.6]];   // [angle, longueur, vitesse, phase]
+  const flammePath = (el, kL) => {
+    const P = (a, r) => [256 + Math.cos(a * Math.PI / 180) * r, 256 + Math.sin(a * Math.PI / 180) * r];
+    const vAng = [-178, -141, -107, -73, -39, -2], vR = [216, 262, 280, 280, 262, 216];   // creux entre les langues (au-dessus de sa tête)
+    const V = vAng.map((a, i) => P(a, vR[i])), p = new Path2D(); p.moveTo(V[0][0], V[0][1]);
+    FLAMME.forEach(([m, L0, w, ph], i) => {
+      const L = L0 * kL * (1 + .07 * Math.sin(el * 6 + i * 1.3)), ta = (m + (-90 - m) * .5) * Math.PI / 180;
+      const d = [Math.cos(ta), Math.sin(ta)], n = [-d[1], d[0]], B = P(m, 226);
+      const sw = (.15 * Math.sin(el * w + ph) + .05 * Math.sin(el * w * 2.3 + ph * 1.7)) * L;   // la pointe ondule…
+      const T = [B[0] + d[0] * L + n[0] * sw, B[1] + d[1] * L + n[1] * sw];
+      const a = V[i], b = V[i + 1], sa = Math.sign((a[0] - B[0]) * n[0] + (a[1] - B[1]) * n[1]) || 1;
+      const lag = -.55 * sw;                                  // … et le corps suit en retard (elle se recourbe)
+      p.bezierCurveTo(a[0] + d[0] * .45 * L + n[0] * sa * .1 * L, a[1] + d[1] * .45 * L + n[1] * sa * .1 * L,
+                      T[0] - d[0] * .32 * L + n[0] * (lag + sa * .07 * L), T[1] - d[1] * .32 * L + n[1] * (lag + sa * .07 * L), T[0], T[1]);
+      p.bezierCurveTo(T[0] - d[0] * .32 * L + n[0] * (lag - sa * .07 * L), T[1] - d[1] * .32 * L + n[1] * (lag - sa * .07 * L),
+                      b[0] + d[0] * .45 * L - n[0] * sa * .1 * L, b[1] + d[1] * .45 * L - n[1] * sa * .1 * L, b[0], b[1]);
+    });
+    p.arc(256, 256, 214, -2 * Math.PI / 180, -178 * Math.PI / 180, true);   // la racine, juste sous le bord de sa tête
+    p.closePath(); return p;
+  };
+  const saiyanHair = (g, hk, el) => {                        // dans le repère de sa tête (deco de paatFigure)
+    const s = .5 + .5 * backOut(Math.min(1, hk * 1.4));
+    g.save(); g.globalAlpha = Math.min(1, hk * 2.5);
+    g.translate(256, 236); g.scale(s, s); g.translate(-256, -236);
+    const p = flammePath(el, 1), gr = g.createLinearGradient(0, 230, 0, -240);
+    gr.addColorStop(0, '#e98a00'); gr.addColorStop(.3, '#ffc21f'); gr.addColorStop(.7, '#ffe36a'); gr.addColorStop(1, '#fff6c4');
+    g.lineJoin = 'round'; g.strokeStyle = P_INK; g.lineWidth = 24; g.stroke(p);
+    g.fillStyle = gr; g.fill(p);
+    g.save(); g.clip(p);
+    g.save(); g.translate(256, 250); g.scale(.62, .66); g.translate(-256, -250);   // cœur plus clair (profondeur de la flamme)
+    g.fillStyle = 'rgba(255,252,225,.6)'; g.fill(flammePath(el + .35, .9)); g.restore();
+    g.drawImage(gagSprites().grain, -124, -380);
+    g.restore();
+    g.restore();
+  };
+  const auraDraw = (g, el, a) => {                           // aura dorée DERRIÈRE lui, repère de sa tête (0..512)
+    const A = gagSprites();
+    g.save(); g.globalAlpha = a * (.75 + .15 * Math.sin(el * 9)); g.drawImage(A.glow, 256 - 470, 300 - 470, 940, 1040); g.restore();
+    g.save(); g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 18; i++) {
+      const ph = (el * 1.8 + i * .618) % 1, head = i < 12;
+      let bx, by, rot;
+      if (head) { const an = -Math.PI * (.04 + .92 * i / 11); bx = 256 + Math.cos(an) * 250; by = 256 + Math.sin(an) * 250; rot = (an + Math.PI / 2) * .45; }
+      else { const j = i - 12, sd = j % 2 ? 1 : -1; bx = 256 + sd * (290 + 18 * (j >> 1)); by = 560 + 95 * (j >> 1); rot = sd * .22; }
+      const z = .7 + .45 * Math.sin(ph * Math.PI), al = a * Math.sin(ph * Math.PI);
+      g.globalAlpha = al; g.save(); g.translate(bx, by - ph * 110); g.rotate(rot); g.scale(z, z);
+      g.drawImage(A.flame, -55, -190, 110, 220); g.restore();
+    }
+    g.restore();
+  };
+  const sparks = (g, cx, cy, R, el, a) => {                  // petits éclairs autour de lui
+    const r = seeded(1 + Math.floor(el * 14) * 7919);
+    g.save(); g.globalAlpha = a; g.lineCap = 'round'; g.lineJoin = 'round';
+    for (let i = 0; i < 3; i++) {
+      const an = r() * 6.2832, d = R * (1 + r() * .4); let x = cx + Math.cos(an) * d, y = cy + Math.sin(an) * d * 1.3; const pts = [[x, y]];
+      for (let j = 0; j < 5; j++) { x += Math.cos(an) * R * .08 + (r() - .5) * R * .2; y += Math.sin(an) * R * .08 + (r() - .5) * R * .2; pts.push([x, y]); }
+      for (const [w, c] of [[R * .06, 'rgba(110,200,255,.55)'], [R * .022, '#ffffff']]) {
+        g.strokeStyle = c; g.lineWidth = w; g.beginPath(); pts.forEach(([px, py], k) => k ? g.lineTo(px, py) : g.moveTo(px, py)); g.stroke();
+      }
+    }
+    g.restore();
+  };
+  const ballDraw = (g, P, r, el, a) => {                     // boule d'énergie qui crépite
+    if (r < 1) return;
+    const z = r * 2.6 * (1 + .07 * Math.sin(el * 37)), rs = seeded(3 + Math.floor(el * 20) * 104729);
+    g.save(); g.globalAlpha = a; g.drawImage(gagSprites().ball, P[0] - z / 2, P[1] - z / 2, z, z);
+    g.strokeStyle = '#f0fdff'; g.lineWidth = Math.max(1.5, r * .07); g.lineCap = 'round';
+    for (let i = 0; i < 3; i++) { const a0 = rs() * 6.2832; g.beginPath(); g.arc(P[0], P[1], r * (.55 + rs() * .35), a0, a0 + .7 + rs()); g.stroke(); }
+    g.restore();
+  };
+  const beamDraw = (g, O, T, w, el, a) => {                  // le rayon (dessiné SOUS ton gommage : il s'arrête sur ta silhouette)
+    const vx = T[0] - O[0], vy = T[1] - O[1], L = Math.hypot(vx, vy); if (L < 2 || w < .5) return;
+    const ux = vx / L, uy = vy / L, nx = -uy, ny = ux, N = 26;
+    const hw = (t, f) => w * f * (.86 + .14 * Math.sin(t * 17 - el * 31)) * Math.min(1, .5 + t * 4);
+    g.save(); g.globalAlpha = a;
+    for (const [f, col] of [[1.75, 'rgba(60,150,255,.35)'], [1.15, 'rgba(85,200,255,.85)'], [.72, '#c9f4ff'], [.36, '#ffffff']]) {
+      const p = new Path2D();
+      for (let i = 0; i <= N; i++) { const t = i / N, h = hw(t, f); i ? p.lineTo(O[0] + ux * L * t + nx * h, O[1] + uy * L * t + ny * h) : p.moveTo(O[0] + nx * h, O[1] + ny * h); }
+      for (let i = N; i >= 0; i--) { const t = i / N, h = hw(t, f); p.lineTo(O[0] + ux * L * t - nx * h, O[1] + uy * L * t - ny * h); }
+      p.closePath(); g.fillStyle = col; g.fill(p);
+      g.beginPath(); g.arc(T[0], T[1], hw(1, f), 0, 6.2832); g.fill();
+    }
+    g.restore();
+  };
+  const gomuArm = (g, S0, F, k, el) => {                     // bras élastique : un tube rouge qui s'étire (épaule tatouée)
+    const vx = F[0] - S0[0], vy = F[1] - S0[1], L = Math.hypot(vx, vy) || 1, nx = -vy / L, ny = vx / L, sag = L * .07;
+    const cx = (S0[0] + F[0]) / 2 + nx * sag, cy = (S0[1] + F[1]) / 2 + ny * sag;
+    const path = new Path2D(); path.moveTo(S0[0], S0[1]); path.quadraticCurveTo(cx, cy, F[0], F[1]);
+    g.save(); g.lineCap = 'round'; g.lineJoin = 'round';
+    for (const [col, w] of [[P_INK, 98], [ARM_DARK, 72], ['#d24235', 46]]) { g.strokeStyle = col; g.lineWidth = w * k; g.stroke(path); }
+    g.strokeStyle = 'rgba(28,13,10,.5)'; g.lineWidth = Math.max(2, 5 * k);
+    for (const t of [.35, .55, .75]) {                       // les plis du caoutchouc
+      const u = 1 - t, px = u * u * S0[0] + 2 * u * t * cx + t * t * F[0], py = u * u * S0[1] + 2 * u * t * cy + t * t * F[1];
+      const tx = 2 * u * (cx - S0[0]) + 2 * t * (F[0] - cx), ty = 2 * u * (cy - S0[1]) + 2 * t * (F[1] - cy), tl = Math.hypot(tx, ty) || 1;
+      g.beginPath(); g.moveTo(px - ty / tl * 26 * k, py + tx / tl * 26 * k); g.lineTo(px + ty / tl * 26 * k, py - tx / tl * 26 * k); g.stroke();
+    }
+    const d = new Path2D(); d.ellipse(S0[0], S0[1], 84 * k, 72 * k, Math.atan2(vy, vx), 0, 6.2832);
+    g.strokeStyle = P_INK; g.lineWidth = 26 * k; g.stroke(d); g.fillStyle = '#d8473a'; g.fill(d);
+    if (P_SUN.complete && P_SUN.naturalWidth) { const z = 124 * k; g.save(); g.translate(S0[0], S0[1]); g.rotate(Math.atan2(vy, vx) - Math.PI / 2); g.drawImage(P_SUN, -z / 2, -z / 2, z, z); g.restore(); }
+    g.restore();
+  };
+  const fistDraw = (g, P, w, ang, a) => {                    // le poing (devant toi), le pouce toujours au-dessus
+    const F = gagSprites().fist, s = w / F.width;
+    g.save(); g.globalAlpha = a; g.translate(P[0], P[1]); g.rotate(ang);
+    if (Math.cos(ang) < 0) g.scale(1, -1);
+    g.scale(s, s); g.drawImage(F, -F.width * .55, -F.height / 2); g.restore();
+  };
+  const boom = (g, P, r, el, a) => {                         // étoile d'impact
+    if (r < 1) return;
+    const star = (rr, f) => { const p = new Path2D(); for (let i = 0; i < 24; i++) { const an = i / 24 * 6.2832, q = i % 2 ? f : 1 + .14 * Math.sin(i * 7.3); i ? p.lineTo(Math.cos(an) * rr * q, Math.sin(an) * rr * q) : p.moveTo(rr * q, 0); } p.closePath(); return p; };
+    g.save(); g.globalAlpha = a; g.translate(P[0], P[1]); g.rotate(el * .6); g.lineJoin = 'round';
+    const p1 = star(r, .56), p2 = star(r * .62, .6);
+    g.strokeStyle = P_INK; g.lineWidth = r * .1; g.stroke(p1); g.fillStyle = '#fff3ad'; g.fill(p1);
+    g.fillStyle = '#ffb02a'; g.fill(p2); g.restore();
+  };
+  const dizzy = (g, C0, rx, ry, s, el, a) => {               // étoiles qui tournent au-dessus de ta tête
+    g.save(); g.globalAlpha = a;
+    for (let i = 0; i < 3; i++) {
+      const an = el * 4 + i * 2.094, x = C0[0] + Math.cos(an) * rx, y = C0[1] + Math.sin(an) * ry, z = s * (.85 + .25 * Math.sin(an));
+      g.fillStyle = P_INK; star5(g, x, y, z * 1.3, el * 2 + i); g.fillStyle = '#ffd23a'; star5(g, x, y, z, el * 2 + i);
+    }
+    g.restore();
+  };
+  /* ce qui se dessine DEVANT toi pendant un gag (après le gommage) */
+  const gagFront = (g, f, el, U, Zv) => {
+    if (f.ball) ballDraw(g, f.ball, f.br, el, f.a);
+    if (f.hit) {                                             // l'impact du rayon, sur le bord de ta tête
+      const r = U * (.5 + .08 * Math.sin(el * 40)) * f.hk;
+      g.save(); g.globalAlpha = f.a; g.drawImage(gagSprites().ball, f.hit[0] - r * 1.3, f.hit[1] - r * 1.3, r * 2.6, r * 2.6); g.restore();
+      sparks(g, f.hit[0], f.hit[1], r * .9, el, f.a * f.hk);
+    }
+    if (f.flash > 0) { g.save(); g.fillStyle = 'rgba(225,248,255,' + (f.flash * .5).toFixed(3) + ')'; g.fillRect(Zv[0], Zv[1], Zv[2] - Zv[0], Zv[3] - Zv[1]); g.restore(); }
+    if (f.smoke) {                                           // fumée qui sort de ta tête
+      const S = gagSprites().smoke;
+      g.save();
+      for (let i = 0; i < 6; i++) {
+        const ph = (f.smoke.t * .9 + i / 6) % 1, x = f.smoke.p[0] + (i - 2.5) * U * .35 + Math.sin(el * 2 + i) * U * .1, y = f.smoke.p[1] - ph * U * 1.6, z = U * (.5 + .7 * ph);
+        g.globalAlpha = f.smoke.a * Math.sin(ph * Math.PI) * .85; g.drawImage(S, x - z / 2, y - z / 2, z, z);
+      }
+      g.restore();
+    }
+    if (f.lines) {                                           // traits de vitesse derrière le poing
+      const { P, ux, uy, w } = f.lines;
+      g.save(); g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineCap = 'round'; g.lineWidth = Math.max(2, w * .035);
+      for (const o of [-.38, -.18, 0, .2, .4]) { const ox = -uy * w * o, oy = ux * w * o, l = w * (.9 + .4 * Math.abs(Math.sin(o * 9 + el * 20)));
+        g.beginPath(); g.moveTo(P[0] + ox - ux * w * .55, P[1] + oy - uy * w * .55); g.lineTo(P[0] + ox - ux * (w * .55 + l), P[1] + oy - uy * (w * .55 + l)); g.stroke(); }
+      g.restore();
+    }
+    if (f.boom) boom(g, f.boom, f.boomR, el, f.a);
+    if (f.fist) fistDraw(g, f.fist, f.fw, f.ang, f.a);
+    if (f.dizzy) dizzy(g, f.dizzy, U * 1.1, U * .3, U * .2, el, f.dz);
+  };
+
   /* coude d'un bras à deux segments (épaule → coude Lu, coude → poignet Lf), plié du côté « dn » ; trop loin = bras tendu */
   const elbowIK = (S0, W0, Lu, Lf, dn) => {
     const vx = W0[0] - S0[0], vy = W0[1] - S0[1], d = Math.hypot(vx, vy) || 1, ux = vx / d, uy = vy / d;
@@ -1450,7 +1748,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const S = sprites();
     const { fw, rx, ry, dx, dy, mx, my } = P, roll = Math.atan2(ry, rx);
     const gy = fx.guy || (fx.guy = { side:0, to:0, x:0, y:0, ang:0, look:0, init:false, want:0, wantT:0, sw:0, pop:1, auto:0, autoT:7, why:'dos',
-                                     U:0, ratio:0, yaw:.5, yawF:-1, yawB:-1, c0:0, st:-1, nextStand:null, bub:null, bubEnd:0, said0:false, rushSaid:false });
+                                     U:0, ratio:0, yaw:.5, yawF:-1, yawB:-1, c0:0, st:-1, gag:null, bub:null, bubEnd:0, said0:false, rushSaid:false });
     const kf = 1 - Math.exp(-dt * 6);                      // il suit tes mouvements avec un petit temps de retard
     /* --- ton orientation (lacet : 0,5 = de face) et ta taille, stables même de profil --- */
     const Lc = fx.sm[234], Rc = fx.sm[454], Nz = fx.sm[1], Tp = fx.sm[10], Ch = fx.sm[152];
@@ -1470,6 +1768,11 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     }
     gy.U = gy.U ? gy.U + (U - gy.U) * (1 - Math.exp(-dt * 2.5)) : U;
     U = gy.U;
+    /* tout près de la caméra (selfie au tel) : il se serre contre toi et sort de derrière ta tête (réglages PAAT_PRES, comme
+       l'ancienne version du tel) · plus loin (cam bureau, tel posé) : réglages normaux. Entre les deux : en douceur. */
+    const pr0 = C.PAAT_PRES ? Math.max(0, Math.min(1, (U / Math.min(W, H) - .08) / .09)) : 0;
+    gy.pp = gy.pp == null ? pr0 : gy.pp + (pr0 - gy.pp) * (1 - Math.exp(-dt / .8));
+    const pv = key => { const b = C.PAAT_PRES && C.PAAT_PRES[key]; return b == null ? C[key] : C[key] + (b - C[key]) * gy.pp; };
     const yawC = Math.max(0, Math.min(1, gy.yaw));
     gy.c0 += ((.5 - yawC) * C.PAAT_LACET - gy.c0) * kf;  // tête tournée : le centre de ta tête n'est plus entre tes yeux
     const G = (u, w) => [mx + (rx * (u + gy.c0) + dx * w) * U, my + (ry * (u + gy.c0) + dy * w) * U];   // repère de TON visage
@@ -1482,27 +1785,51 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       const nn = Math.hypot(fs.rx, fs.ry) || 1; fs.rx /= nn; fs.ry /= nn; }
     const Gs = (u, w) => [fs.mx + (fs.rx * (u + fs.c0) - fs.ry * w) * fs.U, fs.my + (fs.ry * (u + fs.c0) + fs.rx * w) * fs.U];
     const ta = Math.min(1, Math.abs(yawC - .5) * 2) * .45;   // tête tournée : ton nez et l'arrière de ta tête dépassent → on élargit
-    const MX = C.PAAT_MAINS_X + ta, PF = PAAT_FACE, fx0 = PF[0] + ta;
+    const MX = pv('PAAT_MAINS_X') + ta, PF = PAAT_FACE, fx0 = PF[0] + ta;
     const face = rectOf([G(-fx0, PF[1]), G(fx0, PF[1]), G(-fx0, PF[2]), G(fx0, PF[2])]);
     face[4] = 4;
 
-    /* --- gag Stand : de temps en temps, quelques secondes --- */
-    const D = Math.max(3, C.FILTER_DURATION), SD = C.PAAT_STAND_DUREE;
-    if (gy.nextStand == null) gy.nextStand = FX[fx.key].standFirst ? 2.2 : C.PAAT_STAND_1 + Math.random() * 6;
-    if (gy.st < 0 && !gy.sw && el > gy.nextStand && el < D - SD - 1.5) {
-      gy.st = el; gy.rushSaid = false; gy.nextStand = el + C.PAAT_STAND_ECART * (.75 + Math.random() * .5);
-      gy.bub = { txt:pick('stand'), t0:el, dur:2.2 };
+    /* --- gags manga : Stand, Super Saiyan, bras élastique — PAAT_GAGS par passage (1), au hasard, vers PAAT_GAG_1 s
+           (noms SAMMI « stand » · « kamehameha » · « gomu » = le farceur, avec ce gag-là dès le début) --- */
+    const D = durOf(fx.key), GD = { stand:C.PAAT_STAND_DUREE, saiyan:C.PAAT_SAIYAN_DUREE, gomu:C.PAAT_GOMU_DUREE };
+    if (!gy.gags) {
+      const o = ['stand', 'saiyan', 'gomu'].sort(() => Math.random() - .5), f = fx.gagFirst;
+      if (f && o.includes(f)) { o.splice(o.indexOf(f), 1); o.unshift(f); }
+      else if (o[0] === gagDernier()) o.push(o.shift());   // jamais le même gag qu'à la fin du passage d'avant
+      gy.gags = o.slice(0, Math.max(1, Math.min(3, Math.round(C.PAAT_GAGS || 1)))); gy.gi = 0; gy.nextGag = f ? 2.2 : C.PAAT_GAG_1 + Math.random() * 15;
     }
-    const se = gy.st >= 0 ? el - gy.st : -1;
-    if (se > SD) gy.st = -1;
-    const sk = gy.st < 0 ? 0 : Math.max(0, Math.min(1, se / .35, (SD - se) / .5));   // 0 → 1 → 0
-    const rushing = gy.st >= 0 && se > 2 && se < SD - 1.2;
-    if (rushing && !gy.rushSaid) { gy.rushSaid = true; gy.bub = { txt:RUSH_TXT, t0:el, dur:SD - 1.2 - se }; }
+    const calme = !gy.sw && gy.swH == null && gy.swU == null && !((gy.ec || 0) > .1 && gy.ec < .9);   // pas en plein changement de côté ou de posture
+    if (gy.st < 0 && calme && el > gy.nextGag) {
+      const type = gy.gags[gy.gi];
+      if (type && el < D - GD[type] - 1.5) {
+        gy.gi++; gagDernier(type); gy.gag = type; gy.gd = GD[type]; gy.st = el; gy.rushSaid = false; gy.gs = 0; gy.gW0 = null; gy.fAng = null;
+        gy.ecG = (gy.ec || 0) > .5 ? 1 : 0;
+        gy.nextGag = el + C.PAAT_GAG_ECART * (.85 + Math.random() * .3);
+        gy.bub = type === 'stand' ? { txt:pickB('stand'), t0:el, dur:2.2 } : { txt:(type === 'saiyan' ? SAIYAN_TXT : GOMU_TXT)[0], t0:el, dur:type === 'saiyan' ? 1.7 : 2.1 };
+      } else gy.nextGag = 1e9;
+    }
+    let se = gy.st >= 0 ? el - gy.st : -1;
+    const gd = gy.gd || 1;
+    if (se > gd) { gy.st = -1; gy.gag = null; se = -1; }
+    const gag = gy.st < 0 ? '' : gy.gag;
+    const gk = gag ? Math.max(0, Math.min(1, se / .35, (gd - se) / .5)) : 0;   // un gag en cours : 0 → 1 → 0
+    const sk = gag === 'stand' ? gk : 0;                     // Stand
+    const rushing = gag === 'stand' && se > 2 && se < gd - 1.2;
+    if (rushing && !gy.rushSaid) { gy.rushSaid = true; gy.bub = { txt:RUSH_TXT, t0:el, dur:gd - 1.2 - se }; }
+    /* Super Saiyan (en part de la durée) : transformation (→ 20 %) · charge (→ 57,5 %) · rayon (→ 82,5 %) · fumée */
+    const sf = gag === 'saiyan' ? se / gd : -1;
+    const hairK = sf < 0 ? 0 : Math.max(0, Math.min(1, sf / .09, (.98 - sf) / .08));   // flamme dorée + aura
+    const sa = sf < 0 ? 0 : Math.max(0, Math.min(1, sf / .08, (1 - sf) / .1));        // il recule un peu (place pour le rayon)
+    if (sf >= .2 && gy.gs < 1) { gy.gs = 1; gy.bub = { txt:SAIYAN_TXT[1], t0:el, dur:gd * .6 }; }
+    /* bras élastique (en secondes) : il arme (→ 2) · il frappe (→ 2,3) · reste collé (→ 3,2) · revient en « boing » (→ 4,2) */
+    const gf = gag === 'gomu' ? se : -1;
+    const bandK = gf < 0 ? 0 : Math.max(0, Math.min(1, gf / .4, (gd - gf) / .3));   // bandana de pirate pendant tout le gag
+    if (gf >= 2 && gy.gs < 1) { gy.gs = 1; gy.bub = { txt:GOMU_TXT[1], t0:el, dur:1.6 }; }
 
     /* --- de quel côté ? --- */
-    const TAI = C.PAAT_TAILLE * (1 + .15 * sk) * (1 - .2 * (gy.ec || 0));   // il s'écarte = il recule aussi un peu (plus petit)
+    const TAI = pv('PAAT_TAILLE') * (1 + .15 * sk) * (1 - .1 * (gy.ec || 0));   // il s'écarte = il recule aussi un peu (plus petit)
     let R = 1.1 * U * TAI; const shrink = Math.min(1, H * .2 / R); R *= shrink;   // jamais énorme si tu es tout près
-    const COTE = C.PAAT_COTE, HAUT = C.PAAT_HAUT - .45 * sk;
+    const COTE = pv('PAAT_COTE'), HAUT = pv('PAAT_HAUT') - .45 * sk - .25 * sa;
     const Zv = zonePx(W, H);                               // la partie visible de la caméra (fenêtre « masques et filtres »…)
     const fits = s => { const p = G(s * (COTE + .6), HAUT); return p[0] > Zv[0] + R * .85 && p[0] < Zv[2] - R * .85; };   // ce côté a assez de place ? (sa tête + l'écart pour ta main)
     /* tu tournes la tête vers lui → il passe de l'autre côté. On regarde le MOUVEMENT de ta tête
@@ -1530,13 +1857,13 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     if (!gy.sw) {
       gy.auto += dt;
       if (!fits(gy.side) && fits(-gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }        // il sortirait de l'image → autre côté
-      else if (sk === 0 && el > 2.5 && gy.auto > .8 && turn && turn !== gy.side && fits(turn)) {    // tu regardes de son côté
+      else if (!gag && el > 2.5 && gy.auto > .8 && turn && turn !== gy.side && fits(turn)) {        // tu regardes de son côté
         if (gy.want !== turn) { gy.want = turn; gy.wantT = 0; }
         gy.wantT += dt;
         if (gy.wantT > .2) { gy.to = turn; gy.sw = 1; gy.want = 0; gy.why = 'tourne'; }
       } else {
         gy.want = 0;
-        if (gy.st < 0 && el > 2.5 && gy.auto > gy.autoT && fits(-gy.side) && !(turn && turn === gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }   // farceur : il te tourne autour (jamais vers là où tu regardes)
+        if (!gag && el > 2.5 && gy.auto > gy.autoT && fits(-gy.side) && !(turn && turn === gy.side)) { gy.to = -gy.side; gy.sw = 1; gy.why = 'dos'; }   // farceur : il te tourne autour (jamais vers là où tu regardes)
       }
     }
     if (gy.sw === 1) {                                     // changement net : il rétrécit vite…
@@ -1544,7 +1871,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       if (gy.pop <= 0) {
         gy.side = gy.to; gy.init = false; gy.sw = 2; gy.auto = 0; gy.autoT = C.PAAT_AUTO * (.8 + Math.random() * .4);
         gy.yawB = gy.yawF;                                 // nouvelle position de référence : pas de va-et-vient
-        if (gy.st < 0) gy.bub = { txt:pick(gy.why === 'tourne' ? 'tourne' : 'dos'), t0:el, dur:3 };
+        if (!gag) gy.bub = { txt:pickB(gy.why === 'tourne' ? 'tourne' : 'dos'), t0:el, dur:3 };
       }
     } else if (gy.sw === 2) {                              // … et rebondit de l'autre côté
       gy.pop = Math.min(1, gy.pop + dt / .25);
@@ -1553,57 +1880,65 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const ps = gy.sw === 2 ? backOut(gy.pop) : gy.pop;     // sa taille pendant le changement
     const sd = gy.side;
 
-    /* --- position : sa tête à côté de la tienne, plus haut ; son torse penché rentre dans ton dos --- */
+    /* --- position : redressé comme au Stand (torse droit qui flotte, bas du torse effacé), sa tête à côté de la tienne, plus haut --- */
     /* de temps en temps (toutes les 12 à 20 s, pendant 4 à 6 s) il s'écarte un peu de toi : il tend alors les deux bras vers toi */
     if (gy.ecN == null) gy.ecN = el + 9 + Math.random() * 6;
-    if (el > gy.ecN && gy.st < 0 && !gy.sw) { gy.ecE = el + 4 + Math.random() * 2; gy.ecN = gy.ecE + 12 + Math.random() * 8; }
-    gy.ec = (gy.ec || 0) + ((gy.st < 0 && (el < (gy.ecE || 0) || gy.farKO) ? 1 : 0) - (gy.ec || 0)) * (1 - Math.exp(-dt * 2.5));   // (aussi quand l'autre côté de ta tête est hors de la fenêtre)
-    const ecX = MX + 2.95 * TAI * shrink + .2;             // assez loin pour tendre les bras (la fenêtre peut le retenir plus près)
-    const T = G(sd * (COTE + (ecX - COTE) * gy.ec), HAUT + 1.0 * gy.ec + .1 * sk * Math.sin(el * 1.6));   // (le Stand flotte)
-    const inImg = () => { T[0] = Math.max(Zv[0] + R * 1.02, Math.min(Zv[2] - R * 1.02, T[0])); T[1] = Math.max(Zv[1] + R * 1.02, Math.min(Zv[3] - R * 1.02, T[1])); };
+    if (el > gy.ecN && !gag && !gy.sw) { gy.ecE = el + 4 + Math.random() * 2; gy.ecN = gy.ecE + 12 + Math.random() * 8; }
+    const ecT = gy.pp > .5 ? 0 : gag ? gy.ecG : (el < (gy.ecE || 0) || gy.farKO) ? 1 : 0;   // (tout près : pas la place de s'écarter)   // (aussi quand l'autre côté de ta tête est hors de la fenêtre) · figé pendant un gag
+    gy.ec = (gy.ec || 0) + (ecT - (gy.ec || 0)) * (1 - Math.exp(-dt * 2.5));
+    const szB = TAI * shrink, MY = pv('PAAT_MAINS_Y');
+    const ecX = MX + 2.4 * szB, ecY = MY - .1 - 2.3 * szB;   // bras tendus : il s'écarte sur le côté, ses deux bras tendus vers ta tête (sans jamais s'étirer)
+    const T = G(sd * (COTE + (ecX - COTE) * gy.ec + 3 * sa), HAUT + (ecY - HAUT) * gy.ec + .1 * Math.sin(el * 1.6));
+    const topM = R * (1.02 + 1.3 * hairK + .12 * bandK);   // (Super Saiyan / bras élastique : sa flamme dorée et son bandana restent dans l'image aussi)
+    const inImg = () => { T[0] = Math.max(Zv[0] + R * 1.02, Math.min(Zv[2] - R * 1.02, T[0])); T[1] = Math.max(Zv[1] + topM, Math.min(Zv[3] - R * 1.02, T[1])); };
     inImg();                                               // sa tête reste toujours entière dans la partie visible
     {                                                      // … et ne passe jamais derrière sa propre main (ta tête trop haute dans l'image, etc.)
       const hz = C.PAAT_MAINS * U * TAI * shrink, mg = R * .06;   // ses mains de son côté (une, ou deux quand il tend les bras)
-      const hrs = gy.m === 1 ? [] : [handRect([Gs(sd * MX, C.PAAT_MAINS_Y), hz])];   // (bras tendus : ses mains sont devant lui, pas besoin)
+      const hrs = gy.m === 1 || gag === 'saiyan' ? [] : [handRect([Gs(sd * MX, MY), hz])];   // (bras tendus : ses mains sont devant lui, pas besoin)
       const hit = () => hrs.some(hr => { const cx = Math.max(hr[0] - mg, Math.min(hr[2] + mg, T[0])), cy = Math.max(hr[1] - mg, Math.min(hr[3] + mg, T[1])); return Math.hypot(T[0] - cx, T[1] - cy) < R; });
       for (let i = 0; i < 16 && hit(); i++) { T[0] += sd * rx * R * .1; T[1] += sd * ry * R * .1; inImg(); }   // il s'écarte sur le côté
     }
     if (!gy.init) { gy.x = T[0]; gy.y = T[1]; gy.ang = roll; gy.init = true; }
     gy.x += (T[0] - gy.x) * kf; gy.y += (T[1] - gy.y) * kf;
     const up = Math.min(backOut(el / .9), a);              // il sort de ton dos à l'arrivée… et y rentre à la fin
-    const A0 = G(sd * C.PAAT_DOS_X, C.PAAT_DOS_Y);         // le point de ton dos d'où il sort
-    const hx = A0[0] + (gy.x - A0[0]) * up, hy = A0[1] + (gy.y - A0[1]) * up + .02 * U * Math.sin(el * 2.4);
+    const A0 = G(sd * pv('PAAT_DOS_X'), pv('PAAT_DOS_Y'));         // le point de ton dos d'où il sort
+    const shake = sf > .2 && sf < .575 ? .025 * U * Math.sin(el * 63) : 0;   // Super Saiyan : il tremble en chargeant
+    const hx = A0[0] + (gy.x - A0[0]) * up + shake, hy = A0[1] + (gy.y - A0[1]) * up + .02 * U * Math.sin(el * 2.4);
     const k = 2.2 * U * TAI * shrink * Math.max(.02, ps) * (.4 + .6 * up) / 512;
-    const vx = A0[0] - hx, vy = A0[1] - hy, Lb = Math.hypot(vx, vy) || 1;
-    let dA = Math.atan2(-vx, vy) - roll; dA = Math.atan2(Math.sin(dA), Math.cos(dA));
-    const lean = roll + Math.max(-.9, Math.min(.9, dA)), tgt = lean + (roll * .5 + .05 * Math.sin(el * 1.1) - lean) * sk;   // le Stand se redresse
-    const stretch = 1 + (Math.max(.8, Math.min(1.6, (Lb + .5 * U - 224 * k) / (620 * k))) - 1) * (1 - sk);
-    gy.ang += (tgt - gy.ang) * kf;
-    const lookT = sk > .5 ? 0 : (el % 5.2) < 3.8 ? -sd : 0;   // regard en coin vers toi… puis vers la caméra
+    gy.ang += (roll * .5 + .05 * Math.sin(el * 1.1) - gy.ang) * kf;   // toujours droit (comme au Stand), qui ondule un peu
+    const lookT = gk > .5 ? (gag === 'stand' ? 0 : -sd) : (el % 5.2) < 3.8 ? -sd : 0;   // regard en coin vers toi… puis vers la caméra
     gy.look += (lookT - gy.look) * (1 - Math.exp(-dt * 7));
     const bt = (el + .7) % 3.4, bl0 = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;   // clignement
-    const wt = el % 20.8 - 19.65, wk = sk > .5 || wt < 0 || wt > .65 ? 0 : wt < .12 ? wt / .12 : wt < .45 ? 1 : 1 - (wt - .45) / .2;   // un regard aux viewers sur quatre (≈ toutes les 20 s) : clin d'œil
+    const wt = el % 20.8 - 19.65, wk = gk > .5 || wt < 0 || wt > .65 ? 0 : wt < .12 ? wt / .12 : wt < .45 ? 1 : 1 - (wt - .45) / .2;   // un regard aux viewers sur quatre (≈ toutes les 20 s) : clin d'œil
     const blink = wk > 0 ? (sd > 0 ? [bl0, Math.max(bl0, wk)] : [Math.max(bl0, wk), bl0]) : bl0;
 
     let L2G = null;
+    const GS = sf >= 0 || gf >= 0 ? gagSprites() : null;
     if (ps > .02) {
-      /* corps + tête (Stand : aura violette, bas du torse qui s'efface) */
+      if (GS && hairK > .01) {                             // Super Saiyan : aura dorée DERRIÈRE lui
+        g.save(); g.translate(hx, hy); g.rotate(gy.ang); g.scale(k, k); g.translate(-256, -256);
+        auraDraw(g, el, hairK * up); g.restore();
+      }
+      /* corps + tête, bas du torse qui s'efface (Stand : aura violette) */
       g.save();
       if (sk > .01) { g.shadowColor = 'rgba(164,92,255,.95)'; g.shadowBlur = R * (.45 + .2 * Math.sin(el * 5)) * sk; g.globalAlpha = 1 - .1 * sk; }
-      L2G = paatFigure(g, S, hx, hy, gy.ang, k, gy.look, blink, stretch, sk > .5 ? 'stand' : 'soft');
+      const Sx = GS && hairK > .5 ? Object.assign({}, S, { pupil:GS.pupilT }) : S;
+      L2G = paatFigure(g, Sx, hx, hy, gy.ang, k, gy.look, blink, 1, 'stand', GS && hairK > .01 ? c => saiyanHair(c, hairK, el) : GS && bandK > .01 ? c => bandanaDraw(c, bandK, hx > mx ? 1 : -1, el) : null);
       g.restore();
+      if (GS && hairK > .01) sparks(g, hx, hy, R, el, hairK * up);
     }
     /* deux bras : un doigt de chaque côté de ton visage (le 2e bras passe derrière toi, ressort derrière ton autre épaule) */
     const hands = [];
     gy.armK = gy.sw ? 0 : Math.min(1, (gy.armK || 0) + dt / .35);   // après un changement de côté, il relève les bras
     const ap = (el < 1 ? 0 : backOut((el - 1) / .4)) * Math.min(1, a * 2) * up * backOut(gy.armK);
-    const lis = gy.lis || (gy.lis = {});                  // coudes lissés : plus de petits sursauts quand le suivi tremble
-    if (gy.sw || el - (gy.lisT || 0) > .5) for (const kk in lis) delete lis[kk];
+    const lis = gy.lis || (gy.lis = {}), fk = gy.fk || (gy.fk = {});   // lissages : plus de petits sursauts quand le suivi tremble
+    if (gy.sw || el - (gy.lisT || 0) > .5) { for (const kk in lis) delete lis[kk]; for (const kk in fk) delete fk[kk]; }
     gy.lisT = el;
-    const lisse = (key, p, tau = .35) => {
-      const q = lis[key]; if (!q) { lis[key] = p.slice(); return p; }
+    const lisse = (key, p, tau = .35, p0) => {
+      const q = lis[key]; if (!q) { lis[key] = (p0 || p).slice(); return lis[key].slice(); }
       const kf = 1 - Math.exp(-dt / tau); q[0] += (p[0] - q[0]) * kf; q[1] += (p[1] - q[1]) * kf; return q.slice();
     };
+    let FXs = null;                                        // effets du gag à dessiner devant toi (après le gommage)
     if (L2G && ap > .01) {
       const hh0 = C.PAAT_MAINS * U * TAI * shrink;
       /* Ses doigts d'honneur, deux façons (bras aux proportions naturelles : bras = avant-bras, musclés, jamais étirés) :
@@ -1611,54 +1946,134 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
            l'autre passe derrière ta tête (coude caché derrière ta tête) et un avant-bras normal ressort de l'autre côté ;
          · « tendus » : quand il s'écarte de toi (ou que l'autre côté est hors d'atteinte / hors de la fenêtre),
            il tend les deux bras vers toi, deux doigts côte à côte du même côté.
-         Pour passer de l'un à l'autre : il baisse les bras, puis les relève. Épaules, coudes et poignets lissés. */
+         Pour passer de l'un à l'autre : il baisse les bras, puis les relève.
+         Bras « à angles », comme une marionnette : longueurs fixes, on lisse l'angle de l'épaule et celui du coude
+         (pas les positions), le coude plie toujours du même côté et dans des limites naturelles → il ne s'étire ni ne se désarticule jamais. */
       const Lseg = 1.15 * k * 512 / 2.2, mH = hh0 * .55;   // longueur du bras = longueur de l'avant-bras
+      const BMIN = .14, BMAX = 2.35;                       // pli du coude : presque tendu → bien plié (rad)
+      const armFK = (key, S0, Wt, L, dn, tau, mode) => {
+        const vx = Wt[0] - S0[0], vy = Wt[1] - S0[1], d0 = Math.hypot(vx, vy) || 1, ux = vx / d0, uy = vy / d0;
+        let q = fk[key];
+        if (q && q.mode !== mode) q = null;                // (nouvelle pose de gag : le coude peut changer de côté, en douceur)
+        const s = q ? q.s : (uy * dn[0] - ux * dn[1] >= 0 ? 1 : -1);   // côté du coude, choisi une fois puis gardé
+        const d = Math.max(2 * L * Math.cos(BMAX / 2), Math.min(2 * L * Math.cos(BMIN / 2), d0));
+        const al = Math.acos(Math.min(1, d / (2 * L))), th = Math.atan2(vy, vx) - s * al, b = 2 * al;
+        if (!q) { const o = fk[key]; q = fk[key] = o ? Object.assign(o, { s, mode }) : { th, b, s, mode }; }
+        if (q.th == null) { q.th = th; q.b = b; }
+        else { const kq = 1 - Math.exp(-dt / (tau || .12)); let e = th - q.th; e = Math.atan2(Math.sin(e), Math.cos(e)); q.th += e * kq; q.b += (b - q.b) * kq; }
+        const E = [S0[0] + Math.cos(q.th) * L, S0[1] + Math.sin(q.th) * L], tf = q.th + q.s * q.b;
+        return [E, [E[0] + Math.cos(tf) * L, E[1] + Math.sin(tf) * L]];
+      };
       const So = lisse('so', L2G(256 + sd * 230, 600), .2), Si = lisse('si', L2G(256 - sd * 230, 600), .2);
       const zcl = p => [Math.max(Zv[0] + mH, Math.min(Zv[2] - mH, p[0])), Math.max(Zv[1] + mH, Math.min(Zv[3] - mH, p[1]))];
       let farT = null;                                     // l'autre côté de ta tête : à portée de son bras, et dans la partie visible ?
-      for (const uu of [MX, 1.8, 1.6]) { const p = Gs(-sd * uu, C.PAAT_MAINS_Y), q = zcl(p);
+      for (const uu of [MX, 1.8, 1.6]) { const p = Gs(-sd * uu, MY), q = zcl(p);
         if (Math.hypot(q[0] - p[0], q[1] - p[1]) < hh0 * .2) { farT = p; break; } }
       if (farT) gy.farT = farT;
       gy.farKO = !farT;
       const want = gy.ec > .5 || !farT ? 1 : 0;           // 0 = autour · 1 = tendus
       if (gy.m == null) { gy.m = want; gy.mT = el; }
-      if (gy.swH == null && gy.swU == null && want !== gy.m && el - gy.mT > 1.2) { gy.swH = el; gy.mW = want; }
+      if (!gag && gy.swH == null && gy.swU == null && want !== gy.m && el - gy.mT > 1.2) { gy.swH = el; gy.mW = want; }
       let apM = 1;
       if (gy.swH != null) {                                // il baisse les bras…
         const q = (el - gy.swH) / .25;
         if (q < 1) apM = 1 - q * q;
-        else { gy.m = gy.mW; gy.mT = el; gy.swH = null; gy.swU = el; apM = 0; for (const kk of ['wO', 'wI', 'cO', 'cI']) delete lis[kk]; }
+        else { gy.m = gy.mW; gy.mT = el; gy.swH = null; gy.swU = el; apM = 0; for (const kk of ['wI', 'cI']) delete lis[kk]; for (const kk of ['O', 'I']) delete fk[kk]; }
       } else if (gy.swU != null) {                         // … et les relève dans l'autre position
         const q = (el - gy.swU) / .35;
         if (q < 1) apM = backOut(q); else gy.swU = null;
       }
-      const apH = ap * apM, farP = farT || gy.farT || Gs(-sd * 1.6, C.PAAT_MAINS_Y);
-      const tend = (S, P) => {                             // bras tendu de l'épaule S vers P (jamais plus loin que ta tête), presque droit
-        const vx = P[0] - S[0], vy = P[1] - S[1], d = Math.hypot(vx, vy) || 1, L = Math.min(d, 1.8 * Lseg);
-        return [S[0] + vx / d * L, S[1] + vy / d * L];
-      };
+      const apH = ap * apM, farP = farT || gy.farT || Gs(-sd * 1.6, MY);
       let arms;
-      if (gy.m === 0) arms = [[So, Gs(sd * MX, C.PAAT_MAINS_Y), 'O'], [Si, farP, 'I']];
+      if (gy.m === 0) arms = [[So, Gs(sd * MX, MY), 'O'], [Si, farP, 'I']];
       else {                                               // tendus : la main côté toi vise ta tête, l'autre juste à côté (un peu plus bas)
-        const hI = tend(Si, Gs(sd * MX, C.PAAT_MAINS_Y - .1)), u2 = fs.U;
-        arms = [[Si, hI, 'I'], [So, tend(So, [hI[0] + (fs.rx * sd * .55 - fs.ry * .4) * u2, hI[1] + (fs.ry * sd * .55 + fs.rx * .4) * u2]), 'O']];
+        const hI = Gs(sd * MX, MY - .1), u2 = fs.U;
+        arms = [[Si, hI, 'I'], [So, [hI[0] + (fs.rx * sd * .55 - fs.ry * .4) * u2, hI[1] + (fs.ry * sd * .55 + fs.rx * .4) * u2], 'O']];
       }
-      for (const [S0, tgt, who] of arms) {
-        const outer = who === 'O', Wt = zcl(tgt), R0 = L2G(256 + (outer ? sd : -sd) * 120, 760);
-        let W0 = [R0[0] + (Wt[0] - R0[0]) * apH, R0[1] + (Wt[1] - R0[1]) * apH];
-        const behind = gy.m === 0 && !outer;               // le bras qui passe derrière ta tête
-        const dd = Math.hypot(W0[0] - S0[0], W0[1] - S0[1]), dm = 1.97 * Lseg;   // les bras visibles : jamais plus longs qu'un bras normal
-        if (!behind && dd > dm) W0 = [S0[0] + (W0[0] - S0[0]) * dm / dd, S0[1] + (W0[1] - S0[1]) * dm / dd];
-        W0 = lisse('w' + who, W0, .08);
-        const dn = outer ? [dx + sd * rx * .6, dy + sd * ry * .6] : [dx - sd * rx * .2, dy - sd * ry * .2];
-        /* derrière ta tête : le coude est caché derrière ta tête, à une longueur d'avant-bras de sa main (vers toi, un peu plus haut) :
-           on voit son bras partir de son épaule et disparaître derrière ta tête, puis un avant-bras normal ressortir de l'autre côté */
-        const E = lisse('c' + who, behind ? [W0[0] + (fs.rx * sd * .94 + fs.ry * .34) * Lseg, W0[1] + (fs.ry * sd * .94 - fs.rx * .34) * Lseg]
-                                          : elbowIK(S0, W0, Lseg, Lseg, dn));
+      /* gags : où vont ses mains */
+      const gArm = {}, Hb = G(sd * 1.2, -.35);           // Hb = ta tempe, de son côté (le rayon y arrive)
+      const dOut = [[dx - sd * rx * .8, dy - sd * ry * .8], [dx + sd * rx * .8, dy + sd * ry * .8]];   // coudes vers l'extérieur
+      if (sf >= 0 && (sf < .2 || sf >= .825)) {             // transformation / fin : bras le long du corps, il pousse
+        gArm.I = { tgt:L2G(256 - sd * 300, 860), rot:gy.ang - sd * .15, dn:dOut[0], m:'p' };
+        gArm.O = { tgt:L2G(256 + sd * 300, 860), rot:gy.ang + sd * .15, dn:dOut[1], m:'p' };
+      } else if (sf >= .2 && sf < .575) {                  // charge : les deux mains devant sa poitrine, la boule d'énergie entre elles
+        gArm.I = { tgt:L2G(256 - sd * 60, 790), rot:gy.ang + sd * .45, dn:dOut[0], m:'p' };
+        gArm.O = { tgt:L2G(256 + sd * 60, 790), rot:gy.ang - sd * .45, dn:dOut[1], m:'p' };
+      } else if (sf >= .575 && sf < .825) {                // rayon : il pousse les deux mains vers toi
+        const M = [(So[0] + Si[0]) / 2, (So[1] + Si[1]) / 2], vx = Hb[0] - M[0], vy = Hb[1] - M[1], d = Math.hypot(vx, vy) || 1;
+        const rF = Math.min(1.5 * Lseg, Math.max(.8 * Lseg, d - 2.2 * U)), F = [M[0] + vx / d * rF, M[1] + vy / d * rF], nx = -vy / d * .22 * U, ny = vx / d * .22 * U;
+        const rot = Math.atan2(vy, vx) + Math.PI / 2;
+        gArm.O = { tgt:[F[0] + nx, F[1] + ny], rot, tau:.05, dn:[dx, dy], m:'f' }; gArm.I = { tgt:[F[0] - nx, F[1] - ny], rot, tau:.05, dn:[dx, dy], m:'f' };
+      }
+      const gomuOn = gf >= 0 && gf < 4.2;
+      const lw = gy.lastW || (gy.lastW = {});
+      for (const [S0, tgt0, who] of arms) {
+        const outer = who === 'O', ga = gArm[who];
+        if (outer && gomuOn) continue;                     // bras élastique : dessiné plus bas
+        const R0 = L2G(256 + (outer ? sd : -sd) * 120, 760);
+        let Wt = zcl(ga ? ga.tgt : tgt0);
+        Wt = [R0[0] + (Wt[0] - R0[0]) * apH, R0[1] + (Wt[1] - R0[1]) * apH];
+        if (ga) Wt = lisse('g' + who, Wt, ga.tau || .15, lw[who]); else delete lis['g' + who];
+        const behind = gy.m === 0 && !outer && !ga;        // le bras qui passe derrière ta tête
+        let E, W0;
+        if (behind) {
+          /* derrière ta tête : le coude est caché derrière ta tête, à une longueur d'avant-bras de sa main (vers toi, un peu plus haut) :
+             on voit son bras partir de son épaule et disparaître derrière ta tête, puis un avant-bras normal ressortir de l'autre côté */
+          W0 = lisse('wI', Wt, .08, lw.I);
+          E = lisse('cI', [W0[0] + (fs.rx * sd * .94 + fs.ry * .34) * Lseg, W0[1] + (fs.ry * sd * .94 - fs.rx * .34) * Lseg], .12);
+          delete fk.I;
+        } else {
+          const dn = ga && ga.dn ? ga.dn : outer ? [dx + sd * rx * .6, dy + sd * ry * .6] : [dx - sd * rx * .2, dy - sd * ry * .2];
+          [E, W0] = armFK(who, S0, Wt, Lseg, dn, ga ? ga.tau : .12, ga ? ga.m : '');
+          if (!outer) { delete lis.wI; delete lis.cI; }
+        }
         paatArm(g, S0, W0, k, [dx, dy], outer ? C.PAAT_BRAS : 'muscle', el, false, { elbow:E, tat:outer });
+        lw[who] = W0;
         const cote = gy.m === 1 || outer ? sd : -sd;       // côté de ta tête où est cette main : penchée vers toi
-        hands.push([W0, hh0 * (.4 + .6 * apH) * ps, roll - cote * .2, outer ? sd > 0 : sd < 0, Math.min(1, apH * 3)]);
+        const pop = outer && gf >= 4.2 ? backOut(Math.min(1, (gf - 4.2) / .3)) : 1;   // (bras élastique : la main revient)
+        const inFace = W0[0] > face[0] && W0[0] < face[2] && W0[1] > face[1] && W0[1] < face[3];   // (une main qui passe derrière ta tête ne se voit pas)
+        hands.push([W0, hh0 * (.4 + .6 * apH) * ps * pop, ga && ga.rot != null ? ga.rot : roll - cote * .2, outer ? sd > 0 : sd < 0, inFace ? 0 : Math.min(1, apH * 3)]);
       }
+      /* Super Saiyan : boule d'énergie entre ses mains, puis le rayon (sous ton gommage : il s'arrête sur ta silhouette) */
+      if (sf >= .2 && sf < .825 && lw.O && lw.I) {
+        const Wm = [(lw.O[0] + lw.I[0]) / 2, (lw.O[1] + lw.I[1]) / 2];
+        if (sf < .575) {
+          const bk = Math.max(0, Math.min(1, (sf - .23) / .3));
+          FXs = { a:up, ball:[Wm[0] - dx * hh0 * .5, Wm[1] - dy * hh0 * .5], br:hh0 * .62 * bk * (1 + .1 * Math.sin(el * 23)) };
+        } else {
+          const tb = (sf - .575) * gd, vx = Hb[0] - Wm[0], vy = Hb[1] - Wm[1], d = Math.hypot(vx, vy) || 1;
+          const Ob = [Wm[0] + vx / d * hh0 * .55, Wm[1] + vy / d * hh0 * .55], wb = .42 * U * Math.min(1, tb / .15) * Math.min(1, ((.825 - sf) * gd) / .25);
+          beamDraw(g, Ob, Hb, wb * (1 + .08 * Math.sin(el * 47)), el, up);
+          FXs = { a:up, ball:Ob, br:wb * 1.15, hit:[Hb[0] + fs.rx * sd * .15 * U, Hb[1] + fs.ry * sd * .15 * U], hk:wb / (.42 * U), flash:Math.max(0, 1 - tb / .18) };
+        }
+      }
+      if (sf >= .8) FXs = Object.assign(FXs || { a:up }, { smoke:{ p:G(0, -2.1), t:(sf - .8) * gd, a:Math.min(1, (sf - .8) / .04, (1 - sf) / .06) } });
+      /* bras élastique : un tube qui s'étire depuis son épaule tatouée, le poing (devant toi) grossit et te frappe */
+      if (gomuOn) {
+        const p0 = gy.gW0 || (gy.gW0 = (lw.O || L2G(256 + sd * 230, 760)).slice());
+        const Bk = zcl(L2G(256 + sd * 620, 470)), Hf = G(sd * 1.05, .45), fw0 = .85 * hh0;
+        const Hc = sc => [Hf[0] + fs.rx * sd * fw0 * sc * .42, Hf[1] + fs.ry * sd * fw0 * sc * .42];
+        const lerp2 = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+        const Wn = zcl(arms.find(x => x[2] === 'O')[1]);
+        let Fp, sc, mv = null;
+        if (gf < 2) {                                       // il arme : le bras s'étire en arrière et tremble
+          const w = Math.min(1, gf / 1.2), vib = gf > 1 ? .03 * U * Math.sin(el * 70) : 0;
+          Fp = lerp2(p0, Bk, backOut(w)); Fp[0] += dx * vib; Fp[1] += dy * vib; sc = .8 + .2 * w;
+        } else if (gf < 2.3) {                              // il frappe : le poing file vers toi en grossissant
+          const t = (gf - 2) / .3, e = t * t; sc = 1 + 1.2 * e; Fp = lerp2(Bk, Hc(sc), e); mv = [Hc(sc)[0] - Bk[0], Hc(sc)[1] - Bk[1]];
+        } else if (gf < 3.2) {                              // collé sur ta joue
+          sc = 2.2 + .08 * Math.sin((gf - 2.3) * 30) * Math.exp(-(gf - 2.3) * 4); Fp = Hc(2.2);
+        } else {                                            // il revient en « boing »
+          const t = gf - 3.2, o = Math.exp(-5 * t) * Math.cos(13 * t); sc = 1 + 1.2 * Math.max(0, o); Fp = lerp2(Wn, Hc(2.2), o);
+        }
+        gomuArm(g, So, Fp, k, el);
+        const aT = mv ? Math.atan2(mv[1], mv[0]) : Math.atan2(Fp[1] - So[1], Fp[0] - So[0]);
+        if (gy.fAng == null) gy.fAng = aT; else { let e = aT - gy.fAng; e = Math.atan2(Math.sin(e), Math.cos(e)); gy.fAng += e * (1 - Math.exp(-dt / .05)); }
+        FXs = { a:up, fist:Fp, fw:fw0 * sc, ang:gy.fAng };
+        if (mv) { const l = Math.hypot(mv[0], mv[1]) || 1; FXs.lines = { P:Fp, ux:mv[0] / l, uy:mv[1] / l, w:fw0 * sc }; }
+        if (gf >= 2.25 && gf < 3.3) { FXs.boom = [Fp[0] - fs.rx * sd * fw0 * sc * .5, Fp[1] - fs.ry * sd * fw0 * sc * .5]; FXs.boomR = fw0 * 1.05 * backOut(Math.min(1, (gf - 2.25) / .2)); }
+      }
+      if (gf >= 2.4) FXs = Object.assign(FXs || { a:up }, { dizzy:G(0, -2.3), dz:Math.min(1, (gf - 2.4) / .2, (gd - gf) / .5) });
     }
     if (L2G && sk > .01) menacing(g, hx, hy + R * .6, R * .75, el, sk * up);   // ゴゴゴ (derrière toi aussi)
     /* toi devant lui : on gomme Paatrice là où le détourage te voit (ou, ancienne méthode, toi détouré par-dessus) */
@@ -1669,14 +2084,17 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       } else g.drawImage(personLayer(v, W, H), 0, 0);
     }
     for (const h of hands) paatHand(g, ...h);              // ses mains : à côté de ton visage, par-dessus tout
+    if (FXs) gagFront(g, FXs, el, U, Zv);                  // boule, impact, poing, étoiles… devant toi
     const fc = G(0, 0);
     if (rushing) for (const h of hands) rushAround(g, h, el, face, fc, Math.min(1, sk * 2));
     if (!L2G) return;
-    /* bulles : à l'arrivée, à chaque changement de côté, au Stand… et s'il se tait depuis trop longtemps */
-    if (!gy.said0 && el > 1.2) { gy.said0 = true; if (!gy.bub) gy.bub = { txt:pick('arrivee'), t0:el, dur:3 }; }
+    /* bulles : à l'arrivée, à chaque changement de côté, aux gags… et s'il se tait depuis trop longtemps */
+    if (!gy.said0 && el > 1.2) { gy.said0 = true; if (!gy.bub) gy.bub = { txt:pickB('arrivee'), t0:el, dur:3 }; }
     if (gy.bub && el - gy.bub.t0 > gy.bub.dur) { gy.bub = null; gy.bubEnd = el; }
-    if (!gy.bub && gy.said0 && !gy.sw && gy.st < 0 && el - gy.bubEnd > C.PAAT_BLABLA) gy.bub = { txt:pick('dos'), t0:el, dur:3 };
+    if (!gy.bub && gy.said0 && !gy.sw && !gag && el - gy.bubEnd > C.PAAT_BLABLA) gy.bub = { txt:pickB('dos'), t0:el, dur:3 };
     const avoid = [face].concat(hands.map(handRect));
+    if (hairK > .3) avoid.push([hx - R * .95, hy - R * 2.25, hx + R * .95, hy - R * .75, 1.5]);   // sa flamme dorée : la bulle évite de la cacher
+    if (FXs && FXs.fist) avoid.push([FXs.fist[0] - FXs.fw * .6, FXs.fist[1] - FXs.fw * .5, FXs.fist[0] + FXs.fw * .6, FXs.fist[1] + FXs.fw * .5, 3]);
     const bub = gy.bub ? paatSay(g, gy.bub, el, L2G, hx, hy, R, sd, avoid, W, H, up * ps) : null;
     if (sk > .01 && se < 2.6) {                            // carte « STAND 「PAATRICE」 » au début du Stand
       const cs = R * .34, m = standCardSize(g, cs);
@@ -1694,7 +2112,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const S = sprites(), pp = fx.pup || (fx.pup = { t0:t, bub:null, n:0 });
     const el = (t - pp.t0) / 1000;
     const Zv = zonePx(W, H), zw = Zv[2] - Zv[0], kzp = Math.min(1, zw / (W * .66));   // fenêtre étroite : un peu plus petit…
-    const k = .8 * H / 1000 * C.PAAT_MARIONNETTE * kzp, R = 238 * k;
+    const k = .8 * Math.min(H, W * 1.25) / 1000 * C.PAAT_MARIONNETTE * kzp, R = 238 * k;   // (image verticale du tel : à l'échelle de la largeur)
     const up = Math.min(backOut(el / .6), a);              // il monte du bas de l'écran (et redescend à la fin)
     const sway = .03 * Math.sin(el * 1.6);                 // petit balancement de marionnette
     const hx = (Zv[0] + Zv[2]) / 2;                        // … et au milieu de la partie visible
@@ -1716,7 +2134,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const lt = el - .8 - pp.n * 4.2;
     if (lt > 4.2) pp.n++;
     if (lt > 0 && lt < 3.6) {
-      if (!pp.bub || pp.bub.n !== pp.n) pp.bub = { n:pp.n, txt:pick('absent'), t0:el, dur:3.6 };
+      if (!pp.bub || pp.bub.n !== pp.n) pp.bub = { n:pp.n, txt:pickB('absent'), t0:el, dur:3.6 };
       paatSay(g, pp.bub, el, L2G, hx, hy, R, pp.n % 2 ? 1 : -1, hands.map(handRect), W, H, up);
     }
   };
@@ -1937,9 +2355,9 @@ const paatBeauEyes = (g, S) => {
   /* Tête de Paatrice qui se balade : beau gosse (Chad) ou la tête du filtre en cours (tk).
      Elle se déplace comme un petit personnage autonome : une position, une vitesse, et des « forces » qui la poussent
      (principe des comportements de pilotage de Craig Reynolds : errance, exploration, évitement, rester dans l'image).
-     Elle erre de façon imprévisible (errance de Reynolds) et part explorer une autre région de l'écran, à tour de rôle
-     tout en haut, tout en bas ou sur les côtés, loin d'elle ; elle ralentit en arrivant ; sa vitesse varie toute seule,
-     avec de temps en temps un petit coup d'accélérateur (elle fonce droit devant une demi-seconde).
+     Elle erre de façon imprévisible (errance de Reynolds), à un rythme qui varie (humeur paresseuse ↔ vive) ; de temps en temps
+     elle part en balade vers un autre coin (parfois le côté opposé, en contournant ton visage), puis flâne ; et, rarement
+     (toutes les 20 à 45 s), un petit trait droit et rapide d'une demi-seconde, sans se déformer, qui casse le rythme.
      Seulement dans la partie visible de la caméra : si un filtre « move » d'OBS la rogne en fenêtre (ex. « masques et filtres »),
      la page lit ce rognage (zonePx) et elle reste dans la fenêtre — un peu plus grande, puisque la fenêtre est réduite à l'écran.
      Jamais sur ton visage (cheveux et barbe compris : elle est repoussée, et ne peut pas y entrer),
@@ -1951,13 +2369,19 @@ const paatBeauEyes = (g, S) => {
     const u = (a, b) => a + Math.random() * (b - a), V = Math.max(.2, C.TETES_VITESSE || 1), cl = (v, a, b) => Math.max(a, Math.min(b, v));
     const h1 = Math.min(dt, .05);                            // pas de temps borné
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, tz:[],
-                                       ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, tC:0 });
+                                       ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, via:null });
     /* la partie visible de l'image (rognage du filtre « move » d'OBS) : [gauche, haut, droite, bas] en pixels, qui glisse en douceur */
     const Z = zonePx(W, H);
     sp.kz = (sp.kz || zoneEch()) + (zoneEch() - (sp.kz || zoneEch())) * Math.min(1, h1 * 3);
     const kz = Math.pow(1 / cl(sp.kz, .3, 1), .6);          // fenêtre réduite à l'écran (×0,65) → têtes plus grandes (×1,3) pour rester bien visibles
     sp.kf = (sp.kf || 1) + ((sp.kfT || 1) - (sp.kf || 1)) * Math.min(1, h1 * 1.5);       // (encore plus petites s'il n'y a plus de place libre)
-    const sc = W / 1920;                                     // forces à l'échelle de l'image
+    const sc = Math.max(W, H) / 1920;                        // forces à l'échelle de l'image (son grand côté : 16:9 ou vertical)
+    if (sp.W && (sp.W !== W || sp.H !== H)) {                // l'image change de format (tel tourné) : elle garde sa place, en proportion
+      if (sp.x != null) { sp.x *= W / sp.W; sp.y *= H / sp.H; }
+      if (sp.f) { sp.f.x *= W / sp.W; sp.f.y *= H / sp.H; }
+      sp.cible = null; sp.via = null; sp.dash = null;
+    }
+    sp.W = W; sp.H = H;
     if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu)
     const F0 = sp.f || { x:W * .5, y:H * .42, fw:H * .1 };
     /* taille : petite ↔ grande, au hasard, n'importe où */
@@ -1973,13 +2397,15 @@ const paatBeauEyes = (g, S) => {
       sp.tz.push({ z:q ? (q.z > .5 ? u(0, .45) : u(.55, 1)) : u(0, 1), t:q ? q.t + u(.6, 1.4) * (C.TETES_TAILLE_RYTHME || 7) / V : -u(1, 4) });
     }
     while (sp.tz.length > 4 && sp.tz[2].t <= el) sp.tz.shift();
-    const colK = x => 1 - .5 * cl(1 - (Math.abs(x - F0.x) - 1.1 * F0.fw) / (1.3 * F0.fw), 0, 1);   // au-dessus / en dessous de toi : plus petite
+    const colK = x => 1 - (W < H ? .25 : .5) * cl(1 - (Math.abs(x - F0.x) - 1.1 * F0.fw) / (1.3 * F0.fw), 0, 1);   // au-dessus / en dessous de toi : plus petite (moins en vertical : c'est là qu'est la place)
     sp.kp = (sp.kp || 1) + (colK(sp.x == null ? -1e4 : sp.x) - (sp.kp || 1)) * Math.min(1, h1 * 2.5);
-    const z = cl(herm(sp.tz, 'z'), 0, 1), hh0 = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp * sp.kf * kz;
+    const z = cl(herm(sp.tz, 'z'), 0, 1), hh0 = Math.min(H, W * .75) * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp * sp.kf * kz;
     const capH = .3 * (Z[2] - Z[0]), hh = hh0 > capH ? capH + (hh0 - capH) * .25 : hh0;   // jamais trop large pour la fenêtre
     const spr = tk ? null : beauSprite(), k = tk ? hh / 442 : hh / 670;
     const sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;   // même encombrement que beau gosse (halo compris)
-    const mx = tk ? .42 : .32, mt = tk ? .3 : .28, mb = tk ? .3 : .3;   // marges : elle peut aller jusqu'au bord de l'image (haut et bas compris)
+    /* ton visage remplit presque toute la largeur (selfie au tel) : plus de place libre → elle se cache au bord (à moitié dehors) */
+    const crowd = cl((2.7 * F0.fw / Math.max(1, Z[2] - Z[0]) - .5) / .3, 0, 1), kc = 1 - 1.25 * crowd;
+    const mx = (tk ? .42 : .32) * kc, mt = (tk ? .3 : .28) * kc, mb = (tk ? .3 : .3) * kc;   // marges : elle peut aller jusqu'au bord de l'image (haut et bas compris)
     let X0 = Z[0] + sw * mx, X1 = Z[2] - sw * mx, Y0 = Z[1] + sh * mt, Y1 = Z[3] - sh * mb;
     if (X1 < X0) X0 = X1 = (Z[0] + Z[2]) / 2; if (Y1 < Y0) Y0 = Y1 = (Z[1] + Z[3]) / 2;   // fenêtre plus étroite que sa tête
     /* ton visage (+ cheveux, barbe) + sa tête : un rectangle aux coins arrondis où elle n'entre jamais */
@@ -2003,33 +2429,84 @@ const paatBeauEyes = (g, S) => {
     let ax = 0, ay = 0, vmax;
     const doux = (t, p) => (Math.sin(t * .31 + p) + Math.sin(t * .53 + p * 1.7) * .7 + Math.sin(t * .97 + p * 2.3) * .4) / 2.1;   // bruit doux (-1 → 1)
     const pousse = (fx2, fy2, max) => { const m = Math.hypot(fx2, fy2); if (m > max) { fx2 *= max / m; fy2 *= max / m; } ax += fx2; ay += fy2; };
-    vmax = (110 + 70 * doux(el, sp.np[0])) * sc * V;       // sa vitesse varie toute seule (changements de rythme)
-    if (sp.tB == null) sp.tB = el + u(1.5, 4) / V;          // + des coups d'accélérateur bien visibles, au hasard (0,5 à 0,9 s, ×2,8 à ×3,8)
-    if (el > sp.tB) { sp.b0 = el; sp.bD = u(.5, .9); sp.bK = u(2.8, 3.8); sp.tB = el + u(2.5, 6) / V; }
-    const bt = sp.bD ? (el - sp.b0) / sp.bD : 1;              // départ sec (0,15 du temps), puis elle ralentit en douceur
-    const bo = bt >= 0 && bt < 1 ? (bt < .15 ? bt / .15 : Math.pow(1 - (bt - .15) / .85, 2)) : 0;
-    if (bo > 0) vmax *= 1 + (sp.bK - 1) * bo;
+    /* son rythme : une humeur qui change en douceur (paresseuse ↔ vive, toutes les 8 à 20 s) + un petit bruit doux */
+    if (sp.mT == null || el > sp.mT) { sp.mood0 = sp.mood == null ? u(.7, 1.2) : sp.mood; sp.moodT = u(.55, 1.35); sp.m0 = el; sp.mD = u(2, 4); sp.mT = el + u(8, 20) / V; }
+    { const q = cl((el - sp.m0) / sp.mD, 0, 1); sp.mood = sp.mood0 + (sp.moodT - sp.mood0) * q * q * (3 - 2 * q); }
+    vmax = (100 + 45 * doux(el, sp.np[0])) * sp.mood * sc * V;
+    /* le point opposé : le symétrique de sa position par rapport au centre de la partie visible (n'importe quel angle, ± 35°) */
+    const oppose = () => {
+      const cx = (Z[0] + Z[2]) / 2, cy = (Z[1] + Z[3]) / 2;
+      let vx = cx - sp.x, vy = cy - sp.y, L = Math.hypot(vx, vy);
+      if (L < 30 * sc) { const a = u(0, 6.2832); vx = Math.cos(a); vy = Math.sin(a); L = 0; }
+      const a0 = Math.atan2(vy, vx) + u(-.6, .6);
+      for (let n = 0; n < 15; n++) {
+        const a = a0 + (n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * .22 : 0), ux = Math.cos(a), uy = Math.sin(a);
+        const ex = ux > 1e-3 ? (X1 - cx) / ux : ux < -1e-3 ? (X0 - cx) / ux : 1e9, ey = uy > 1e-3 ? (Y1 - cy) / uy : uy < -1e-3 ? (Y0 - cy) / uy : 1e9;
+        const E = Math.max(0, Math.min(ex, ey));             // du centre jusqu'au bord, dans cette direction
+        for (const f of [u(.9, 1), .78, .62]) {
+          const r = cl(L, .6 * E, E) * f, x = cx + ux * r, y = cy + uy * r;
+          if (libre(x, y)) return [x, y];
+        }
+      }
+      return null;
+    };
+    const contourne = T => {                                 // la ligne droite passe sur ton visage ? → un point de passage sur le côté
+      let best = null, bf = 9;
+      for (let i = 1; i < 16; i++) { const t = i / 16, x = sp.x + (T[0] - sp.x) * t, y = sp.y + (T[1] - sp.y) * t, f = fz(x, y); if (f < bf) { bf = f; best = [x, y]; } }
+      if (bf > 1.2) return null;
+      const vx = T[0] - sp.x, vy = T[1] - sp.y, L = Math.hypot(vx, vy) || 1; let nx = -vy / L, ny = vx / L;
+      if ((best[0] - F0.x) * nx + (best[1] - F0.y) * ny < 0) { nx = -nx; ny = -ny; }   // du côté où la ligne passe déjà
+      for (const s of [1, -1]) for (let m = 1; m < 40; m++) {
+        const x = best[0] + nx * s * m * .12 * F0.fw, y = best[1] + ny * s * m * .12 * F0.fw;
+        if (x < X0 || x > X1 || y < Y0 || y > Y1) break;
+        if (fz(x, y) > 1.35) return [x, y];
+      }
+      return null;
+    };
+    /* balades : de temps en temps elle part tranquillement vers un autre coin (parfois le côté opposé), puis flâne sur place */
+    if (sp.tJ == null) sp.tJ = el + u(2, 5) / V;
+    if (el > sp.tJ && !sp.dash) {
+      const To = oppose();
+      sp.kfT = To ? Math.min(1, (sp.kfT || 1) + .04) : Math.max(.5, (sp.kfT || 1) * .85);   // plus aucune place libre (petite fenêtre) → elle rapetisse
+      sp.cible = (Math.random() < .4 && To) || place();
+      sp.tJ = el + 20 / V;                                   // (filet : une nouvelle balade même si elle n'est pas arrivée)
+    }
+    /* petit trait droit et rapide (≈ 0,5 s), rare : toutes les 20 à 45 s, dans une direction au hasard (parfois vers le côté opposé),
+       jamais à travers ton visage — ça casse le rythme sans attirer l'œil tout le temps */
+    const trait = () => {
+      const zw = Z[2] - Z[0], to = Math.random() < .35 ? oppose() : null;
+      const a0 = to ? Math.atan2(to[1] - sp.y, to[0] - sp.x) : u(0, 6.2832);
+      for (let n = 0; n < 12; n++) {
+        const a = a0 + (n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * .35 : 0), D = u(.22, .36) * zw * (n > 6 ? .7 : 1);
+        const x = sp.x + Math.cos(a) * D, y = sp.y + Math.sin(a) * D;
+        if (!libre(x, y)) continue;
+        let ok = true; for (let i = 1; i < 10 && ok; i++) { const t = i / 10; if (fz(sp.x + (x - sp.x) * t, sp.y + (y - sp.y) * t) < 1.2) ok = false; }
+        if (ok) return [x, y];
+      }
+      return null;
+    };
+    const TR = C.TETES_TRAIT || [20, 45];                    // s entre deux petits traits (réglage)
+    if (sp.tD == null) sp.tD = el + u(TR[0] * .5, TR[0] * 1.1) / V;
+    if (!sp.dash && !sp.popPh && el > sp.tD && sp.cible) sp.tD = el + 1.5;   // (pas en pleine balade : il attend qu'elle soit arrivée)
+    if (!sp.dash && !sp.popPh && el > sp.tD) {
+      const P1 = trait();
+      if (P1) { sp.dash = { P0:[sp.x, sp.y], P1, t0:el, d:u(.42, .6) }; sp.cible = null; sp.tD = el + u(TR[0], TR[1]) / V; }
+      else sp.tD = el + 3;
+    }
+    let goal = null;
+    if (sp.cible) {
+      if (Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) { sp.cible = null; sp.tJ = Math.min(sp.tJ, el + u(2.5, 7) / V); }   // arrivée : elle flâne un peu
+      else { sp.via = contourne(sp.cible); goal = sp.via || sp.cible; }
+    }
+    if (!goal) sp.via = null;
+    else vmax *= 1.6;                                        // en balade : plus décidée (elle flâne une fois arrivée)
     sp.wa += u(-1, 1) * 2.4 * h1;                          // errance (Reynolds) : un point qui se promène sur un cercle devant elle
     const sv = Math.hypot(sp.vx, sp.vy) || 1, hx = sp.vx / sv, hy = sp.vy / sv;
-    const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1;
-    pousse(tx / tm * vmax - sp.vx, ty / tm * vmax - sp.vy, 160 * sc);
-    if (bo > 0) { ax += hx * 1100 * sc * bo; ay += hy * 1100 * sc * bo; }   // le coup d'accélérateur : elle fonce droit devant
-    if (!sp.cible || el > sp.tC || Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) {   // exploration : une autre région, loin d'elle
-      const zn = sp.zone === 'haut' ? ['bas', 'bas', 'cote'] : sp.zone === 'bas' ? ['haut', 'haut', 'cote'] : ['haut', 'haut', 'bas'];
-      const z0 = zn[Math.floor(Math.random() * zn.length)], essais = [z0, z0 === 'haut' ? 'bas' : 'haut', 'cote'];
-      let best = null, bd = -1, zb = null;
-      for (const zo of essais) { if (best) break;
-        for (let n = 0; n < 40; n++) {
-          const yt = Y0 + (Y1 - Y0) * (zo === 'haut' ? u(-.25, .12) : zo === 'bas' ? u(.88, 1.25) : u(.15, .85));   // tout en haut · tout en bas · sur les côtés
-          const x = u(X0, X1), y = cl(yt, 0, H); if (!libre(x, y)) continue;
-          const d = Math.hypot(x - sp.x, y - sp.y) * u(.7, 1.3); if (d > bd) { bd = d; best = [x, y]; zb = zo; } } }
-      sp.cible = best; sp.zone = zb;           // le temps d'y arriver (selon la distance), puis elle repart
-      sp.kfT = best ? Math.min(1, (sp.kfT || 1) + .04) : Math.max(.5, (sp.kfT || 1) * .85);   // plus aucune place libre (petite fenêtre) → elle rapetisse
-      sp.tC = el + (best ? Math.hypot(best[0] - sp.x, best[1] - sp.y) / (85 * sc) : 0) / V + u(2, 5) / V;
-    }
-    if (sp.cible) {                                         // elle y va et ralentit en arrivant
-      const dx = sp.cible[0] - sp.x, dy = sp.cible[1] - sp.y, d = Math.hypot(dx, dy) || 1, vs = vmax * Math.min(1, d / (220 * sc));
-      pousse((dx / d * vs - sp.vx) * .8, (dy / d * vs - sp.vy) * .8, 120 * sc);
+    const tx = hx * 1.6 + Math.cos(sp.wa), ty = hy * 1.6 + Math.sin(sp.wa), tm = Math.hypot(tx, ty) || 1, kw = goal ? .3 : 1;
+    pousse((tx / tm * vmax - sp.vx) * kw, (ty / tm * vmax - sp.vy) * kw, 160 * sc);
+    if (goal) {                                             // elle va vers sa cible (et ralentit en arrivant)
+      const dx = goal[0] - sp.x, dy = goal[1] - sp.y, d = Math.hypot(dx, dy) || 1, vs = vmax * (sp.via ? 1 : Math.min(1, d / (220 * sc)));
+      pousse((dx / d * vs - sp.vx) * .9, (dy / d * vs - sp.vy) * .9, 160 * sc);
     }
     { const f = fz(sp.x, sp.y);                              // ton visage : plus elle s'approche, plus elle est repoussée
       if (f < 1.15) {
@@ -2042,9 +2519,25 @@ const paatBeauEyes = (g, S) => {
     if (sp.x > X1 - bord) ax -= kb * Math.pow(1 - (X1 - sp.x) / bord, 2);
     if (sp.y < Y0 + bord) ay += kb * Math.pow(1 - (sp.y - Y0) / bord, 2);
     if (sp.y > Y1 - bord) ay -= kb * Math.pow(1 - (Y1 - sp.y) / bord, 2);
-    sp.vx += ax * h1; sp.vy += ay * h1;                      // le mouvement
-    const vv = Math.hypot(sp.vx, sp.vy), vl = vmax * 1.25; if (vv > vl) { sp.vx *= vl / vv; sp.vy *= vl / vv; }
-    sp.x += sp.vx * h1; sp.y += sp.vy * h1;
+    const Dh = sp.dash;
+    if (Dh) {                                                // le petit trait : en ligne droite, départ sec, freinage doux (aucune déformation)
+      const q = cl((el - Dh.t0) / Dh.d, 0, 1), e = 1 - Math.pow(1 - q, 2.6), vk = 2.6 * Math.pow(1 - q, 1.6) / Dh.d;
+      const nx = Dh.P0[0] + (Dh.P1[0] - Dh.P0[0]) * e, ny = Dh.P0[1] + (Dh.P1[1] - Dh.P0[1]) * e;
+      if (fz(nx, ny) < 1.05) sp.dash = null;                 // tu as bougé sur sa route → elle s'arrête là
+      else {
+        sp.x = nx; sp.y = ny; sp.vx = (Dh.P1[0] - Dh.P0[0]) * vk; sp.vy = (Dh.P1[1] - Dh.P0[1]) * vk;
+        if (q >= 1) {                                        // arrivée : elle repart tout doucement, et flâne un peu avant la prochaine balade
+          const L = Math.hypot(Dh.P1[0] - Dh.P0[0], Dh.P1[1] - Dh.P0[1]) || 1;
+          sp.vx = (Dh.P1[0] - Dh.P0[0]) / L * vmax * .5; sp.vy = (Dh.P1[1] - Dh.P0[1]) / L * vmax * .5;
+          sp.dash = null; sp.tJ = Math.max(sp.tJ, el + u(1.5, 4) / V);
+        }
+      }
+    }
+    if (!Dh || !sp.dash) {
+      if (!Dh) { sp.vx += ax * h1; sp.vy += ay * h1; }       // le mouvement
+      const vv = Math.hypot(sp.vx, sp.vy), vl = vmax * 1.25; if (vv > vl) { sp.vx *= vl / vv; sp.vy *= vl / vv; }
+      if (!Dh) { sp.x += sp.vx * h1; sp.y += sp.vy * h1; }
+    }
     if (sp.x < X0) { sp.x = X0; sp.vx = Math.abs(sp.vx) * .4; } if (sp.x > X1) { sp.x = X1; sp.vx = -Math.abs(sp.vx) * .4; }
     if (sp.y < Y0) { sp.y = Y0; sp.vy = Math.abs(sp.vy) * .4; } if (sp.y > Y1) { sp.y = Y1; sp.vy = -Math.abs(sp.vy) * .4; }
     { const f = fz(sp.x, sp.y);                              // jamais dedans (si tu bouges vite vers elle : ramenée au bord de la zone)
@@ -2057,7 +2550,7 @@ const paatBeauEyes = (g, S) => {
     if (!sp.popPh && sp.tCo > .35) { sp.popPh = 1; sp.pop = 1; }
     if (sp.popPh === 1) {
       sp.pop -= h1 / .15;
-      if (sp.pop <= 0) { const [x, y] = place(); Object.assign(sp, { x, y, vx:0, vy:0, cible:null, pop:0, popPh:2, tCo:0 }); sp.kfT = Math.max(.5, (sp.kfT || 1) * .85); }
+      if (sp.pop <= 0) { const [x, y] = place(); Object.assign(sp, { x, y, vx:0, vy:0, cible:null, dash:null, pop:0, popPh:2, tCo:0 }); sp.kfT = Math.max(.5, (sp.kfT || 1) * .85); }
     } else if (sp.popPh === 2) { sp.pop = Math.min(1, sp.pop + h1 / .3); if (sp.pop >= 1) sp.popPh = 0; }
     const pz = sp.popPh === 2 ? backOut(sp.pop) : sp.popPh === 1 ? Math.max(0, sp.pop) : 1;
     const x = sp.x, y = sp.y + H * .008 * Math.sin(el * 2.1 + sp.ph);   // elle flotte
@@ -2067,7 +2560,6 @@ const paatBeauEyes = (g, S) => {
     const alpha = Math.min(ap, amt);                         // opaque : transparente seulement en apparaissant et en disparaissant
     if (alpha > .01) {
       g.save(); g.globalAlpha = alpha; g.translate(x, y);
-      if (bo > .02) { const va = Math.atan2(sp.vy, sp.vx); g.rotate(va); g.scale(1 + .18 * bo, 1 - .12 * bo); g.rotate(-va); }   // étirée dans le sens où elle fonce
       g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el))); g.scale(pz, pz);   // Chad : il penche la tête en levant le sourcil
       if (tk) {                                              // tête du filtre : composée à part (animations comprises), posée en une fois
         const L = Math.max(2, Math.ceil((512 + 2 * T_PAD) * k)), lc = teteLayer(L), lg = lc.getContext('2d');
@@ -2514,7 +3006,7 @@ const paatBeauEyes = (g, S) => {
      Pour passer d'une grimace à la suivante, chaque partie du visage se déforme vers sa nouvelle forme :
      pas de coupure, pas de fondu. Chaque grimace tient EXA_TENUE s.
      ============================================================ */
-  const EXA_TENUE = 20, EXA_MORPH = 1;                       // s par grimace · s de déformation vers la suivante
+  const EXA_TENUE = 9.5, EXA_MORPH = 1;                      // s par grimace (9,5 s : les 5 grimaces en 1 min, dans un ordre au hasard à chaque fois)
   const sRng = seed => { let s = seed % 2147483647 || 1; return (a, b) => { s = s * 16807 % 2147483647; return a + (s / 2147483647) * (b - a); }; };
   const bStroke = (g, pts, w, seed, al) => {                 // trait pinceau sec au grain fixe (rien ne scintille quand ça bouge)
     if (w <= .3 || al === 0) return;
@@ -2533,7 +3025,7 @@ const paatBeauEyes = (g, S) => {
   };
   const bz4 = (b, n) => { const o = []; for (let i = 0; i < n; i++) { const t = i / (n - 1), u = 1 - t;
     o.push([0, 1].map(j => u * u * u * b[0][j] + 3 * u * u * t * b[1][j] + 3 * u * t * t * b[2][j] + t * t * t * b[3][j])); } return o; };
-  const chain = segs => { const n = 12 / segs.length + 1, o = []; segs.forEach((b, i) => bz4(b, n).forEach((p, j) => { if (!i || j) o.push(p); })); return o; };   // 13 points
+  const chainB = segs => { const n = 12 / segs.length + 1, o = []; segs.forEach((b, i) => bz4(b, n).forEach((p, j) => { if (!i || j) o.push(p); })); return o; };   // 13 points
   const quad3 = (p0, c, p2) => [p0, [p0[0] + 2 / 3 * (c[0] - p0[0]), p0[1] + 2 / 3 * (c[1] - p0[1])], [p2[0] + 2 / 3 * (c[0] - p2[0]), p2[1] + 2 / 3 * (c[1] - p2[1])], p2];
   const mixV = (a, b, e) => typeof a === 'number' ? a + (b - a) * e : Array.isArray(a) ? a.map((v, i) => mixV(v, b[i], e)) : Object.fromEntries(Object.keys(a).map(k => [k, mixV(a[k], b[k], e)]));
   const mirP = P => P.map(([x, y]) => [512 - x, y]);
@@ -2546,8 +3038,8 @@ const paatBeauEyes = (g, S) => {
       sL:[[30, -2], [84, -48], [166, -62], [232, -38]], sR:mirP([[30, -2], [84, -48], [166, -62], [232, -38]]), sw:28,
       oL:{ x:134, y:172, rx:112, ry:122, glob:1, p:[0, 2, 30, .62, 0], h:OUV_H, b:OUV_B, ha:0, ba:0, hw:14, bw:10, w:13 },
       nez:[[256, 228], [252, 262], [268, 256]], nw:7,
-      top:chain([[[84, 322], [150, 292], [362, 292], [428, 322]]]),
-      bot:chain([[[84, 322], [22, 430], [92, 662], [256, 666]], [[256, 666], [420, 662], [490, 430], [428, 322]]]),
+      top:chainB([[[84, 322], [150, 292], [362, 292], [428, 322]]]),
+      bot:chainB([[[84, 322], [22, 430], [92, 662], [256, 666]], [[256, 666], [420, 662], [490, 430], [428, 322]]]),
       d:{ uc:36, uf:1, ux0:92, ux1:420, lc:26, lf:1, lx0:168, lx1:344, rr:1, bl:0, zz:0 },
       lg:[256, 622, 120, 56, 1], lu:[256, 330, 62, 1]
     },
@@ -2556,8 +3048,8 @@ const paatBeauEyes = (g, S) => {
       sL:[[40, 66], [96, 12], [176, -4], [238, 28]], sR:mirP([[40, 66], [96, 12], [176, -4], [238, 28]]), sw:26,
       oL:{ x:144, y:192, rx:92, ry:62, glob:0, p:[0, -10, 60, .5, 0], h:[.36, -1.7, .36], b:[.36, -1.7, .36], ha:1, ba:0, hw:24, bw:10, w:12 },
       nez:[[254, 204], [250, 246], [272, 236]], nw:8,
-      top:chain([quad3([-44, 258], [256, 336], [556, 258])]),
-      bot:chain([[[-44, 258], [-12, 566], [128, 658], [256, 658]], [[256, 658], [384, 658], [524, 566], [556, 258]]]),
+      top:chainB([quad3([-44, 258], [256, 336], [556, 258])]),
+      bot:chainB([[[-44, 258], [-12, 566], [128, 658], [256, 658]], [[256, 658], [384, 658], [524, 566], [556, 258]]]),
       d:{ uc:40, uf:1, ux0:0, ux1:512, lc:0, lf:0, lx0:168, lx1:344, rr:1, bl:0, zz:0 },
       lg:[256, 612, 160, 70, 1], lu:[256, 340, 54, 1]
     },
@@ -2566,8 +3058,8 @@ const paatBeauEyes = (g, S) => {
       sL:[[34, -66], [94, -104], [176, -112], [234, -86]], sR:mirP([[34, -66], [94, -104], [176, -112], [234, -86]]), sw:26,
       oL:{ x:132, y:150, rx:122, ry:140, glob:1, p:[0, 0, 18, .95, 0], h:OUV_H, b:OUV_B, ha:0, ba:0, hw:14, bw:10, w:13 },
       nez:[[254, 292], [252, 316], [268, 310]], nw:7,
-      top:chain([[[192, 488], [192, 488 - 152 * KK], [256 - 64 * KK, 336], [256, 336]], [[256, 336], [256 + 64 * KK, 336], [320, 488 - 152 * KK], [320, 488]]]),
-      bot:chain([[[192, 488], [192, 488 + 152 * KK], [256 - 64 * KK, 640], [256, 640]], [[256, 640], [256 + 64 * KK, 640], [320, 488 + 152 * KK], [320, 488]]]),
+      top:chainB([[[192, 488], [192, 488 - 152 * KK], [256 - 64 * KK, 336], [256, 336]], [[256, 336], [256 + 64 * KK, 336], [320, 488 - 152 * KK], [320, 488]]]),
+      bot:chainB([[[192, 488], [192, 488 + 152 * KK], [256 - 64 * KK, 640], [256, 640]], [[256, 640], [256 + 64 * KK, 640], [320, 488 + 152 * KK], [320, 488]]]),
       d:{ uc:0, uf:0, ux0:192, ux1:320, lc:0, lf:0, lx0:192, lx1:320, rr:1, bl:0, zz:0 },
       lg:[256, 612, 50, 28, 1], lu:[256, 350, 40, 0]
     },
@@ -2577,8 +3069,8 @@ const paatBeauEyes = (g, S) => {
       oL:{ x:146, y:240, rx:84, ry:70, glob:0, p:[12, 0, 62, .5, 0], h:[-.17, -.6, -.11], b:[.26, .555, .23], ha:1, ba:1, hw:14.4, bw:9.6, w:12 },
       oR:{ x:374, y:186, rx:120, ry:128, glob:1, p:[-10, 6, 30, .62, .1], h:OUV_H, b:OUV_B, ha:0, ba:0, hw:14, bw:10, w:13 },
       nez:[[228, 300], [224, 344], [248, 334]], nw:8,
-      top:chain([[[-54, 330], [40, 296], [220, 352], [332, 416]]]),
-      bot:chain([[[-54, 330], [-44, 412], [30, 436], [110, 454]], [[110, 454], [210, 478], [320, 472], [332, 416]]]),
+      top:chainB([[[-54, 330], [40, 296], [220, 352], [332, 416]]]),
+      bot:chainB([[[-54, 330], [-44, 412], [30, 436], [110, 454]], [[110, 454], [210, 478], [320, 472], [332, 416]]]),
       d:{ uc:999, uf:.5, ux0:-60, ux1:340, lc:999, lf:.5, lx0:-60, lx1:340, rr:0, bl:1, zz:7 },
       lg:[200, 440, 80, 30, 0], lu:[140, 380, 40, 0]
     },
@@ -2587,8 +3079,8 @@ const paatBeauEyes = (g, S) => {
       sL:[[40, 48], [110, 70], [178, 96], [240, 124]], sR:mirP([[40, 48], [110, 70], [178, 96], [240, 124]]), sw:28,
       oL:{ x:144, y:184, rx:88, ry:74, glob:0, p:[8, -22, 70, .55, -.05], h:OUV_H, b:[.76, -.88, .76], ha:0, ba:1, hw:14.4, bw:9.6, w:12 },
       nez:[[252, 214], [248, 256], [272, 246]], nw:8,
-      top:chain([[[-30, 196], [60, 300], [170, 318], [256, 318]], [[256, 318], [342, 318], [452, 300], [542, 196]]]),
-      bot:chain([[[-30, 196], [-28, 470], [112, 604], [256, 604]], [[256, 604], [400, 604], [540, 470], [542, 196]]]),
+      top:chainB([[[-30, 196], [60, 300], [170, 318], [256, 318]], [[256, 318], [342, 318], [452, 300], [542, 196]]]),
+      bot:chainB([[[-30, 196], [-28, 470], [112, 604], [256, 604]], [[256, 604], [400, 604], [540, 470], [542, 196]]]),
       d:{ uc:999, uf:.55, ux0:-40, ux1:552, lc:999, lf:.45, lx0:-40, lx1:552, rr:0, bl:1, zz:0 },
       lg:[256, 560, 150, 60, 0], lu:[256, 340, 40, 0]
     }
@@ -2598,8 +3090,8 @@ const paatBeauEyes = (g, S) => {
       sL:[[56, 128], [100, 116], [160, 112], [226, 120]], sR:mirP([[56, 128], [100, 116], [160, 112], [226, 120]]), sw:24,
       oL:{ x:144, y:232, rx:74, ry:70, glob:0, p:[2, -4, 80, .48, -.08], h:OUV_H, b:OUV_B, ha:0, ba:0, hw:14, bw:10, w:12 },
       nez:[[252, 238], [248, 300], [272, 288]], nw:8,
-      top:chain([[[190, 384], [214, 404], [236, 412], [256, 412]], [[256, 412], [276, 412], [298, 404], [322, 384]]]),
-      bot:chain([[[190, 384], [214, 404], [236, 412], [256, 412]], [[256, 412], [276, 412], [298, 404], [322, 384]]]),
+      top:chainB([[[190, 384], [214, 404], [236, 412], [256, 412]], [[256, 412], [276, 412], [298, 404], [322, 384]]]),
+      bot:chainB([[[190, 384], [214, 404], [236, 412], [256, 412]], [[256, 412], [276, 412], [298, 404], [322, 384]]]),
       d:{ uc:0, uf:0, ux0:190, ux1:322, lc:0, lf:0, lx0:190, lx1:322, rr:1, bl:0, zz:0 },
       lg:[256, 420, 40, 20, 0], lu:[256, 380, 30, 0]
   });
@@ -2743,9 +3235,9 @@ const paatBeauEyes = (g, S) => {
 
   /* 😁 content : le sourire part d'un petit « :) » et se déploie en grand sourire (il dépasse un peu puis se pose),
      tient C_TENUE s, se replie en « :) », attend C_PAUSE s, et recommence */
-  const C_GRIN = { top:chain([[[-34, 236], [60, 330], [170, 348], [256, 348]], [[256, 348], [342, 348], [452, 330], [546, 236]]]),
-                   bot:chain([[[-34, 236], [-14, 420], [110, 512], [256, 512]], [[256, 512], [402, 512], [526, 420], [546, 236]]]) };
-  const C_SMILE = chain([[[184, 384], [208, 404], [232, 414], [256, 414]], [[256, 414], [280, 414], [304, 404], [328, 384]]]);
+  const C_GRIN = { top:chainB([[[-34, 236], [60, 330], [170, 348], [256, 348]], [[256, 348], [342, 348], [452, 330], [546, 236]]]),
+                   bot:chainB([[[-34, 236], [-14, 420], [110, 512], [256, 512]], [[256, 512], [402, 512], [526, 420], [546, 236]]]) };
+  const C_SMILE = chainB([[[184, 384], [208, 404], [232, 414], [256, 414]], [[256, 414], [280, 414], [304, 404], [328, 384]]]);
   const C_T0 = 1, C_DEPLI = 1.2, C_TENUE = 20, C_REPLI = .8, C_PAUSE = 2;
   const contentE = el => {
     let t = el - C_T0; if (t < 0) return 0;
@@ -2953,29 +3445,29 @@ const paatBeauEyes = (g, S) => {
   let EYE_CUT = null;                                       // exagéré : toile où l'on découpe tes yeux
   const STK = {
     /* 🤯 exagéré : yeux grands ouverts → tes yeux se « détachent » : chacun est découpé dans l'image de la caméra (bords fondus)
-       et reposé par-dessus, agrandi jusqu'à ×4 ; en grandissant ils s'écartent nettement l'un de l'autre (jamais l'un sur l'autre :
-       ton regard reste lisible). Marche aussi quand tu n'es pas de face (yeuxGrands). */
+       et reposé par-dessus, agrandi jusqu'à ×EXA_YEUX (1,8) en tout ; en grandissant ils s'écartent l'un de l'autre (jamais l'un sur l'autre :
+       ton regard reste lisible). Marche aussi quand tu n'es pas de face (yeuxGrands) : de profil, seul l'œil bien visible grandit. */
     exagere: (g, P, a, el, dt, v) => {
       const wo = yeuxGrands();
       fx.yeuxO = (fx.yeuxO || 0) + (wo - (fx.yeuxO || 0)) * Math.min(1, dt * 7);   // lissé (ça ne clignote pas)
       const o = fx.yeuxO; if (o < .04 || !v || !v.videoWidth) return;
       const sx = v.videoWidth / g.canvas.width, sy = v.videoHeight / g.canvas.height, e = o * o * (3 - 2 * o);
       const cut = EYE_CUT || (EYE_CUT = document.createElement('canvas')), cg = cut.getContext('2d');
-      const yeux = [];
-      for (const ring of EYE_RING) {
-        const src = ring.map(i => fx.sm[i]); if (src.some(q => !q)) continue;
+      const yeux = [], vis = oeilVis(), kE = Math.max(1, C.EXA_YEUX || 1.8) - 1;
+      for (const [n, ring] of EYE_RING.entries()) {
+        const src = ring.map(i => fx.sm[i]); if (src.some(q => !q) || vis[n] < .05) continue;
         let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; src.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
         const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, rw = (x1 - x0) * .8, rh = Math.max((y1 - y0) * 1.25, rw * .64);   // l'œil + un peu de paupière
         let d0 = 1e9, d1 = -1e9; ring.forEach(i => { const q = warpPos(fx.sm[i]); d0 = Math.min(d0, q[0]); d1 = Math.max(d1, q[0]); });
-        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0)) * (1 + 3 * e);   // toujours plus grand que l'œil déjà grossi (×4 de plus au max)
-        yeux.push({ cx, cy, rw, rh, c, kd });
+        const c = warpPos([cx, cy]), kd = Math.max(1, (d1 - d0) / Math.max(1, x1 - x0), 1 + kE * e);   // au moins l'œil déjà grossi par la loupe, ×1,8 au plus
+        yeux.push({ cx, cy, rw, rh, c, kd, va:vis[n] });
       }
-      if (yeux.length === 2) {                               // trop gros pour leur écart → ils s'écartent (chacun de son côté)
+      if (yeux.length === 2 && yeux[0].va > .5 && yeux[1].va > .5) {   // trop gros pour leur écart → ils s'écartent (chacun de son côté)
         const [A, B] = yeux, vx = B.c[0] - A.c[0], vy = B.c[1] - A.c[1], d = Math.hypot(vx, vy) || 1;
         const need = (A.rw * A.kd + B.rw * B.kd) * .8;       // bien écartés (le bord fondu commence à la moitié du rayon)
         if (need > d) { const p = (need - d) / 2; A.c = [A.c[0] - vx / d * p, A.c[1] - vy / d * p]; B.c = [B.c[0] + vx / d * p, B.c[1] + vy / d * p]; }
       }
-      for (const { cx, cy, rw, rh, c, kd } of yeux) {
+      for (const { cx, cy, rw, rh, c, kd, va } of yeux) {
         const W2 = Math.ceil(rw * 2), H2 = Math.ceil(rh * 2);
         if (cut.width < W2 || cut.height < H2) { cut.width = Math.max(cut.width, W2); cut.height = Math.max(cut.height, H2); }
         cg.setTransform(1, 0, 0, 1, 0, 0); cg.globalCompositeOperation = 'source-over'; cg.clearRect(0, 0, cut.width, cut.height);
@@ -2984,7 +3476,7 @@ const paatBeauEyes = (g, S) => {
         cg.translate(rw, rh); cg.scale(1, rh / rw);
         const mg = cg.createRadialGradient(0, 0, rw * .5, 0, 0, rw); mg.addColorStop(0, 'rgba(0,0,0,1)'); mg.addColorStop(1, 'rgba(0,0,0,0)');
         cg.fillStyle = mg; cg.beginPath(); cg.arc(0, 0, rw, 0, 6.2832); cg.fill();
-        g.save(); g.globalAlpha = a * Math.min(1, o / .18);
+        g.save(); g.globalAlpha = a * Math.min(1, o / .18) * Math.min(1, va * 1.5);
         g.drawImage(cut, 0, 0, W2, H2, c[0] - rw * kd, c[1] - rh * kd, rw * 2 * kd, rh * 2 * kd);
         g.restore();
       }
@@ -3384,9 +3876,9 @@ const paatBeauEyes = (g, S) => {
   const openCam = id => md.getUserMedia({ video:{ deviceId:{ exact:id }, width:{ ideal:C.WIDTH }, height:{ ideal:C.HEIGHT },
                                                   frameRate:{ ideal:C.VIDEO_FPS }, resizeMode:{ ideal:'none' } } });
 
-  const fxStart = async key => {
+  const fxStart = async (key, first) => {
     if (fx.on) return;
-    Object.assign(fx, { on:true, ending:false, key, t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, parts:[], guy:null,
+    Object.assign(fx, { on:true, ending:false, key, gagFirst:first || '', t0:0, face:0, seen:0, miss:0, sm:{}, bs:{}, fg:1, parts:[], guy:null,
                         pup:null, body:null, refBody:null, lastPresent:0, pstate:'', ori:null, refHead:null, nPose:0,
                         beau:null, mir:null, mirT:null, mirK:1, mirHold:0, ting:null, tw:null, cYaw:null, turnA:0, farR:false,
                         mask:false, last:0, tDet:0, lastFrame:performance.now(), useRaf:false, got:false, q:-1 });
@@ -3406,6 +3898,7 @@ const paatBeauEyes = (g, S) => {
       if (FX[key].keep && C.PAAT_CORPS) await ensureBody().catch(e => log('suivi du corps indisponible : ' + (e.message || e)));
       glInit();
       if (FX[key].stk) sprites();                    // dessins préparés AVANT le compte à rebours
+      if (key === 'derriere') gagSprites();          // (gags du farceur : flamme dorée, bandana, poing…)
       if (FX[key].stk === 'chad' && C.FILTER_PAATRICE) beauSprite();
       if (C.FILTER_PAATRICE && TETE_KEYS.has(key)) { sprites(); tetePrep(key); }   // tête de Paatrice du filtre
       await vcamOn();
@@ -3451,7 +3944,7 @@ const paatBeauEyes = (g, S) => {
     if (fx.track) fx.track.stop();                   // caméra fermée : plus rien ne calcule
     fx.track = null;
   };
-  const fxNext = () => { if (!fx.on && fxQ.length) fxStart(fxQ.shift()); };
+  const fxNext = () => { if (!fx.on && fxQ.length) fxStart(...fxQ.shift()); };
 
   /* garde-fou : plus d'image depuis 1 s → le calque s'efface (jamais d'image figée à l'antenne) */
   setInterval(() => {
@@ -3460,14 +3953,16 @@ const paatBeauEyes = (g, S) => {
     }
   }, 250);
 
-  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', zinzin:'benet', derriere2:'derriere', farceur:'derriere', stand:'derriere', jojo:'derriere' };   // mêmes noms que la cam tel
+  const FX_ALIAS = { kawai:'chat', kawaii:'chat', mad:'fache', colere:'fache', idee:'pleure', yeux:'mini', bouche:'derriere', zinzin:'benet', derriere2:'derriere', farceur:'derriere' };   // mêmes noms que la cam tel
+  const GAG_ALIAS = { stand:'stand', jojo:'stand', kamehameha:'saiyan', saiyan:'saiyan', sayen:'saiyan', sayan:'saiyan', dbz:'saiyan', gomu:'gomu', luffy:'gomu', onepiece:'gomu' };   // le farceur, avec ce gag en premier
   const fxRequest = d => {
     const m = (d && d.meta && typeof d.meta === 'object') ? d.meta : {};
     let key = String(m.nom || (d && d.nom) || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s_\-]+/g, '').trim();
-    key = FX_ALIAS[key] || key;
+    const first = GAG_ALIAS[key] || '';
+    key = first ? 'derriere' : FX_ALIAS[key] || key;
     if (!FX[key]) { log('filtre inconnu :', key); ST.err = 'filtre inconnu : « ' + key + ' »'; return; }
-    if (fx.on) { if (fxQ.length < C.FILTER_QUEUE_MAX) fxQ.push(key); return; }
-    fxStart(key);
+    if (fx.on) { if (fxQ.length < C.FILTER_QUEUE_MAX) fxQ.push([key, first]); return; }
+    fxStart(key, first);
   };
 
   /* ---------- Déclencheur : Social Stream Ninja, canal 1 (comme la cam tel) ---------- */
@@ -3583,11 +4078,11 @@ const paatBeauEyes = (g, S) => {
       'Caméra : ' + (s ? (ST.cam || '?') + ' · ' + (vid.videoWidth || s.width) + '×' + (vid.videoHeight || s.height) + ' · ' + Math.round(s.frameRate || 0) + ' i/s' : 'fermée (repos)'),
       'Calque : ' + (fx.on ? ST.fps + ' i/s · calcul ' + fxCv.width + '×' + fxCv.height + ' · suivi ' + ST.dps + '/s · ' + f1(ST.avg) + ' ms (max ' + f1(ST.max) + ') · visage '
                              + (fx.face > .5 ? 'vu' : 'perdu') + (fx.useRaf ? ' · mode secours' : '') : '—'),
-      'État   : ' + (fx.on ? FX[fx.key].name + (fx.t0 ? ' · ' + el + ' / ' + C.FILTER_DURATION + ' s' : ' · démarrage…') : 'repos')
+      'État   : ' + (fx.on ? FX[fx.key].name + (fx.t0 ? ' · ' + el + ' / ' + durOf(fx.key) + ' s' : ' · démarrage…') : 'repos')
                   + (fxQ.length ? ' · file ' + fxQ.length : ''),
       fx.on && FX[fx.key].keep ? 'Paatrice : ' + ({ ok:'à côté de toi', profil:'dans ton dos (visage perdu)', absent:'marionnette (tu n\'es pas à l\'image)' }[fx.pstate] || '…')
                   + (fx.body ? ' · silhouette ' + Math.round((fx.body.cov || 0) * 100) + ' %' : '')
-                  + (fx.guy && fx.guy.st >= 0 ? ' · STAND' : '') + (C.PAAT_CALQUE ? ' · calque transparent' : ' · ancienne méthode')
+                  + (fx.guy && fx.guy.st >= 0 && fx.guy.gag ? ' · ' + { stand:'STAND', saiyan:'SUPER SAIYAN', gomu:'BRAS ÉLASTIQUE' }[fx.guy.gag] : '') + (C.PAAT_CALQUE ? ' · calque transparent' : ' · ancienne méthode')
                   + '\nRegard   : ' + (!C.PAAT_CORPS ? 'suivi du corps coupé' : !bodyLm ? 'suivi du corps pas prêt ⚠️'
                      : fx.ori ? 'tête ' + (fx.ori.head == null ? '?' : Math.round(fx.ori.head) + '°') + ' · corps ' + (fx.ori.body == null ? '?' : Math.round(fx.ori.body) + '°')
                        + ' → ' + (fx.guy && fx.guy.gaze ? (fx.guy.gaze > 0 ? 'tu regardes à droite' : 'tu regardes à gauche') : 'de face') : 'personne') : '',
