@@ -1279,11 +1279,23 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const handRect = h => { const [W0, hh] = h, hw = hh * HAND_AR; return [W0[0] - hw / 2, W0[1] - hh * .93, W0[0] + hw / 2, W0[1] + hh * .07, 2]; };
   /* place une boîte w × h : candidats (coin haut gauche) par ordre de préférence → le meilleur dans l'image, hors des zones à éviter.
      only = n° de candidat à évaluer seul. Renvoie [x, y, n°, score]. */
+  /* Partie visible de la caméra (rognage des filtres « move » d'OBS, lu plus bas : « Zone visible de la caméra »).
+     zonePx(W, H) → [gauche, haut, droite, bas] en pixels, qui glisse en douceur quand la zone change ; zoneEch() → réduction à l'écran. */
+  const OBSZ = { ok:false, rect:null, err:'', scale:1 };
+  let zoneL = null, zoneT = 0;
+  const zonePx = (W, H) => {
+    const zr = (C.OBS_ZONE && OBSZ.rect) || [0, 0, 1, 1], now = performance.now();
+    const k = zoneL ? Math.min(1, (now - zoneT) / 1000 * 5) : 1; zoneT = now;
+    zoneL = zoneL ? zoneL.map((v, i) => v + (zr[i] - v) * k) : zr.slice();
+    return [zoneL[0] * W, zoneL[1] * H, zoneL[2] * W, zoneL[3] * H];
+  };
+  const zoneEch = () => (C.OBS_ZONE && OBSZ.rect && OBSZ.scale) || 1;
   const placeBox = (w, h, cands, avoid, W, H, only) => {
     const m = 8; let best = [0, 0, 0], bs = 1e9;
     cands.forEach(([x0, y0], i) => {
       if (only != null && i !== only) return;
-      const x = Math.max(m, Math.min(W - m - w, x0)), y = Math.max(m, Math.min(H - m - h, y0));
+      const Zv = zonePx(W, H);                             // dans la partie visible de la caméra
+      const x = Math.max(Zv[0] + m, Math.min(Zv[2] - m - w, x0)), y = Math.max(Zv[1] + m, Math.min(Zv[3] - m - h, y0));
       const r = [x, y, x + w, y + h]; let ov = 0;
       for (const A of avoid) if (A) ov += ovl(r, A) * (A[4] || 1);
       const sc = ov / (w * h) * 3 + Math.hypot(x - x0, y - y0) / Math.max(w, h) * .6 + i * .2;
@@ -1464,7 +1476,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     const TAI = C.PAAT_TAILLE * (1 + .15 * sk);
     let R = 1.1 * U * TAI; const shrink = Math.min(1, H * .2 / R); R *= shrink;   // jamais énorme si tu es tout près
     const COTE = C.PAAT_COTE, HAUT = C.PAAT_HAUT - .45 * sk;
-    const fits = s => { const p = G(s * (COTE + .6), HAUT); return p[0] > R * .85 && p[0] < W - R * .85; };   // ce côté a assez de place ? (sa tête + l'écart pour ta main)
+    const Zv = zonePx(W, H);                               // la partie visible de la caméra (fenêtre « masques et filtres »…)
+    const fits = s => { const p = G(s * (COTE + .6), HAUT); return p[0] > Zv[0] + R * .85 && p[0] < Zv[2] - R * .85; };   // ce côté a assez de place ? (sa tête + l'écart pour ta main)
     /* tu tournes la tête vers lui → il passe de l'autre côté. On regarde le MOUVEMENT de ta tête
        (par rapport à ta position habituelle) : à la cam bureau tu es souvent tourné vers l'écran. */
     /* Suivi du corps : tête (oreilles) d'abord, sinon épaules — même de profil. Tête et corps opposés : la tête gagne.
@@ -1483,7 +1496,7 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
     gy.gaze = gaze;
     const turn = -gaze * Math.sign(rx || 1);               // côté où il doit être, dans le repère de ton visage
     if (!gy.side) {
-      gy.side = gy.to = mx < W / 2 ? 1 : -1;               // du côté où il y a de la place
+      gy.side = gy.to = mx < (Zv[0] + Zv[2]) / 2 ? 1 : -1; // du côté où il y a de la place
       if (!fits(gy.side) && fits(-gy.side)) gy.side = gy.to = -gy.side;
       gy.autoT = C.PAAT_AUTO * (.8 + Math.random() * .4);
     }
@@ -1515,8 +1528,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
 
     /* --- position : sa tête à côté de la tienne, plus haut ; son torse penché rentre dans ton dos --- */
     const T = G(sd * COTE, HAUT + .1 * sk * Math.sin(el * 1.6));   // (le Stand flotte)
-    const inImg = () => { T[0] = Math.max(R * 1.02, Math.min(W - R * 1.02, T[0])); T[1] = Math.max(R * 1.02, Math.min(H - R * 1.02, T[1])); };
-    inImg();                                               // sa tête reste toujours entière dans l'image
+    const inImg = () => { T[0] = Math.max(Zv[0] + R * 1.02, Math.min(Zv[2] - R * 1.02, T[0])); T[1] = Math.max(Zv[1] + R * 1.02, Math.min(Zv[3] - R * 1.02, T[1])); };
+    inImg();                                               // sa tête reste toujours entière dans la partie visible
     {                                                      // … et ne passe jamais derrière sa propre main (ta tête trop haute dans l'image, etc.)
       const hr = handRect([G(sd * MX, C.PAAT_MAINS_Y), C.PAAT_MAINS * U * TAI * shrink]), mg = R * .06;
       const hit = () => { const cx = Math.max(hr[0] - mg, Math.min(hr[2] + mg, T[0])), cy = Math.max(hr[1] - mg, Math.min(hr[3] + mg, T[1])); return Math.hypot(T[0] - cx, T[1] - cy) < R; };
@@ -1561,7 +1574,8 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
       for (const s of [-sd, sd]) {                         // s = côté de ton visage où va la main (d'abord celle qui passe derrière toi)
         const near = s === sd, ph = near ? 0 : 1.4;
         const pump = .12 * Math.abs(Math.sin(el * 3.4 + ph)) * (1 + sk);   // il te les « pousse » en rythme
-        const Wt = G(s * MX, C.PAAT_MAINS_Y - pump);
+        const Wt = G(s * MX, C.PAAT_MAINS_Y - pump), mH = hh0 * .55;   // dans la partie visible : près du bord, la main se rapproche de ton visage
+        Wt[0] = Math.max(Zv[0] + mH, Math.min(Zv[2] - mH, Wt[0])); Wt[1] = Math.max(Zv[1] + mH, Math.min(Zv[3] - mH, Wt[1]));
         let S0, R0, E = null;
         if (near) { S0 = L2G(256 + sd * 230, 600); R0 = L2G(256 + sd * 120, 760); }          // son épaule extérieure
         else { S0 = L2G(256 - sd * 230, 600); E = G(-sd * 1.55, 3); R0 = G(-sd * 1.6, 2.5); }   // épaule côté toi → derrière ton autre épaule
@@ -1611,10 +1625,12 @@ html, body { margin:0; width:100%; height:100%; overflow:hidden; background:tran
   const paatPuppet = (g, W, H, t, dt, a) => {
     const S = sprites(), pp = fx.pup || (fx.pup = { t0:t, bub:null, n:0 });
     const el = (t - pp.t0) / 1000;
-    const k = .8 * H / 1000 * C.PAAT_MARIONNETTE, R = 238 * k;
+    const Zv = zonePx(W, H), zw = Zv[2] - Zv[0], kzp = Math.min(1, zw / (W * .66));   // fenêtre étroite : un peu plus petit…
+    const k = .8 * H / 1000 * C.PAAT_MARIONNETTE * kzp, R = 238 * k;
     const up = Math.min(backOut(el / .6), a);              // il monte du bas de l'écran (et redescend à la fin)
     const sway = .03 * Math.sin(el * 1.6);                 // petit balancement de marionnette
-    const hx = W / 2, hy = H - (1040 - 256) * k + (1 - up) * H * .9;   // bassin pile au bas de l'écran
+    const hx = (Zv[0] + Zv[2]) / 2;                        // … et au milieu de la partie visible
+    const hy = Zv[3] - (1040 - 256) * k + (1 - up) * H * .9;   // bassin pile au bas de la partie visible
     const bt = (el + .3) % 3.1, blink = bt < .16 ? Math.sin(bt / .16 * Math.PI) : 0;
     const L2G = paatFigure(g, S, hx, hy, sway, k, 0, blink, 1, false);
     const ap = up * backOut(Math.min(1, Math.max(0, (el - .5) / .4)));
@@ -1856,25 +1872,23 @@ const paatBeauEyes = (g, S) => {
      Elle erre de façon imprévisible (errance de Reynolds) et part explorer une autre région de l'écran, à tour de rôle
      tout en haut, tout en bas ou sur les côtés, loin d'elle ; elle ralentit en arrivant ; sa vitesse varie toute seule.
      Seulement dans la partie visible de la caméra : si un filtre « move » d'OBS la rogne en fenêtre (ex. « masques et filtres »),
-     la page lit ce rognage (OBSZ, plus bas) et elle reste dans la fenêtre, un peu plus petite.
+     la page lit ce rognage (zonePx) et elle reste dans la fenêtre — un peu plus grande, puisque la fenêtre est réduite à l'écran.
      Jamais sur ton visage (cheveux et barbe compris : elle est repoussée, et ne peut pas y entrer),
      elle va jusqu'aux bords de l'image (haut et bas compris) ; pour passer au-dessus ou en dessous de toi, elle rapetisse
      (elle s'éloigne) ; elle suit ta tête (le dernier endroit vu si tu disparais), sa taille change au hasard,
      elle penche dans le sens où elle va. Opaque : transparente seulement en apparaissant et en disparaissant.
      Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
-  const OBSZ = { ok:false, rect:null, err:'' };             // partie visible de la caméra, lue dans OBS (voir « Zone visible » plus bas)
   const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage · tk = tête du filtre (sinon beau gosse)
     const u = (a, b) => a + Math.random() * (b - a), V = Math.max(.2, C.TETES_VITESSE || 1), cl = (v, a, b) => Math.max(a, Math.min(b, v));
     const h1 = Math.min(dt, .05);                            // pas de temps borné
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, tz:[],
                                        ph:u(0, 6.2832), wa:u(0, 6.2832), np:[u(0, 9), u(0, 9)], cible:null, tC:0 });
     /* la partie visible de l'image (rognage du filtre « move » d'OBS) : [gauche, haut, droite, bas] en pixels, qui glisse en douceur */
-    const zr = (C.OBS_ZONE && OBSZ.rect) || [0, 0, 1, 1];
-    sp.zv = sp.zv ? sp.zv.map((v, i) => v + (zr[i] - v) * Math.min(1, h1 * 5)) : zr.slice();
-    const Z = [sp.zv[0] * W, sp.zv[1] * H, sp.zv[2] * W, sp.zv[3] * H];
-    const kz = Math.pow(cl(Math.min((Z[2] - Z[0]) / W, (Z[3] - Z[1]) / H), .2, 1), .3);   // fenêtre plus petite → têtes et vitesses un peu plus petites
+    const Z = zonePx(W, H);
+    sp.kz = (sp.kz || zoneEch()) + (zoneEch() - (sp.kz || zoneEch())) * Math.min(1, h1 * 3);
+    const kz = Math.pow(1 / cl(sp.kz, .3, 1), .6);          // fenêtre réduite à l'écran (×0,65) → têtes plus grandes (×1,3) pour rester bien visibles
     sp.kf = (sp.kf || 1) + ((sp.kfT || 1) - (sp.kf || 1)) * Math.min(1, h1 * 1.5);       // (encore plus petites s'il n'y a plus de place libre)
-    const sc = W / 1920 * kz;                                // forces à l'échelle de l'image
+    const sc = W / 1920;                                     // forces à l'échelle de l'image
     if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu)
     const F0 = sp.f || { x:W * .5, y:H * .42, fw:H * .1 };
     /* taille : petite ↔ grande, au hasard, n'importe où */
@@ -1892,7 +1906,8 @@ const paatBeauEyes = (g, S) => {
     while (sp.tz.length > 4 && sp.tz[2].t <= el) sp.tz.shift();
     const colK = x => 1 - .5 * cl(1 - (Math.abs(x - F0.x) - 1.1 * F0.fw) / (1.3 * F0.fw), 0, 1);   // au-dessus / en dessous de toi : plus petite
     sp.kp = (sp.kp || 1) + (colK(sp.x == null ? -1e4 : sp.x) - (sp.kp || 1)) * Math.min(1, h1 * 2.5);
-    const z = cl(herm(sp.tz, 'z'), 0, 1), hh = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp * kz * sp.kf;
+    const z = cl(herm(sp.tz, 'z'), 0, 1), hh0 = H * C.BEAU_TAILLE * (C.BEAU_LOIN + (C.BEAU_PRES - C.BEAU_LOIN) * Math.pow(z, 1.3)) * (tk ? C.TETE_TAILLE || 1 : 1) * sp.kp * sp.kf * kz;
+    const capH = .3 * (Z[2] - Z[0]), hh = hh0 > capH ? capH + (hh0 - capH) * .25 : hh0;   // jamais trop large pour la fenêtre
     const spr = tk ? null : beauSprite(), k = tk ? hh / 442 : hh / 670;
     const sw = tk ? 488 * 1.27 * k : spr.width * k, sh = tk ? 442 * 1.28 * k : spr.height * k;   // même encombrement que beau gosse (halo compris)
     const mx = tk ? .42 : .32, mt = tk ? .3 : .28, mb = tk ? .3 : .3;   // marges : elle peut aller jusqu'au bord de l'image (haut et bas compris)
@@ -1905,8 +1920,14 @@ const paatBeauEyes = (g, S) => {
       return Math.pow(Math.pow(Math.abs(dx) / zA(ks), 4) + Math.pow(Math.abs(dy) / b, 4), .25); };
     const libre = (x, y) => { const ks = colK(x) / sp.kp;     // (avec la taille qu'elle aura là-bas)
       return x > Z[0] + sw * ks * mx && x < Z[2] - sw * ks * mx && y > Z[1] + sh * ks * mt && y < Z[3] - sh * ks * mb && fz(x, y, ks) > 1.15; };
+    const place = () => {                                    // un endroit libre au hasard (sinon : le plus loin possible de ton visage)
+      let bx = (X0 + X1) / 2, by = (Y0 + Y1) / 2, bf = -1;
+      for (let n = 0; n < 80; n++) { const x = u(X0, X1), y = u(Y0, Y1); if (libre(x, y)) return [x, y];
+        const f = fz(x, y); if (f > bf) { bf = f; bx = x; by = y; } }
+      return [bx, by];
+    };
     if (sp.x == null) {                                      // départ : un endroit libre au hasard, déjà en mouvement
-      let x, y, n = 0; do { x = u(X0, X1); y = u(Y0, Y1); } while (!libre(x, y) && ++n < 80);
+      const [x, y] = place();
       const a0 = u(0, 6.2832); Object.assign(sp, { x, y, vx:Math.cos(a0) * 60 * sc, vy:Math.sin(a0) * 60 * sc });
     }
     /* les forces qui la poussent */
@@ -1956,13 +1977,21 @@ const paatBeauEyes = (g, S) => {
         sp.x = F0.x + (sp.x - F0.x) / Math.max(.05, f); sp.y = F0.y + (sp.y - F0.y) / Math.max(.05, f);
         sp.x = cl(sp.x, X0, X1); sp.y = cl(sp.y, Y0, Y1);
       } }
+    /* coincée contre ton visage sans chemin libre (la zone a changé, fenêtre étroite…) → « pop » : elle rapetisse et réapparaît ailleurs */
+    sp.tCo = fz(sp.x, sp.y) < 1.02 ? (sp.tCo || 0) + h1 : 0;
+    if (!sp.popPh && sp.tCo > .35) { sp.popPh = 1; sp.pop = 1; }
+    if (sp.popPh === 1) {
+      sp.pop -= h1 / .15;
+      if (sp.pop <= 0) { const [x, y] = place(); Object.assign(sp, { x, y, vx:0, vy:0, cible:null, pop:0, popPh:2, tCo:0 }); sp.kfT = Math.max(.5, (sp.kfT || 1) * .85); }
+    } else if (sp.popPh === 2) { sp.pop = Math.min(1, sp.pop + h1 / .3); if (sp.pop >= 1) sp.popPh = 0; }
+    const pz = sp.popPh === 2 ? backOut(sp.pop) : sp.popPh === 1 ? Math.max(0, sp.pop) : 1;
     const x = sp.x, y = sp.y + H * .008 * Math.sin(el * 2.1 + sp.ph);   // elle flotte
     sp.vx2 = (sp.vx2 || 0) + (sp.vx - (sp.vx2 || 0)) * Math.min(1, h1 * 4);
     const rot = cl(sp.vx2 / (W * .5), -.16, .16) + .03 * Math.sin(el * 1.7 + sp.ph);   // elle penche dans le sens où elle va, et ondule
     const fa = Math.min(1, el / Math.max(.1, C.BEAU_APPARITION)), ap = fa * fa * (3 - 2 * fa);
     const alpha = Math.min(ap, amt);                         // opaque : transparente seulement en apparaissant et en disparaissant
     if (alpha > .01) {
-      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el)));   // Chad : il penche la tête en levant le sourcil
+      g.save(); g.globalAlpha = alpha; g.translate(x, y); g.rotate(rot + (tk ? 0 : .08 * beauAnimK(el))); g.scale(pz, pz);   // Chad : il penche la tête en levant le sourcil
       if (tk) {                                              // tête du filtre : composée à part (animations comprises), posée en une fois
         const L = Math.max(2, Math.ceil((512 + 2 * T_PAD) * k)), lc = teteLayer(L), lg = lc.getContext('2d');
         lg.setTransform(1, 0, 0, 1, 0, 0); lg.globalAlpha = 1; lg.globalCompositeOperation = 'source-over'; lg.clearRect(0, 0, lc.width, lc.height);
@@ -3426,6 +3455,7 @@ const paatBeauEyes = (g, S) => {
         if (!base) { const v = await req('GetVideoSettings'); base = v.baseWidth ? [v.baseWidth, v.baseHeight] : null; }
         const t = (await req('GetSceneItemTransform', { sceneName:C.OBS_SCENE, sceneItemId:itemId })).sceneItemTransform || {};
         OBSZ.rect = zoneVisible(t, base); OBSZ.err = OBSZ.rect ? '' : 'rognage illisible';
+        OBSZ.scale = t.scaleX > 0 && (!t.boundsType || t.boundsType === 'OBS_BOUNDS_NONE') ? t.scaleX : 1;   // fenêtre réduite à l'écran (0,652…)
       } catch (e) { OBSZ.err = e.message; itemId = null; }
       lecture = false;
     };
