@@ -105,6 +105,8 @@ const CONFIG = {
   PAAT_POILS       : 2,     // poils sur son torse : 1 = poilu · 2 = très poilu
   PAAT_DETOURAGE   : true,  // true = il passe DERRIÈRE toi (détourage) · false = devant, sans détourage
   PAAT_MARGE       : 1.5,   // (cam bureau seulement)
+  LOIN             : true,  // de loin (visage trop petit pour le suivi du visage) : Paatrice et les têtes te suivent grâce au suivi du corps
+                            // (les déformations du visage, elles, s'arrêtent : de si loin on ne les verrait pas)
   PAAT_CORPS       : true,  // suivi du corps (de quel côté tu regardes, même de profil) · false = moins de chauffe
   /* tel posé, plus loin (image en 16:9 ou toi en entier) : comme la cam bureau… */
   PAAT_TAILLE      : 1.2,   // taille de Paatrice
@@ -1893,17 +1895,22 @@ body.live #go { display:none; }
         }
         fx.tDet = t;
         if (F.seg && seg && C.PAAT_DETOURAGE) try { segStep(v, W, H); } catch (e) { log('SEG ' + e.message); }
-        if (F.keep && bodyLm && C.PAAT_CORPS && (fx.nPose = (fx.nPose || 0) + 1) % 2 === 0) try { bodyStep(v, W, H); } catch (e) { log('POSE ' + e.message); }   // suivi du corps (1 image sur 2)
+        const loin = C.LOIN && !(fx.seen && fx.miss < 3);   // visage perdu (trop loin, de dos…) : le suivi du corps cherche où tu es
+        if (loin && !bodyLm) ensureBody().catch(() => {});
+        if (bodyLm && ((F.keep && C.PAAT_CORPS) || loin) && (fx.nPose = (fx.nPose || 0) + 1) % (loin && !F.keep ? 3 : 2) === 0) try { bodyStep(v, W, H); } catch (e) { log('POSE ' + e.message); }   // suivi du corps (1 image sur 2 · de loin : 1 sur 3)
         fx.skip = performance.now() - t0 > 28;
       } else fx.skip = false;
       const faceOn = fx.seen && fx.miss < 3;                          // visage perdu (3 ratés de suite) → la déformation s'efface
       fx.face = Math.max(0, Math.min(1, fx.face + (faceOn ? 1 : -1) * dt / 0.25));
+      const farP = C.LOIN && !faceOn && fx.ori && fx.ori.far && t - fx.ori.far.t < 500 ? fx.ori.far : null;   // de loin : ton visage approché par le suivi du corps
+      if (faceOn || farP) fx.hSeen = t;
+      const hAbsent = !!(fx.t0 && t - fx.t0 > 1500 && (!fx.hSeen || t - fx.hSeen > C.PAAT_ABSENT * 1000));   // têtes : tu n'es plus à l'image
       /* Paatrice : es-tu à l'image ? Visage vu, ou silhouette vue par le détourage (de profil, de dos) */
       let absent = false;
       if (F.keep) {
         const bodyOK = (seg && C.PAAT_DETOURAGE) ? !!(fx.body && fx.body.cov > C.PAAT_BODY_MIN) : !!(fx.seen && t - fx.seen < C.PAAT_HOLD * 1000);
         if (faceOn) { fx.lastPresent = t; fx.refBody = fx.body && fx.body.cov ? { x:fx.body.x, y:fx.body.y } : null; }
-        else if (fx.seen && bodyOK) fx.lastPresent = t;
+        else if ((fx.seen && bodyOK) || farP) fx.lastPresent = t;
         absent = !!(fx.t0 && t - fx.t0 > 600 && (!fx.lastPresent || t - fx.lastPresent > C.PAAT_ABSENT * 1000));
         fx.pstate = absent ? 'absent' : faceOn ? 'ok' : 'profil';
       }
@@ -1963,6 +1970,7 @@ body.live #go { display:none; }
       if (pose && F.keep && !faceOn && fx.body && fx.body.cov && fx.refBody) {   // de profil, de dos : il suit ta silhouette
         pose.mx += fx.body.x - fx.refBody.x; pose.my += fx.body.y - fx.refBody.y;
       }
+      if (farP) pose = Object.assign({ far:true }, farP);   // de loin : le repère approché (Paatrice et les têtes te suivent)
       fx.n = n; fx.nb = nb; fx.k = k;
 
       /* 4. Dessin : déformation (WebGL), puis Paatrice / dessins animés, puis la tête de Paatrice qui se balade */
@@ -1991,7 +1999,7 @@ body.live #go { display:none; }
          indépendante de ton visage (elle reste même si le suivi te perd) · visage vu → elle le contourne */
       const tKey = C.FILTER_PAATRICE && TETE_KEYS.has(fx.key) ? fx.key : null;
       if (C.FILTER_PAATRICE && (F.stk === 'chad' || tKey) && !absent && fx.t0) {
-        try { beauGhost(out2d, W, H, el, dt, amt, pose && faceOn ? pose : null, tKey); } catch (e) { log('TETE ' + e.message); }
+        try { beauGhost(out2d, W, H, el, dt, amt, pose && (faceOn || farP) ? pose : null, tKey, hAbsent); } catch (e) { log('TETE ' + e.message); }
       }
       if (fx.drawn) { fx.drawn(); fx.drawn = null; }
     }
@@ -2537,6 +2545,17 @@ body.live #go { display:none; }
     o.body = b == null ? null : o.body == null ? b : o.body + (b - o.body) * .5;
     o.hx = (p[7].x + p[8].x) / 2 * W; o.hy = (p[7].y + p[8].y) / 2 * H;            // ta tête (milieu des oreilles)
     o.t = performance.now();
+    /* de loin : un repère de ton visage approché par le suivi du corps (yeux, oreilles), pour Paatrice et les têtes */
+    const vi = i => p[i].visibility == null ? 1 : p[i].visibility, P2 = i => [p[i].x * W, p[i].y * H];
+    o.far = null;
+    if (vi(7) > .4 || vi(8) > .4 || (vi(2) > .4 && vi(5) > .4)) {
+      const eR = P2(5), eL = P2(2), aR = P2(8), aL = P2(7), dE = Math.hypot(eL[0] - eR[0], eL[1] - eR[1]), dA = Math.hypot(aL[0] - aR[0], aL[1] - aR[1]);
+      const useE = dE > .35 * dA, vx = useE ? eL[0] - eR[0] : aL[0] - aR[0], vy = useE ? eL[1] - eR[1] : aL[1] - aR[1], vl = Math.hypot(vx, vy) || 1;
+      const fw = Math.max(1.45 * dE, .6 * dA, 4), rx = vx / vl, ry = vy / vl;
+      const mx = (eR[0] + eL[0]) / 2, my = (eR[1] + eL[1]) / 2, q = o.farS;
+      o.far = o.farS = q && o.t - q.t < 500 ? { mx:q.mx + (mx - q.mx) * .5, my:q.my + (my - q.my) * .5, fw:q.fw + (fw - q.fw) * .4, rx, ry, dx:-ry, dy:rx, t:o.t }
+                                             : { mx, my, fw, rx, ry, dx:-ry, dy:rx, t:o.t };
+    }
   };
 
   /* Où un point du visage se retrouve APRÈS déformation (loupes + points) : pour poser un dessin pile dessus */
@@ -3106,7 +3125,7 @@ body.live #go { display:none; }
       gy.yawB += (gy.yaw - gy.yawB) * (1 - Math.exp(-dt / 1.5));   // … ta position habituelle, lentement
     }
     let U = fw;                                            // écart des yeux… qui rétrécit quand tu tournes la tête : corrigé par la hauteur du visage
-    if (Tp && Ch) {
+    if (Tp && Ch && !P.far) {                              // (de loin : pas de points du visage, le repère approché suffit)
       const fh = Math.hypot(Ch[0] - Tp[0], Ch[1] - Tp[1]);
       if (fresh && Math.abs(gy.yaw - .5) < .08) gy.ratio = gy.ratio ? gy.ratio + (fh / fw - gy.ratio) * .05 : fh / fw;
       U = Math.max(fw, fh / Math.max(1.6, Math.min(2.4, gy.ratio || PAAT_RATIO)));
@@ -3717,7 +3736,7 @@ const paatBeauEyes = (g, S) => {
      (elle s'éloigne) ; elle suit ta tête (le dernier endroit vu si tu disparais), sa taille change au hasard,
      elle penche dans le sens où elle va. Opaque : transparente seulement en apparaissant et en disparaissant.
      Chad seulement : pluie d'étoiles à l'apparition, puis étoiles qui scintillent en permanence autour de lui. */
-  const beauGhost = (g, W, H, el, dt, amt, P, tk) => {      // P = ton visage · tk = tête du filtre (sinon beau gosse)
+  const beauGhost = (g, W, H, el, dt, amt, P, tk, abs) => { // P = ton visage · tk = tête du filtre (sinon beau gosse) · abs = tu n'es plus à l'image
     const u = (a, b) => a + Math.random() * (b - a), V = Math.max(.2, C.TETES_VITESSE || 1), cl = (v, a, b) => Math.max(a, Math.min(b, v));
     const h1 = Math.min(dt, .05);                            // pas de temps borné
     const sp = fx.beau || (fx.beau = { st:Array.from({ length:16 }, (_, j) => ({ t0:j * .09, life:0, an:null })), tst:{}, tz:[],
@@ -3735,7 +3754,7 @@ const paatBeauEyes = (g, S) => {
     }
     sp.W = W; sp.H = H;
     if (P) sp.f = { x:P.mx, y:P.my, fw:P.fw };               // ton visage (le dernier vu)
-    const F0 = sp.f || { x:W * .5, y:H * .42, fw:H * .1 };
+    const F0 = abs ? { x:-1e5, y:-1e5, fw:sp.f ? sp.f.fw : H * .1 } : sp.f || { x:W * .5, y:H * .42, fw:H * .1 };   // (absent : plus de visage à éviter)
     /* taille : petite ↔ grande, au hasard, n'importe où */
     const herm = (arr, key) => {
       let i = 1; while (i < arr.length - 2 && arr[i + 1].t <= el) i++;
@@ -3817,7 +3836,7 @@ const paatBeauEyes = (g, S) => {
     };
     /* balades : de temps en temps elle part tranquillement vers un autre coin (parfois le côté opposé), puis flâne sur place */
     if (sp.tJ == null) sp.tJ = el + u(2, 5) / V;
-    if (el > sp.tJ && !sp.dash) {
+    if (el > sp.tJ && !sp.dash && !abs) {
       const To = oppose();
       sp.kfT = To ? Math.min(1, (sp.kfT || 1) + .04) : Math.max(.5, (sp.kfT || 1) * .85);   // plus aucune place libre (petite fenêtre) → elle rapetisse
       sp.cible = (Math.random() < .4 && To) || place();
@@ -3840,11 +3859,21 @@ const paatBeauEyes = (g, S) => {
     const TR = C.TETES_TRAIT || [20, 45];                    // s entre deux petits traits (réglage)
     if (sp.tD == null) sp.tD = el + u(TR[0] * .5, TR[0] * 1.1) / V;
     if (!sp.dash && !sp.popPh && el > sp.tD && sp.cible) sp.tD = el + 1.5;   // (pas en pleine balade : il attend qu'elle soit arrivée)
-    if (!sp.dash && !sp.popPh && el > sp.tD) {
+    if (!sp.dash && !sp.popPh && el > sp.tD && !abs) {
       const P1 = trait();
       if (P1) { sp.dash = { P0:[sp.x, sp.y], P1, t0:el, d:u(.42, .6) }; sp.cible = null; sp.tD = el + u(TR[0], TR[1]) / V; }
       else sp.tD = el + 3;
     }
+    /* tu n'es plus à l'image : elle flotte tranquillement dans une zone au centre de l'image (et parle toute seule, plus bas) */
+    if (abs) {
+      const cx = (Z[0] + Z[2]) / 2, cy = (Z[1] + Z[3]) / 2, ax = .16 * (Z[2] - Z[0]), ay = .16 * (Z[3] - Z[1]);
+      const dedans = (x, y) => ((x - cx) / ax) ** 2 + ((y - cy) / ay) ** 2 < 1;
+      if (!sp.abs) { sp.abs = true; sp.dash = null; sp.cible = null; sp.tJ = el; }
+      if (el > sp.tJ || (!sp.cible && !dedans(sp.x, sp.y))) {
+        const a = u(0, 6.2832), r = Math.sqrt(u(0, 1)); sp.cible = [cx + Math.cos(a) * ax * r, cy + Math.sin(a) * ay * r]; sp.tJ = el + u(3, 6) / V;
+      }
+      vmax *= dedans(sp.x, sp.y) ? .7 : 1.5;               // (elle y va d'abord, puis flotte doucement)
+    } else if (sp.abs) { sp.abs = false; sp.cible = null; sp.tJ = el + u(.5, 1.5); }
     let goal = null;
     if (sp.cible) {
       if (Math.hypot(sp.cible[0] - sp.x, sp.cible[1] - sp.y) < 60 * sc) { sp.cible = null; sp.tJ = Math.min(sp.tJ, el + u(2.5, 7) / V); }   // arrivée : elle flâne un peu
@@ -3926,6 +3955,12 @@ const paatBeauEyes = (g, S) => {
       }
       g.restore();
     }
+    /* absent : elle parle toute seule (les mêmes répliques que Paatrice quand tu n'es pas là) */
+    if (abs && alpha > .01) {
+      if (!sp.bub || el - sp.bub.t0 > sp.bub.dur + 1.8) sp.bub = { txt:pickB('absent'), t0:el, dur:3 };
+      const kk = hh / 512, sdB = x < (Z[0] + Z[2]) / 2 ? -1 : 1;
+      try { paatSay(g, sp.bub, el, (lx, ly) => [x + (lx - 256) * kk, y + (ly - 256) * kk], x, y, Math.max(hh * .5, Math.min(W, H) * .1), sdB, [], W, H, alpha); } catch (e) {}   // (bulle lisible même si la tête est petite)
+    } else if (!abs) sp.bub = null;
     if (tk) return;                                          // les étoiles : réservées à Chad
     /* les étoiles : pluie pendant l'apparition, puis CHAD_PAATRICE_ETOILES qui scintillent en permanence (taille ×CHAD_ETOILES_TAILLE) */
     sp.st.forEach((q, j) => {
@@ -5256,7 +5291,7 @@ const paatBeauEyes = (g, S) => {
   };
   const fxCleanup = () => {
     fx.on = false; fx.ending = false; fx.t0 = 0; fx.drawn = null; fx.parts = []; fx.guy = null; fx.mask = false;
-    fx.pup = null; fx.body = null; fx.refBody = null; fx.lastPresent = 0; fx.beau = null;
+    fx.pup = null; fx.body = null; fx.refBody = null; fx.lastPresent = 0; fx.beau = null; fx.hSeen = 0;
     clearInterval(fx.ban);
     cancelAnimationFrame(fx.raf);
     if (fx.vid) { try { fx.vid.cancelVideoFrameCallback(fx.rvfc); } catch (_) {} fx.vid.srcObject = null; }
